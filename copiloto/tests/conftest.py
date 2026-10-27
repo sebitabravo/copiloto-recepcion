@@ -123,8 +123,9 @@ def clock():
 
 @pytest.fixture
 def settings():
-    return Settings(hotel_data_path=str(HOTEL_PATH), db_path=":memory:", webhook_secret="s3cret", pms_events_secret="pms-secret",
-                    panel_token="panel-secret", chatwoot_team_id=1, public_url="http://localhost:8100")
+    return Settings(hotel_data_path=str(HOTEL_PATH), db_path=":memory:", webhook_secret="s3cret",
+                    pms_events_secret="pms-secret", panel_token="panel-secret", chatwoot_team_id=1,
+                    public_url="http://localhost:8100")
 
 
 @pytest.fixture
