@@ -141,6 +141,9 @@ class Copiloto:
 
     async def _route(self, ctx: Context, greeting: bool) -> None:
         state = ctx.state
+        if state.step == "handed_off":
+            # La conversación volvió a pending (p. ej. se resolvió y el huésped escribió de nuevo)
+            state.reset_session()
         if state.step == "start":
             await self._welcome(ctx)
             state.step = "menu"
@@ -162,7 +165,7 @@ class Copiloto:
         handler = {
             "menu": self._menu_level, "faq_menu": self._faq_step, "ask_dates": self._dates_step,
             "ask_adults": self._adults_step, "ask_children": self._children_step,
-            "pick_room": self._pick_room_step, "handed_off": self._after_handoff,
+            "pick_room": self._pick_room_step,
         }.get(state.step, self._menu_level)
         await handler(ctx)
 
@@ -451,10 +454,6 @@ class Copiloto:
         ctx.state.data["room_code"] = room_code
         store.set_prebooking_room(self.db, ctx.conversation_id, room_code)
         await self._handoff(ctx, "commercial")
-
-    async def _after_handoff(self, ctx: Context) -> None:
-        # La conversación pasó a open: normalmente el bot ya no recibe estos mensajes.
-        return
 
     # ---------- traspaso a recepción ----------
 

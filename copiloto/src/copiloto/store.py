@@ -18,6 +18,13 @@ class ConversationState:
     sla_red_done: bool = False
 
 
+    def reset_session(self) -> None:
+        """Nueva consulta de un huésped que ya fue derivado: conserva el nombre y reinicia el resto."""
+        self.step, self.data = "start", {}
+        self.sla_started_at = self.sla_stopped_at = None
+        self.sla_amber_done = self.sla_red_done = False
+
+
 def get_state(db: sqlite3.Connection, conversation_id: int) -> ConversationState:
     row = db.execute("SELECT * FROM conversation_state WHERE conversation_id = ?", (conversation_id,)).fetchone()
     if row is None:

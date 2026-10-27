@@ -75,3 +75,12 @@ async def test_booking_confirmed_event_marks_prebooking_converted(harness):
     assert store.active_prebooking(harness.db, 1)["status"] == "converted"
     assert json.loads(harness.events("booking_confirmed")[0]["payload"]) == {"booking_id": 55}
     assert any("Reserva #55" in n for n in harness.chatwoot.notes(1))
+
+
+async def test_returning_guest_after_handoff_restarts_the_session(harness):
+    await handed_off(harness)
+    harness.clock.advance(400)
+    await harness.say("hola otra vez", status="pending")
+    assert any("Ubicación:" in t for t in harness.chatwoot.guest_texts()[-4:])
+    state = store.get_state(harness.db, 1)
+    assert state.sla_started_at is None and state.step == "menu"

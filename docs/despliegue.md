@@ -12,6 +12,11 @@ Requiere Docker con 4 GB o más. Si Chatwoot no arranca por falta de memoria con
 El stack se define en `infra/docker-compose.yml` con imágenes fijadas: `chatwoot/chatwoot:v4.18.0-ce`,
 `pgvector/pgvector:pg16`, `redis:7-alpine`, `nginx:alpine`. `make up` es idempotente: puedes repetirlo.
 
+## Red
+
+Los puertos se publican solo en `127.0.0.1`. Para mostrar la demo a otros equipos de tu red define
+`BIND_ADDR=0.0.0.0` antes de `make up`; en ese caso protege el panel y las métricas (ver «Servidor»).
+
 ## Variables
 
 Se generan en `.env` (gitignored) a partir de `.env.example`. Las de Chatwoot (tokens, ids) las escribe el seed

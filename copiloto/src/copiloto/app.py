@@ -75,7 +75,7 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     app.state.core, app.state.sla, app.state.db, app.state.settings = core, sla, db, settings
 
     @app.get("/health")
-    def health():
+    async def health():
         return {"status": "ok"}
 
     @app.post("/webhooks/chatwoot")
@@ -98,11 +98,11 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         return {"status": "recorded"}
 
     @app.get("/panel", response_class=HTMLResponse)
-    def panel():
+    async def panel():
         return (STATIC / "panel.html").read_text(encoding="utf-8")
 
     @app.get("/api/panel/{conversation_id}")
-    def panel_data(conversation_id: int):
+    async def panel_data(conversation_id: int):
         state = store.get_state(db, conversation_id)
         data = dict(state.data)
         room = hotel.room(data["room_code"]) if data.get("room_code") else None
@@ -125,18 +125,18 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         }
 
     @app.get("/metricas", response_class=HTMLResponse)
-    def metrics_page():
+    async def metrics_page():
         return (STATIC / "metricas.html").read_text(encoding="utf-8")
 
     @app.get("/metricas/data.json")
-    def metrics_data(days: int = Query(default=7, ge=1, le=366)):
+    async def metrics_data(days: int = Query(default=7, ge=1, le=366)):
         from copiloto.metrics import compute_metrics
 
         end = clock()
         return JSONResponse(compute_metrics(db, end - days * 86400, end + 1, settings))
 
     @app.get("/privacidad", response_class=HTMLResponse)
-    def privacy_page():
+    async def privacy_page():
         return privacy.render(hotel)
 
     return app

@@ -56,7 +56,7 @@ services:
     command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
     environment: *chatwoot-env
     ports:
-      - "3000:3000"
+      - "${BIND_ADDR:-127.0.0.1}:3000:3000"
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -95,7 +95,7 @@ services:
       - ./data:/app/data:ro
       - pms_data:/var/lib/pms
     ports:
-      - "8200:8200"
+      - "${BIND_ADDR:-127.0.0.1}:8200:8200"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8200/health')"]
       interval: 5s
@@ -123,7 +123,7 @@ services:
       - ./data:/app/data:ro
       - copiloto_data:/var/lib/copiloto
     ports:
-      - "8100:8100"
+      - "${BIND_ADDR:-127.0.0.1}:8100:8100"
     depends_on:
       pms-mock: {condition: service_healthy}
     healthcheck:
@@ -138,7 +138,7 @@ services:
     volumes:
       - ./landing:/usr/share/nginx/html:ro
     ports:
-      - "8080:80"
+      - "${BIND_ADDR:-127.0.0.1}:8080:80"
     restart: unless-stopped
 
 volumes:
