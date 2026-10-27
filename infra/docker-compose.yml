@@ -1,0 +1,149 @@
+name: copiloto
+
+x-chatwoot-env: &chatwoot-env
+  RAILS_ENV: production
+  NODE_ENV: production
+  INSTALLATION_ENV: docker
+  SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+  FRONTEND_URL: http://localhost:3000
+  FORCE_SSL: "false"
+  ENABLE_ACCOUNT_SIGNUP: "false"
+  POSTGRES_HOST: postgres
+  POSTGRES_DATABASE: chatwoot
+  POSTGRES_USERNAME: postgres
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  REDIS_URL: redis://redis:6379
+  RAILS_LOG_TO_STDOUT: "true"
+  LOG_LEVEL: info
+  RAILS_MAX_THREADS: "3"
+  WEB_CONCURRENCY: "1"
+  SIDEKIQ_CONCURRENCY: "5"
+  MAILER_SENDER_EMAIL: Copiloto <no-reply@localhost>
+  DEFAULT_LOCALE: es
+  SAFE_FETCH_ALLOW_PRIVATE_NETWORK: "true"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: chatwoot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d chatwoot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  chatwoot:
+    image: chatwoot/chatwoot:v4.18.0-ce
+    entrypoint: docker/entrypoints/rails.sh
+    command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
+    environment: *chatwoot-env
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    volumes:
+      - chatwoot_storage:/app/storage
+      - ./infra/bootstrap:/bootstrap:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+    restart: unless-stopped
+
+  sidekiq:
+    image: chatwoot/chatwoot:v4.18.0-ce
+    entrypoint: docker/entrypoints/rails.sh
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    environment: *chatwoot-env
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    volumes:
+      - chatwoot_storage:/app/storage
+    restart: unless-stopped
+
+  pms-mock:
+    build: ./pms_mock
+    environment:
+      HOTEL_DATA_PATH: /app/data/hotel.yaml
+      PMS_DB_PATH: /var/lib/pms/pms.sqlite
+      STAFF_TOKEN: ${STAFF_TOKEN}
+      COPILOTO_EVENTS_URL: http://copiloto:8100/webhooks/pms?secret=${WEBHOOK_SECRET}
+      SIMULATE_DOWN: ${SIMULATE_DOWN:-0}
+    volumes:
+      - ./data:/app/data:ro
+      - pms_data:/var/lib/pms
+    ports:
+      - "8200:8200"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8200/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  copiloto:
+    build: ./copiloto
+    env_file:
+      - path: ./.env.runtime
+        required: false
+    environment:
+      HOTEL_DATA_PATH: /app/data/hotel.yaml
+      COPILOTO_DB_PATH: /var/lib/copiloto/copiloto.sqlite
+      CHATWOOT_URL: http://chatwoot:3000
+      CHATWOOT_PUBLIC_URL: http://localhost:3000
+      PMS_URL: http://pms-mock:8200
+      PMS_STAFF_URL: http://localhost:8200
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      SHIFT_START: ${SHIFT_START:-08:00}
+      SHIFT_END: ${SHIFT_END:-22:00}
+      FIXED_MONTHLY_CLP: ${FIXED_MONTHLY_CLP:-90000}
+    volumes:
+      - ./data:/app/data:ro
+      - copiloto_data:/var/lib/copiloto
+    ports:
+      - "8100:8100"
+    depends_on:
+      pms-mock: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8100/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  landing:
+    image: nginx:alpine
+    volumes:
+      - ./landing:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  redis_data:
+  chatwoot_storage:
+  pms_data:
+  copiloto_data:
