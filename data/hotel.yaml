@@ -21,7 +21,7 @@ hotel:
 
 location:
   headline: "Estamos en el sector Molco, camino Villarrica-Pucón Km 12.5, frente a la playa Calfurray."
-  detail: "Quedamos entre Villarrica y Pucón (12,5 km a cada una), a unos 35 m de la playa."
+  detail: "Quedamos entre Villarrica y Pucón (12,5 km a cada una), a pocos metros de la playa."
   distances:
     - {place: "Playa Calfuray", distance: "35 a 50 m"}
     - {place: "Villarrica", distance: "12,5 km"}

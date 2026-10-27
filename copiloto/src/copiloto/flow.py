@@ -328,6 +328,10 @@ class Copiloto:
             else:
                 await self._say(ctx, "No pude leer las fechas. Prueba con «15/01 al 18/01» o «este finde».")
             return
+        if stay[0] < self._today(ctx):
+            await self._say(ctx, "Esas fechas ya pasaron. Indícame fechas desde hoy en adelante "
+                                 "(ej. «15/01 al 18/01»).")
+            return
         data = ctx.state.data
         data["checkin"], data["checkout"] = stay[0].isoformat(), stay[1].isoformat()
         adults, children = parse_guests(ctx.text)

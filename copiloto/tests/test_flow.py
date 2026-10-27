@@ -220,3 +220,11 @@ async def test_retention_purge_anonymizes_events_and_drops_identifiers(harness):
     assert rows and all(row["conversation_id"] < 0 for row in rows)
     assert all("booking_id" not in json.loads(row["payload"]) for row in rows)
     assert len({row["conversation_id"] for row in rows}) == 1, "un mismo huésped conserva un solo seudónimo"
+
+
+async def test_past_dates_are_rejected_without_reading_the_pms(harness):
+    await harness.say("quiero reservar")
+    await harness.say("01/01/2020 al 03/01/2020")
+    assert any("ya pasaron" in t for t in harness.chatwoot.guest_texts())
+    assert harness.pms.calls == 0
+    assert store.get_state(harness.db, 1).step == "ask_dates"
