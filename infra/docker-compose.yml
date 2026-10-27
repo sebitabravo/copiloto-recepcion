@@ -64,7 +64,7 @@ services:
       - chatwoot_storage:/app/storage
       - ./infra/bootstrap:/bootstrap:ro
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 60

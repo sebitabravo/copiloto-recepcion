@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Copiloto de Recepción · demo Hotel Bordeluz</title>
+<meta name="description" content="Prototipo académico INNOVA3: asistente de recepción para un hotel boutique de Villarrica.">
+<style>
+  :root {
+    --bg:#f6f0e6; --card:#fffaf2; --ink:#2f2418; --muted:#6f604b; --line:#e3d6c0; --accent:#8c6a3f;
+    --accent-ink:#fff; --banner:#2f2418; --banner-ink:#f6f0e6;
+    --hero-a:#d9c3a0; --hero-b:#8c6a3f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1d1812; --card:#272017; --ink:#efe5d3; --muted:#b5a58c; --line:#3b3226; --accent:#d1a971;
+            --accent-ink:#1d1812; --banner:#efe5d3; --banner-ink:#1d1812; --hero-a:#4a3a26; --hero-b:#8c6a3f; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 system-ui, -apple-system, sans-serif; }
+  .banner { background:var(--banner); color:var(--banner-ink); text-align:center; padding:8px 16px; font-size:14px; }
+  .hero { background:linear-gradient(135deg, var(--hero-a), var(--hero-b)); padding:56px 16px 64px; }
+  .wrap { max-width:960px; margin:0 auto; padding:0 16px; }
+  .hero .wrap { padding:0; }
+  .hero h1 { margin:0 0 8px; font-size:clamp(1.8rem, 5vw, 2.8rem); line-height:1.15; color:#fff; }
+  .hero p { margin:0; max-width:560px; color:#fff; opacity:.92; font-size:1.1rem; }
+  h2 { font-size:1.25rem; margin:40px 0 12px; }
+  .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .card h3 { margin:0 0 4px; font-size:1rem; }
+  .card p { margin:0; color:var(--muted); font-size:.95rem; }
+  .step { display:flex; gap:12px; align-items:flex-start; margin:8px 0; }
+  .step b { flex:none; width:28px; height:28px; border-radius:50%; background:var(--accent); color:var(--accent-ink);
+            display:grid; place-items:center; font-size:.9rem; }
+  a { color:var(--accent); }
+  .links a { display:inline-block; margin:0 12px 8px 0; }
+  footer { margin:48px 0 96px; color:var(--muted); font-size:.85rem; }
+  .btn { display:inline-block; background:var(--accent); color:var(--accent-ink); padding:10px 16px; border-radius:8px;
+         text-decoration:none; font-weight:600; }
+</style>
+</head>
+<body>
+<div class="banner" role="note">Prototipo académico INNOVA3 · INACAP, no es el sitio oficial de Hotel Bordeluz.</div>
+<header class="hero">
+  <div class="wrap">
+    <h1>Copiloto de Recepción<br>demo Hotel Bordeluz</h1>
+    <p>Pregunta por la ubicación, los servicios o la disponibilidad. Recepción mantiene el control y confirma cada reserva.</p>
+  </div>
+</header>
+<main class="wrap">
+  <h2>Pruébalo en 1 minuto</h2>
+  <div class="step"><b>1</b><span>Abre el chat (botón abajo a la derecha) y escribe «hola».</span></div>
+  <div class="step"><b>2</b><span>Mira primero la ubicación y pregunta algo: «¿tienen piscina?».</span></div>
+  <div class="step"><b>3</b><span>Elige <em>Disponibilidad</em>, indica fechas y huéspedes: el copiloto lee el PMS simulado y avisa a recepción.</span></div>
+
+  <h2>Qué hace el copiloto</h2>
+  <div class="grid">
+    <div class="card"><h3>Ubicación primero</h3><p>Antes de pedir datos, muestra dónde estamos: Molco, entre Villarrica y Pucón, frente a la playa.</p></div>
+    <div class="card"><h3>Respuestas aprobadas</h3><p>Responde preguntas frecuentes con contenido del hotel, sin inventar. Cada dato tiene su fuente.</p></div>
+    <div class="card"><h3>Lectura fechada del PMS</h3><p>Muestra disponibilidad con hora de lectura y la deja «pendiente de confirmación por recepción».</p></div>
+    <div class="card"><h3>Traspaso con contexto</h3><p>Recepción recibe la pre-información y un cronómetro de 3 minutos para responder.</p></div>
+  </div>
+
+  <h2>Vistas del prototipo</h2>
+  <p class="links">
+    <a href="http://localhost:3000" target="_blank" rel="noopener">Bandeja de recepción (Chatwoot)</a>
+    <a href="http://localhost:8200/admin" target="_blank" rel="noopener">PMS simulado</a>
+    <a href="http://localhost:8100/metricas" target="_blank" rel="noopener">Métricas para gerencia</a>
+    <a href="http://localhost:8100/privacidad" target="_blank" rel="noopener">Aviso de privacidad</a>
+  </p>
+  <footer>Todos los datos de huéspedes son ficticios. Precios y cupos del PMS son simulados. Datos del hotel tomados de su sitio público; los marcados «pendiente de validar» requieren confirmación del hotel.</footer>
+</main>
+
+<script src="config.js"></script>
+<script>
+  (function () {
+    var cfg = window.COPILOTO_CONFIG;
+    if (!cfg || !cfg.websiteToken) { return; }
+    window.chatwootSettings = { locale: "es", position: "right", type: "expanded_bubble",
+                                launcherTitle: "Habla con recepción" };
+    var script = document.createElement("script");
+    script.src = cfg.chatwootUrl + "/packs/js/sdk.js";
+    script.async = true;
+    script.onload = function () {
+      window.chatwootSDK.run({ websiteToken: cfg.websiteToken, baseUrl: cfg.chatwootUrl });
+    };
+    document.body.appendChild(script);
+  })();
+</script>
+</body>
+</html>

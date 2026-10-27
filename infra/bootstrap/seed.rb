@@ -62,6 +62,8 @@ if inbox.nil?
   inbox = Inbox.create!(account: account, channel: channel, name: 'Sitio web demo',
                         greeting_enabled: false, enable_auto_assignment: false)
 end
+# No se pide correo: datos mínimos (R6)
+inbox.update!(enable_email_collect: false)
 [rec1, rec2, admin].each { |u| InboxMember.find_or_create_by!(inbox: inbox, user: u) }
 
 bot = AgentBot.find_or_initialize_by(account: account, name: 'Copiloto de Recepción')
