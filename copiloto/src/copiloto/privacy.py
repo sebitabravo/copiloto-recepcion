@@ -46,8 +46,9 @@ como pre-información y recepción las valida.</p>
 <p>No pedimos RUT, datos de pago, correo ni teléfono dentro del chat.</p>
 
 <h2>Cuánto tiempo los guardamos (retención)</h2>
-<p>{retention} días desde tu último mensaje; luego se borran las conversaciones y la pre-información
-(valor sujeto a validación del hotel). Conservamos solo conteos agregados sin texto.</p>
+<p>El asistente borra su estado de conversación y las pre-reservas auxiliares {retention} días después de tu
+último mensaje (valor sujeto a validación del hotel) y deja solo contadores sin texto ni identificadores
+enlazables. Las conversaciones guardadas en la bandeja de recepción se eliminan según la política del hotel.</p>
 
 <h2>Con quién se comparten</h2>
 <p>Con el equipo de recepción del hotel. El asistente funciona sin inteligencia artificial generativa

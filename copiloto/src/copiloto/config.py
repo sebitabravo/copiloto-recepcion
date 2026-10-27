@@ -21,6 +21,8 @@ class Settings:
     chatwoot_bot_token: str = ""
     chatwoot_team_id: int | None = None
     webhook_secret: str = ""
+    pms_events_secret: str = ""
+    panel_token: str = ""
     pms_url: str = "http://pms-mock:8200"
     pms_staff_url: str = "http://localhost:8200"
     pms_timeout_s: float = 4.0
@@ -50,6 +52,8 @@ class Settings:
             chatwoot_bot_token=env.get("CHATWOOT_BOT_TOKEN", ""),
             chatwoot_team_id=int(team) if team else None,
             webhook_secret=env.get("WEBHOOK_SECRET", ""),
+            pms_events_secret=env.get("PMS_EVENTS_SECRET", ""),
+            panel_token=env.get("PANEL_TOKEN", ""),
             pms_url=env.get("PMS_URL", cls.pms_url),
             pms_staff_url=env.get("PMS_STAFF_URL", cls.pms_staff_url),
             public_url=env.get("COPILOTO_PUBLIC_URL", cls.public_url),

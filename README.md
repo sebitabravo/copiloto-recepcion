@@ -104,5 +104,8 @@ Quedan **pendientes de validar con el hotel**: Km 12.5 vs 2.5 de la dirección, 
 - **WhatsApp**: requiere una app en Meta (login humano) y tiene cuota gratuita limitada. Nunca conectes el
   número real del hotel a esta demo. Ver [canales](docs/canales.md).
 - **Sin LLM**: el flujo es determinista (decisión de EVA2 sobre sostenibilidad y control de contenido).
-- El panel y las métricas no tienen autenticación propia: en un servidor, publícalos detrás de un proxy con
-  login (ver [despliegue](docs/despliegue.md)).
+- Las métricas (solo contadores) no tienen autenticación propia: en un servidor, publícalas detrás de un
+  proxy con login (ver [despliegue](docs/despliegue.md)).
+- El procesamiento de mensajes es *a lo más una vez*: no hay duplicados, pero si Chatwoot cae justo mientras
+  el bot responde, ese mensaje no se reintenta (la conversación queda pendiente). Una cola durable queda para
+  la fase real.

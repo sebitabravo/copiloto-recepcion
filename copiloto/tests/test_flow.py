@@ -189,3 +189,34 @@ async def test_date_formats_reach_guest_question(harness):
         await harness.say("quiero reservar", conversation_id=conversation_id)
         await harness.say(text, conversation_id=conversation_id)
         assert any("adultos" in t for t in harness.chatwoot.guest_texts(conversation_id)), text
+
+
+async def test_human_request_with_partial_party_data_still_hands_off(harness):
+    await harness.say("quiero reservar")
+    await harness.say("15/11 al 18/11")
+    await harness.say("2")
+    await harness.say("recepción")
+    assert harness.chatwoot.statuses[1] == "open" and harness.chatwoot.assigned == [1]
+    assert "niños sin informar" in harness.chatwoot.notes(1)[0]
+
+
+async def test_sold_out_reply_carries_the_reading_date(harness):
+    harness.pms.offers = []
+    await book(harness)
+    text = next(t for t in harness.chatwoot.guest_texts() if "no veo cupo" in t)
+    assert "28-10-2026 15:00" in text
+    assert harness.chatwoot.statuses[1] == "open"
+
+
+async def test_retention_purge_anonymizes_events_and_drops_identifiers(harness):
+    import json
+    await book(harness)
+    await harness.say("1")
+    await harness.core.on_booking_confirmed(1, 99)
+    harness.clock.advance(91 * 86400)
+    store.purge_personal_data(harness.db, harness.clock(), 90, "salt")
+    assert harness.db.execute("SELECT COUNT(*) FROM events WHERE conversation_id = 1").fetchone()[0] == 0
+    rows = harness.db.execute("SELECT conversation_id, kind, payload FROM events").fetchall()
+    assert rows and all(row["conversation_id"] < 0 for row in rows)
+    assert all("booking_id" not in json.loads(row["payload"]) for row in rows)
+    assert len({row["conversation_id"] for row in rows}) == 1, "un mismo huésped conserva un solo seudónimo"

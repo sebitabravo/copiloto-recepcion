@@ -134,8 +134,12 @@ class Copiloto:
             store.save_state(self.db, ctx.state, now)
 
     async def _safe_handoff_after_failure(self, ctx: Context) -> None:
+        """Último recurso: que una persona vea la conversación aunque el flujo haya fallado."""
         try:
-            await self._handoff(ctx, "human_requested", intro="Tuve un problema técnico. ")
+            await self._say(ctx, "Tuve un problema técnico. Paso tu consulta a recepción para que te ayuden.")
+            await self.chatwoot.add_labels(ctx.conversation_id, ["comercial"])
+            await self.chatwoot.assign_team(ctx.conversation_id)
+            await self.chatwoot.set_status(ctx.conversation_id, "open")
         except Exception:
             logger.exception("No se pudo derivar la conversación %s", ctx.conversation_id)
 
@@ -144,6 +148,7 @@ class Copiloto:
         if state.step == "handed_off":
             # La conversación volvió a pending (p. ej. se resolvió y el huésped escribió de nuevo)
             state.reset_session()
+            store.clear_sla(self.db, ctx.conversation_id)
         if state.step == "start":
             await self._welcome(ctx)
             state.step = "menu"
@@ -385,7 +390,7 @@ class Copiloto:
         offers = sorted(reading.offers, key=lambda offer: offer.nightly_price_clp)[:5]
         data["offers"] = [offer.code for offer in offers]
         if not offers:
-            await self._say(ctx, f"Según lectura del PMS a las {self._clock_text(reading.read_at)} no veo cupo "
+            await self._say(ctx, f"Según lectura del PMS del {self._read_label(reading.read_at)} no veo cupo "
                                  "para esas fechas y esa cantidad de huéspedes. Recepción revisará alternativas.")
             await self._handoff(ctx, "commercial")
             return
@@ -460,7 +465,7 @@ class Copiloto:
     def _local_text(self, epoch: float, fmt: str = "%H:%M") -> str:
         return self.settings.local(epoch).strftime(fmt)
 
-    def _note(self, ctx: Context, reason: str, in_shift: bool) -> str:
+    def _note(self, ctx: Context, reason: str, in_shift: bool, now: float) -> str:
         data = ctx.state.data
         rooms = self.hotel.room(data["room_code"]) if data.get("room_code") else None
         if data.get("checkin"):
@@ -468,8 +473,12 @@ class Copiloto:
             stay = f"{data['checkin']} → {data['checkout']} ({plural(nights, 'noche', 'noches')})"
         else:
             stay = "sin fechas capturadas"
-        guests = (f"{plural(data['adults'], 'adulto', 'adultos')}, {plural(data['children'], 'niño', 'niños')}"
-                  if data.get("adults") else "sin huéspedes capturados")
+        if data.get("adults"):
+            kids = data.get("children")
+            guests = plural(data["adults"], "adulto", "adultos") + (
+                f", {plural(kids, 'niño', 'niños')}" if kids is not None else ", niños sin informar")
+        else:
+            guests = "sin huéspedes capturados"
         reasons = {"commercial": "consulta comercial", "human_requested": "pidió hablar con una persona",
                    "pms_down": "PMS sin respuesta: verificar cupos a mano"}
         lines = [
@@ -490,7 +499,7 @@ class Copiloto:
                          "(no bloquea el PMS).")
         lines.append(f"Motivo: {reasons.get(reason, reason)}")
         if in_shift:
-            deadline = self._local_text(ctx.now + self.settings.sla_red_s)
+            deadline = self._local_text(now + self.settings.sla_red_s)
             lines.append(f"Meta: responder antes de las {deadline} ({self.settings.sla_red_s // 60}:00).")
         else:
             lines.append(f"Captura fuera de turno: atender desde las {self.settings.shift_start}.")
@@ -499,8 +508,10 @@ class Copiloto:
     async def _handoff(self, ctx: Context, reason: str, intro: str = "") -> None:
         state = ctx.state
         data = state.data
-        in_shift = self.settings.in_shift(ctx.now)
+        now = self.clock()
+        in_shift = self.settings.in_shift(now)
         complete = bool(data.get("checkin") and data.get("adults") and data.get("children") is not None)
+        note = self._note(ctx, reason, in_shift, now)
         if in_shift:
             closing = ("Ya pasé tu consulta a recepción con estos datos. Una persona te responde en breve; "
                        "ella valida disponibilidad y cierra la reserva contigo.")
@@ -508,37 +519,37 @@ class Copiloto:
             closing = (f"Estamos fuera del horario de recepción ({self.settings.shift_start} a "
                        f"{self.settings.shift_end}). Dejé tu consulta registrada y recepción te responde desde las "
                        f"{self.settings.shift_start}.")
-        await self._say(ctx, intro + closing)
 
+        # La frontera del traspaso (estado, eventos y reloj) se persiste antes de abrir la conversación a
+        # recepción: así una respuesta humana inmediata nunca llega antes que el inicio del cronómetro.
+        state.step = "handed_off"
+        store.save_state(self.db, state, now)
+        record_event(self.db, ctx.conversation_id, "handoff", now, {"reason": reason})
+        record_event(self.db, ctx.conversation_id, "commercial_started", now, {"in_shift": in_shift})
+        if in_shift:
+            store.start_sla(self.db, ctx.conversation_id, now)
+        else:
+            record_event(self.db, ctx.conversation_id, "night_capture", now, {"complete": complete})
+
+        await self._say(ctx, intro + closing)
         labels = ["comercial"] + ([] if in_shift else ["nocturna"])
-        await self.chatwoot.send_message(ctx.conversation_id, self._note(ctx, reason, in_shift), private=True)
+        await self.chatwoot.send_message(ctx.conversation_id, note, private=True)
         await self.chatwoot.add_labels(ctx.conversation_id, labels)
         await self.chatwoot.assign_team(ctx.conversation_id)
         await self.chatwoot.set_status(ctx.conversation_id, "open")
-
-        state.step = "handed_off"
-        record_event(self.db, ctx.conversation_id, "handoff", ctx.now, {"reason": reason})
-        record_event(self.db, ctx.conversation_id, "commercial_started", ctx.now, {"in_shift": in_shift})
-        if in_shift:
-            if state.sla_started_at is None:
-                state.sla_started_at = ctx.now
-        else:
-            record_event(self.db, ctx.conversation_id, "night_capture", ctx.now, {"complete": complete})
 
     # ---------- eventos externos ----------
 
     def on_human_reply(self, conversation_id: int, user_id: int | None, now: float) -> None:
         """Primer mensaje saliente de una persona: detiene el cronómetro del SLA."""
-        state = store.get_state(self.db, conversation_id)
-        if state.sla_started_at is None or state.sla_stopped_at is not None:
-            return
-        state.sla_stopped_at = now
-        store.save_state(self.db, state, now)
-        record_event(self.db, conversation_id, "human_first_reply", now, {"user_id": user_id})
+        if store.stop_sla(self.db, conversation_id, now):
+            record_event(self.db, conversation_id, "human_first_reply", now, {"user_id": user_id})
 
     async def on_booking_confirmed(self, conversation_id: int | None, booking_id: int) -> None:
         """Reserva confirmada por una persona en el PMS (webhook de pms-mock)."""
         now = self.clock()
+        if not mark_processed(self.db, f"booking:{booking_id}", now):
+            return
         record_event(self.db, conversation_id or 0, "booking_confirmed", now, {"booking_id": booking_id})
         if conversation_id is None:
             return

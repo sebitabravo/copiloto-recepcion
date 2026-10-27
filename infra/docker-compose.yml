@@ -89,7 +89,8 @@ services:
       HOTEL_DATA_PATH: /app/data/hotel.yaml
       PMS_DB_PATH: /var/lib/pms/pms.sqlite
       STAFF_TOKEN: ${STAFF_TOKEN}
-      COPILOTO_EVENTS_URL: http://copiloto:8100/webhooks/pms?secret=${WEBHOOK_SECRET}
+      COPILOTO_EVENTS_URL: http://copiloto:8100/webhooks/pms
+      COPILOTO_EVENTS_TOKEN: ${PMS_EVENTS_SECRET}
       SIMULATE_DOWN: ${SIMULATE_DOWN:-0}
     volumes:
       - ./data:/app/data:ro
@@ -116,6 +117,8 @@ services:
       PMS_URL: http://pms-mock:8200
       PMS_STAFF_URL: http://localhost:8200
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      PMS_EVENTS_SECRET: ${PMS_EVENTS_SECRET}
+      PANEL_TOKEN: ${PANEL_TOKEN}
       SHIFT_START: ${SHIFT_START:-08:00}
       SHIFT_END: ${SHIFT_END:-22:00}
       FIXED_MONTHLY_CLP: ${FIXED_MONTHLY_CLP:-90000}

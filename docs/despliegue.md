@@ -25,6 +25,8 @@ en `.env.runtime` (gitignored). Nunca las commitees.
 | Variable | Uso |
 |---|---|
 | `WEBHOOK_SECRET` | Firma HMAC del webhook de Chatwoot y secreto del webhook del PMS |
+| `PMS_EVENTS_SECRET` | Secreto (header) con que el PMS avisa reservas confirmadas al copiloto |
+| `PANEL_TOKEN` | Token del panel de Chatwoot para leer datos de una conversación |
 | `STAFF_TOKEN` | Token que usa recepción en el PMS simulado |
 | `SHIFT_START` / `SHIFT_END` | Turno humano (hora de `America/Santiago`) |
 | `FIXED_MONTHLY_CLP` | Costo fijo mensual para el costo por consulta |
@@ -33,9 +35,10 @@ en `.env.runtime` (gitignored). Nunca las commitees.
 
 1. Una VM con 4 GB de RAM y Docker. Copia el repo, corre `make up`.
 2. Pon un proxy con HTTPS delante (Caddy o nginx) y define `FRONTEND_URL` con la URL pública de Chatwoot.
-3. **Protege `/panel`, `/api/panel/*` y `/metricas*` del copiloto con login en el proxy**: no tienen
-   autenticación propia y muestran nombres y fechas de huéspedes. Expón solo `/webhooks/*` y `/privacidad`
-   sin login.
+3. `/api/panel/*` exige el `PANEL_TOKEN` (header `X-Panel-Token`; el seed lo deja en la URL del Dashboard
+   App) y `/webhooks/*` verifican firma o secreto. **`/metricas*` no tiene autenticación** (solo contadores):
+   protégelo con login en el proxy. Expón sin login solo `/webhooks/*`, `/panel` (HTML estático) y
+   `/privacidad`.
 4. Cambia la URL del Dashboard App en Chatwoot (Configuración → Integraciones → Dashboard Apps) a la URL
    pública del panel, y `PMS_STAFF_URL` a la del PMS.
 5. Respalda los volúmenes `pg_data` y `copiloto_data`.

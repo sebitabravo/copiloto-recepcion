@@ -43,6 +43,7 @@
   const app = document.getElementById("app");
   const params = new URLSearchParams(location.search);
   let conversationId = params.get("conversation_id");
+  const panelToken = params.get("token") || "";
   let snapshot = null;
   let skew = 0;
 
@@ -110,7 +111,8 @@
   async function refresh() {
     if (!conversationId) return;
     try {
-      const response = await fetch(`/api/panel/${encodeURIComponent(conversationId)}`);
+      const response = await fetch(`/api/panel/${encodeURIComponent(conversationId)}`,
+                                   { headers: { "X-Panel-Token": panelToken } });
       if (!response.ok) throw new Error(response.status);
       snapshot = await response.json();
       skew = snapshot.now - Date.now() / 1000;

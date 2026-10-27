@@ -124,7 +124,8 @@ def test_event_emitted_after_commit(client, monkeypatch):
     response = MagicMock()
     seen = []
 
-    def post(url, json):
+    def post(url, json, headers):
+        assert headers == {}
         with sqlite3.connect(client.app.state.database_path) as connection:
             assert connection.execute("SELECT booking_id FROM bookings").fetchone()[0] == json["booking_id"]
         seen.append((url, json))
@@ -137,6 +138,16 @@ def test_event_emitted_after_commit(client, monkeypatch):
     assert seen == [("http://events.test/event", {"kind": "booking_confirmed", "conversation_id": 42,
                                                "booking_id": result.json()["booking_id"]})]
     response.raise_for_status.assert_called_once()
+
+
+def test_event_carries_secret_in_header_not_in_url(client, monkeypatch):
+    monkeypatch.setenv("COPILOTO_EVENTS_URL", "http://events.test/event")
+    monkeypatch.setenv("COPILOTO_EVENTS_TOKEN", "shh")
+    with patch("pms_mock.main.httpx.Client") as http_client:
+        post = http_client.return_value.__enter__.return_value.post
+        assert book(client).status_code == 201
+    assert post.call_args.args[0] == "http://events.test/event"
+    assert post.call_args.kwargs["headers"] == {"X-Events-Token": "shh"}
 
 
 @pytest.mark.parametrize("failure", [httpx.ConnectError("offline"), httpx.HTTPStatusError(

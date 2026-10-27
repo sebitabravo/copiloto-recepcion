@@ -38,6 +38,7 @@ class FakeChatwoot:
         self.labels: dict[int, set[str]] = {}
         self.assigned: list[int] = []
         self.statuses: dict[int, str] = {}
+        self.during: dict[str, object] = {}
 
     async def send_message(self, conversation_id, content, private=False):
         self.messages.append({"conversation_id": conversation_id, "content": content, "private": private,
@@ -49,12 +50,16 @@ class FakeChatwoot:
 
     async def add_labels(self, conversation_id, labels):
         self.labels.setdefault(conversation_id, set()).update(labels)
+        if "add_labels" in self.during:
+            self.during.pop("add_labels")()
 
     async def assign_team(self, conversation_id):
         self.assigned.append(conversation_id)
 
     async def set_status(self, conversation_id, status):
         self.statuses[conversation_id] = status
+        if "set_status" in self.during:
+            self.during.pop("set_status")()
 
     def guest_texts(self, conversation_id=None) -> list[str]:
         return [m["content"] for m in self.messages
@@ -118,8 +123,8 @@ def clock():
 
 @pytest.fixture
 def settings():
-    return Settings(hotel_data_path=str(HOTEL_PATH), db_path=":memory:", webhook_secret="s3cret",
-                    chatwoot_team_id=1, public_url="http://localhost:8100")
+    return Settings(hotel_data_path=str(HOTEL_PATH), db_path=":memory:", webhook_secret="s3cret", pms_events_secret="pms-secret",
+                    panel_token="panel-secret", chatwoot_team_id=1, public_url="http://localhost:8100")
 
 
 @pytest.fixture

@@ -151,8 +151,12 @@ def emit_event(url: str, event: dict) -> None:
     # Tres reintentos después del primer intento; nunca propagar fallos al huésped.
     for attempt in range(4):
         try:
+            headers = {}
+            if os.getenv("COPILOTO_EVENTS_TOKEN"):
+                # Secreto por header: así no queda en los access logs del receptor
+                headers["X-Events-Token"] = os.environ["COPILOTO_EVENTS_TOKEN"]
             with httpx.Client(timeout=2.0, follow_redirects=False) as client:
-                response = client.post(url, json=event)
+                response = client.post(url, json=event, headers=headers)
                 response.raise_for_status()
             return
         except Exception:

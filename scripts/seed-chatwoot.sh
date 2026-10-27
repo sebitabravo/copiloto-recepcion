@@ -14,7 +14,7 @@ raw="$(mktemp)"
 trap 'rm -f "$raw"' EXIT
 
 docker compose -f infra/docker-compose.yml --project-directory . exec -T \
-  -e DEMO_PASSWORD="$DEMO_PASSWORD" -e WEBHOOK_SECRET="$WEBHOOK_SECRET" \
+  -e DEMO_PASSWORD="$DEMO_PASSWORD" -e WEBHOOK_SECRET="$WEBHOOK_SECRET" -e PANEL_TOKEN="$PANEL_TOKEN" \
   chatwoot bundle exec rails runner /bootstrap/seed.rb >"$raw"
 
 grep -q '^SEED_OK' "$raw" || { echo "El seed no terminó con SEED_OK" >&2; exit 1; }

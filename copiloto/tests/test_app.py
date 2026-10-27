@@ -52,17 +52,32 @@ def test_signed_webhook_is_processed(settings, harness):
 def test_pms_webhook_requires_secret_and_records_event(settings, harness):
     client = make_client(settings, harness)
     payload = {"kind": "booking_confirmed", "conversation_id": 5, "booking_id": 7}
-    assert client.post("/webhooks/pms?secret=nope", json=payload).status_code == 401
-    assert client.post(f"/webhooks/pms?secret={settings.webhook_secret}", json=payload).status_code == 200
-    assert len(harness.events("booking_confirmed")) == 1
+    assert client.post("/webhooks/pms", json=payload).status_code == 401
+    assert client.post("/webhooks/pms", json=payload, headers={"X-Events-Token": "nope"}).status_code == 401
+    ok = {"X-Events-Token": settings.pms_events_secret}
+    assert client.post("/webhooks/pms", json=payload, headers=ok).status_code == 200
+    assert client.post("/webhooks/pms", json=payload, headers=ok).status_code == 200
+    assert len(harness.events("booking_confirmed")) == 1, "un reintento del PMS no duplica la conversión"
+    notes = [n for n in harness.chatwoot.notes(5) if "Reserva #7" in n]
+    assert len(notes) == 1
 
 
 def test_panel_endpoints_and_static_pages(settings, harness):
     client = make_client(settings, harness)
     assert "Pre-información lista" in client.get("/panel").text
-    data = client.get("/api/panel/5").json()
+    assert client.get("/api/panel/5").status_code == 401
+    assert client.get("/api/panel/5", headers={"X-Panel-Token": "otro"}).status_code == 401
+    data = client.get("/api/panel/5", headers={"X-Panel-Token": settings.panel_token}).json()
     assert data["sla"]["red_s"] == 180 and data["prebooking"] is None
     assert "Aviso de privacidad" in client.get("/privacidad").text
     assert client.get("/metricas").status_code == 200
     assert "cost_per_query_clp" in client.get("/metricas/data.json?days=7").json()
     assert client.get("/health").json() == {"status": "ok"}
+
+
+def test_panel_and_pms_webhook_reject_everything_without_configured_secrets(settings, harness):
+    from dataclasses import replace
+    client = make_client(replace(settings, panel_token="", pms_events_secret=""), harness)
+    assert client.get("/api/panel/5", headers={"X-Panel-Token": ""}).status_code == 401
+    assert client.post("/webhooks/pms", json={"kind": "booking_confirmed", "booking_id": 1},
+                       headers={"X-Events-Token": ""}).status_code == 401

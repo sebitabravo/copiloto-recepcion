@@ -41,6 +41,11 @@ def verify_signature(settings: Settings, headers, raw_body: bytes, now: float) -
     return hmac.compare_digest(expected, signature)
 
 
+def _token_ok(expected: str, given: str) -> bool:
+    """Comparación en tiempo constante; sin token configurado se rechaza todo."""
+    return bool(expected) and hmac.compare_digest(expected.encode(), given.encode())
+
+
 def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None = None,
                pms: PmsAdapter | None = None, clock=time.time, run_workers: bool = True,
                db: sqlite3.Connection | None = None) -> FastAPI:
@@ -58,7 +63,7 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     async def purge_loop() -> None:
         while True:
             try:
-                result = store.purge_personal_data(db, clock(), settings.retention_days)
+                result = store.purge_personal_data(db, clock(), settings.retention_days, settings.webhook_secret)
                 logger.info("Purga de retención: %s", result)
             except Exception:
                 logger.exception("Falla en la purga de retención")
@@ -88,8 +93,9 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         return {"status": "accepted"}
 
     @app.post("/webhooks/pms")
-    async def pms_webhook(request: Request, secret: str = Query(default="")):
-        if not settings.webhook_secret or not hmac.compare_digest(secret, settings.webhook_secret):
+    async def pms_webhook(request: Request):
+        # El secreto viaja en un header (no en la URL) para que no quede en los access logs
+        if not _token_ok(settings.pms_events_secret, request.headers.get("x-events-token", "")):
             raise HTTPException(status_code=401, detail="Secreto inválido")
         body = await request.json()
         if body.get("kind") != "booking_confirmed" or "booking_id" not in body:
@@ -102,7 +108,9 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         return (STATIC / "panel.html").read_text(encoding="utf-8")
 
     @app.get("/api/panel/{conversation_id}")
-    async def panel_data(conversation_id: int):
+    async def panel_data(conversation_id: int, request: Request):
+        if not _token_ok(settings.panel_token, request.headers.get("x-panel-token", "")):
+            raise HTTPException(status_code=401, detail="Token del panel requerido")
         state = store.get_state(db, conversation_id)
         data = dict(state.data)
         room = hotel.room(data["room_code"]) if data.get("room_code") else None

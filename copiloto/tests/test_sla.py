@@ -84,3 +84,35 @@ async def test_returning_guest_after_handoff_restarts_the_session(harness):
     assert any("Ubicación:" in t for t in harness.chatwoot.guest_texts()[-4:])
     state = store.get_state(harness.db, 1)
     assert state.sla_started_at is None and state.step == "menu"
+
+
+async def test_human_reply_during_handoff_is_not_lost(harness):
+    # Una respuesta humana que llega mientras el bot abre la conversación debe detener el reloj igual
+    harness.chatwoot.during["set_status"] = lambda: harness.core.on_human_reply(1, 7, harness.clock() + 5)
+    await handed_off(harness)
+    state = store.get_state(harness.db, 1)
+    assert state.sla_started_at is not None and state.sla_stopped_at is not None
+    assert len(harness.events("human_first_reply")) == 1
+
+
+async def test_sla_worker_does_not_overwrite_a_recorded_human_stop(harness, settings):
+    await handed_off(harness)
+    worker = SlaWorker(settings, harness.db, harness.chatwoot, harness.clock)
+    harness.clock.advance(125)
+    harness.chatwoot.during["add_labels"] = lambda: harness.core.on_human_reply(1, 7, harness.clock())
+    await worker.tick()
+    assert store.get_state(harness.db, 1).sla_stopped_at is not None
+    harness.clock.advance(100)
+    await worker.tick()
+    assert "sla-vencido" not in harness.chatwoot.labels[1]
+
+
+async def test_sla_starts_at_handoff_time_not_at_inbound_time(harness):
+    await harness.say("quiero reservar")
+    await harness.say("15/11 al 18/11")
+    await harness.say("2")
+    await harness.say("0")
+    harness.chatwoot.during["set_status"] = lambda: None
+    harness.clock.advance(30)
+    await harness.say("1")
+    assert store.get_state(harness.db, 1).sla_started_at == harness.clock.now

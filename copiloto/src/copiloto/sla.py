@@ -38,25 +38,22 @@ class SlaWorker:
             "SELECT conversation_id FROM conversation_state WHERE sla_started_at IS NOT NULL "
             "AND sla_stopped_at IS NULL AND sla_red_done = 0").fetchall()
         for row in rows:
-            state = store.get_state(self.db, row["conversation_id"])
+            conversation_id = row["conversation_id"]
+            state = store.get_state(self.db, conversation_id)
             elapsed = now - state.sla_started_at
             try:
                 if elapsed >= self.settings.sla_red_s:
-                    await self.chatwoot.add_labels(state.conversation_id, ["sla-vencido"])
+                    await self.chatwoot.add_labels(conversation_id, ["sla-vencido"])
                     await self.chatwoot.send_message(
-                        state.conversation_id,
+                        conversation_id,
                         f"SLA vencido: pasaron {int(elapsed)} s sin respuesta humana "
-                        f"(meta {self.settings.sla_red_s} s).",
-                        private=True)
-                    state.sla_red_done = state.sla_amber_done = True
+                        f"(meta {self.settings.sla_red_s} s).", private=True)
+                    store.mark_sla(self.db, conversation_id, red=True)
                 elif elapsed >= self.settings.sla_amber_s and not state.sla_amber_done:
-                    await self.chatwoot.add_labels(state.conversation_id, ["sla-ambar"])
-                    state.sla_amber_done = True
-                else:
-                    continue
-                store.save_state(self.db, state, now)
+                    await self.chatwoot.add_labels(conversation_id, ["sla-ambar"])
+                    store.mark_sla(self.db, conversation_id, amber=True)
             except Exception:
-                logger.exception("No se pudo actualizar el SLA de la conversación %s", state.conversation_id)
+                logger.exception("No se pudo actualizar el SLA de la conversación %s", conversation_id)
 
     async def run(self) -> None:
         while True:

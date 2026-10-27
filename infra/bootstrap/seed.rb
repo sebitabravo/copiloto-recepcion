@@ -4,7 +4,7 @@
 demo_password = ENV.fetch('DEMO_PASSWORD')
 webhook_secret = ENV.fetch('WEBHOOK_SECRET')
 copiloto_url = ENV.fetch('COPILOTO_INTERNAL_URL', 'http://copiloto:8100')
-panel_url = ENV.fetch('COPILOTO_PANEL_URL', 'http://localhost:8100/panel')
+panel_url = "#{ENV.fetch('COPILOTO_PANEL_URL', 'http://localhost:8100/panel')}?token=#{ENV.fetch('PANEL_TOKEN')}"
 landing_url = ENV.fetch('LANDING_URL', 'http://localhost:8080')
 
 account = Account.find_or_create_by!(name: 'Hotel Bordeluz (demo)')

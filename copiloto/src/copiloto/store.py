@@ -1,5 +1,6 @@
 """Persistencia del estado conversacional, las pre-reservas auxiliares y la retención de datos."""
 
+import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass, field
@@ -36,19 +37,45 @@ def get_state(db: sqlite3.Connection, conversation_id: int) -> ConversationState
 
 
 def save_state(db: sqlite3.Connection, state: ConversationState, now: float) -> None:
+    """Guarda el estado conversacional. Las columnas del SLA solo cambian con start/stop/mark/clear_sla,
+    para que una escritura atrasada nunca pise el cronómetro (p. ej. una respuesta humana ya registrada)."""
     db.execute(
         """INSERT INTO conversation_state(conversation_id, step, data, contact_name, contact_ref,
                sla_started_at, sla_stopped_at, sla_amber_done, sla_red_done, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(conversation_id) DO UPDATE SET step=excluded.step, data=excluded.data,
                contact_name=excluded.contact_name, contact_ref=excluded.contact_ref,
-               sla_started_at=excluded.sla_started_at, sla_stopped_at=excluded.sla_stopped_at,
-               sla_amber_done=excluded.sla_amber_done, sla_red_done=excluded.sla_red_done,
                updated_at=excluded.updated_at""",
         (state.conversation_id, state.step, json.dumps(state.data, ensure_ascii=False), state.contact_name,
          state.contact_ref, state.sla_started_at, state.sla_stopped_at, int(state.sla_amber_done),
          int(state.sla_red_done), now),
     )
+
+
+def start_sla(db: sqlite3.Connection, conversation_id: int, now: float) -> None:
+    """Arranca el reloj una sola vez: asignar o reabrir no lo reinicia."""
+    db.execute("UPDATE conversation_state SET sla_started_at = ? WHERE conversation_id = ? "
+               "AND sla_started_at IS NULL", (now, conversation_id))
+
+
+def stop_sla(db: sqlite3.Connection, conversation_id: int, now: float) -> bool:
+    """Detiene el reloj con la primera respuesta humana. True si efectivamente lo detuvo."""
+    cursor = db.execute("UPDATE conversation_state SET sla_stopped_at = ? WHERE conversation_id = ? "
+                        "AND sla_started_at IS NOT NULL AND sla_stopped_at IS NULL", (now, conversation_id))
+    return cursor.rowcount == 1
+
+
+def mark_sla(db: sqlite3.Connection, conversation_id: int, amber: bool = False, red: bool = False) -> None:
+    if amber:
+        db.execute("UPDATE conversation_state SET sla_amber_done = 1 WHERE conversation_id = ?", (conversation_id,))
+    if red:
+        db.execute("UPDATE conversation_state SET sla_amber_done = 1, sla_red_done = 1 "
+                   "WHERE conversation_id = ?", (conversation_id,))
+
+
+def clear_sla(db: sqlite3.Connection, conversation_id: int) -> None:
+    db.execute("UPDATE conversation_state SET sla_started_at = NULL, sla_stopped_at = NULL, sla_amber_done = 0, "
+               "sla_red_done = 0 WHERE conversation_id = ?", (conversation_id,))
 
 
 def create_prebooking(db: sqlite3.Connection, conversation_id: int, data: dict, now: float,
@@ -88,14 +115,33 @@ def convert_prebooking(db: sqlite3.Connection, conversation_id: int) -> None:
                "('active', 'expired')", (conversation_id,))
 
 
-def purge_personal_data(db: sqlite3.Connection, now: float, retention_days: int) -> dict:
-    """Retención (Ley 21.719): borra datos personales vencidos y conserva los eventos agregados sin texto."""
+SAFE_PAYLOAD_KEYS = ("greeting", "in_shift", "complete", "inbound_ts", "faq_id", "status", "ok", "latency_ms",
+                     "reason")
+
+
+def anonymous_id(conversation_id: int, salt: str) -> int:
+    """Seudónimo irreversible y negativo: sigue sirviendo para contar conversaciones, pero no enlaza a Chatwoot."""
+    digest = hashlib.sha256(f"{salt}:{conversation_id}".encode()).digest()
+    return -(int.from_bytes(digest[:7], "big") + 1)
+
+
+def purge_personal_data(db: sqlite3.Connection, now: float, retention_days: int, salt: str = "") -> dict:
+    """Retención (Ley 21.719): borra datos personales vencidos y deja los eventos sin texto ni identificadores
+    enlazables (solo contadores con seudónimo)."""
     cutoff = now - retention_days * 86400
     cursor_state = db.execute("DELETE FROM conversation_state WHERE updated_at < ?", (cutoff,))
     cursor_pre = db.execute("DELETE FROM prebookings WHERE created_at < ?", (cutoff,))
-    cursor_events = db.execute(
-        """UPDATE events SET payload = json_object('greeting', json_extract(payload, '$.greeting'))
-           WHERE ts < ? AND kind = 'inbound' AND json_extract(payload, '$.text') IS NOT NULL""", (cutoff,))
     cursor_msgs = db.execute("DELETE FROM processed_messages WHERE ts < ?", (cutoff,))
+    anonymized = 0
+    for row in db.execute("SELECT id, payload FROM events WHERE ts < ? AND conversation_id > 0",
+                          (cutoff,)).fetchall():
+        payload = json.loads(row["payload"])
+        safe = {key: payload[key] for key in SAFE_PAYLOAD_KEYS if key in payload}
+        db.execute("UPDATE events SET payload = ? WHERE id = ?", (json.dumps(safe), row["id"]))
+        anonymized += 1
+    for row in db.execute("SELECT DISTINCT conversation_id FROM events WHERE ts < ? AND conversation_id > 0",
+                          (cutoff,)).fetchall():
+        db.execute("UPDATE events SET conversation_id = ? WHERE conversation_id = ? AND ts < ?",
+                   (anonymous_id(row["conversation_id"], salt), row["conversation_id"], cutoff))
     return {"conversation_state": cursor_state.rowcount, "prebookings": cursor_pre.rowcount,
-            "inbound_payloads": cursor_events.rowcount, "processed_messages": cursor_msgs.rowcount}
+            "events_anonymized": anonymized, "processed_messages": cursor_msgs.rowcount}
