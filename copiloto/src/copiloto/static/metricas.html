@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Métricas · Copiloto de Recepción</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #362719; background: #f3eadc; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1120px; margin: auto; padding: 2rem 1rem; }
+    h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); margin-bottom: .5rem; }
+    h2 { font-size: 1.1rem; margin-top: 0; }
+    .subtitle, #refresh-status, footer { color: #634d38; }
+    .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .8rem; margin: 1.6rem 0; }
+    select { font: inherit; color: #362719; background: #fffaf2; border: 1px solid #8C6A3F; padding: .6rem; }
+    :focus-visible { outline: 3px solid #67451f; outline-offset: 3px; }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 1rem; }
+    .tile, .events { background: #fffaf2; border: 1px solid #c8b394; border-radius: .7rem; padding: 1.3rem; }
+    .tile { border-top: 4px solid #8C6A3F; }
+    .value { font-size: 1.7rem; font-weight: 700; margin: .6rem 0; overflow-wrap: anywhere; }
+    .detail { font-size: .9rem; margin: 0; }
+    .events { margin-top: 1.5rem; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    caption { text-align: left; padding-bottom: .8rem; }
+    th, td { text-align: left; padding: .7rem .3rem; border-bottom: 1px solid #d5c5ae; }
+    td:last-child, th:last-child { text-align: right; }
+    footer { margin-top: 1.5rem; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Métricas · Copiloto de Recepción</h1>
+      <p class="subtitle">Hotel Boutique Bordeluz · Seguimiento de consultas y atención</p>
+    </header>
+    <div class="toolbar">
+      <label for="days">Período</label>
+      <select id="days">
+        <option value="1">Último día</option>
+        <option value="7" selected>Últimos 7 días</option>
+        <option value="30">Últimos 30 días</option>
+      </select>
+      <p id="refresh-status" role="status" aria-live="polite">Cargando métricas…</p>
+    </div>
+    <section class="tiles" aria-label="Indicadores de atención">
+      <article class="tile">
+        <h2>Latencia de respuestas FAQ</h2>
+        <p class="value" id="faq-median">—</p>
+        <p class="detail">Mediana · p95: <span id="faq-p95">—</span></p>
+      </article>
+      <article class="tile">
+        <h2>Cumplimiento comercial &lt;180 s</h2>
+        <p class="value" id="compliance">—</p>
+        <p class="detail">Primera respuesta humana durante el turno</p>
+      </article>
+      <article class="tile">
+        <h2>Captura nocturna</h2>
+        <p class="value" id="night-capture">—</p>
+        <p class="detail">Consultas nocturnas con datos completos</p>
+      </article>
+      <article class="tile">
+        <h2>Conversión directa</h2>
+        <p class="value" id="conversion">—</p>
+        <p class="detail">Reservas confirmadas dentro de 7 días</p>
+      </article>
+      <article class="tile">
+        <h2>Costo por consulta</h2>
+        <p class="value" id="cost">—</p>
+        <p class="detail">Pesos chilenos (CLP), sin contar saludos</p>
+      </article>
+    </section>
+    <section class="events" aria-labelledby="events-title">
+      <h2 id="events-title">Eventos del período</h2>
+      <table>
+        <caption>Conteo por tipo de evento registrado</caption>
+        <thead><tr><th scope="col">Evento</th><th scope="col">Cantidad</th></tr></thead>
+        <tbody id="event-counts"></tbody>
+      </table>
+    </section>
+    <footer>Datos simulados del prototipo académico INNOVA3</footer>
+  </main>
+  <script>
+    const days = document.getElementById("days");
+    const status = document.getElementById("refresh-status");
+    const numberFormat = new Intl.NumberFormat("es-CL", { maximumFractionDigits: 2 });
+    const moneyFormat = new Intl.NumberFormat("es-CL", {
+      style: "currency", currency: "CLP", maximumFractionDigits: 0
+    });
+    let activeRequest;
+
+    function setValue(id, value, suffix = "", currency = false) {
+      const text = value == null ? "—" : (currency ? moneyFormat.format(value) : numberFormat.format(value));
+      document.getElementById(id).textContent = value == null ? text : text + suffix;
+    }
+
+    async function refreshMetrics() {
+      // Cancelar una lectura anterior evita mostrar un período que ya no está seleccionado.
+      if (activeRequest) activeRequest.abort();
+      const request = new AbortController();
+      activeRequest = request;
+      status.textContent = "Actualizando métricas…";
+      try {
+        const response = await fetch(`/metricas/data.json?days=${days.value}`, {
+          signal: request.signal, cache: "no-store"
+        });
+        if (!response.ok) throw new Error("No se pudieron cargar las métricas");
+        const data = await response.json();
+        if (request !== activeRequest) return;
+        setValue("faq-median", data.faq_latency_median_s, " s");
+        setValue("faq-p95", data.faq_latency_p95_s, " s");
+        setValue("compliance", data.commercial_response_compliance_pct, " %");
+        setValue("night-capture", data.night_capture_rate_pct, " %");
+        setValue("conversion", data.direct_conversion_pct, " %");
+        setValue("cost", data.cost_per_query_clp, " CLP", true);
+        const tbody = document.getElementById("event-counts");
+        tbody.replaceChildren();
+        for (const [kind, count] of Object.entries(data.counts).sort()) {
+          const row = document.createElement("tr");
+          const label = document.createElement("th");
+          label.scope = "row";
+          label.textContent = kind;
+          const value = document.createElement("td");
+          value.textContent = count == null ? "—" : numberFormat.format(count);
+          row.append(label, value);
+          tbody.append(row);
+        }
+        status.textContent = `Actualizado a las ${new Date().toLocaleTimeString("es-CL")}. Se renueva cada 15 s.`;
+      } catch (error) {
+        if (error.name !== "AbortError" && request === activeRequest) {
+          status.textContent = "No se pudieron actualizar las métricas. Se reintentará en 15 s.";
+        }
+      }
+    }
+
+    days.addEventListener("change", refreshMetrics);
+    refreshMetrics();
+    setInterval(refreshMetrics, 15000);
+  </script>
+</body>
+</html>
