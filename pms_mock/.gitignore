@@ -1,0 +1,8 @@
+.venv/
+.uv-cache/
+.python/
+__pycache__/
+.pytest_cache/
+*.sqlite
+*.sqlite-*
+*.pyc

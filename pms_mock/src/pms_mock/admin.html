@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recepción — Hotel Boutique Bordeluz</title>
+<style>body{font-family:system-ui,sans-serif;max-width:850px;margin:2rem auto;padding:0 1rem}label{display:block;margin:.7rem 0}input{padding:.5rem;max-width:95%}button{padding:.7rem;margin:.5rem 0}table{border-collapse:collapse;width:100%;overflow-wrap:anywhere}td,th{border:1px solid #ccc;padding:.4rem;text-align:left}#message{white-space:pre-wrap}</style>
+</head>
+<body>
+<h1>Recepción · Hotel Boutique Bordeluz</h1>
+<p>PMS simulado. La distribución y los precios no son datos comerciales reales.</p>
+<label>Token del personal <input id="token" type="password" autocomplete="off"></label>
+<button id="load" type="button">Consultar reservas</button>
+<h2>Confirmar reserva</h2>
+<p>Revise todos los datos antes de confirmar. Esta acción crea una reserva.</p>
+<form id="booking">
+<label>Nombre del huésped <input name="guest_name" required maxlength="200"></label>
+<label>Entrada <input name="checkin" type="date" required></label>
+<label>Salida <input name="checkout" type="date" required></label>
+<label>Código del tipo de habitación <input name="room_code" required></label>
+<label>Adultos <input name="adults" type="number" min="1" value="1" required></label>
+<label>Niños <input name="children" type="number" min="0" value="0" required></label>
+<label>ID de conversación (opcional) <input name="conversation_id" type="number" step="1"></label>
+<label><input id="confirmed" type="checkbox" required> He revisado los datos y confirmo esta reserva.</label>
+<button id="submit" type="submit">Confirmar reserva</button>
+</form>
+<p id="message" role="status" aria-live="polite"></p>
+<h2>Reservas registradas</h2>
+<table><thead><tr><th>ID</th><th>Huésped</th><th>Entrada</th><th>Salida</th><th>Habitación</th><th>Adultos</th><th>Niños</th></tr></thead><tbody id="rows"></tbody></table>
+<script>
+const form = document.getElementById('booking');
+const message = document.getElementById('message');
+const params = new URLSearchParams(location.search);
+for (const name of ['checkin','checkout','room_code','adults','children','conversation_id']) {
+  if (params.has(name)) form.elements[name].value = params.get(name);
+}
+if (params.has('guest')) form.elements.guest_name.value = params.get('guest');
+async function api(path, options = {}) {
+  const response = await fetch(path, {...options, headers: {
+    'Content-Type': 'application/json',
+    'X-Staff-Token': document.getElementById('token').value,
+  }});
+  const data = await response.json();
+  if (!response.ok) throw new Error(`Error ${response.status}: ${JSON.stringify(data.detail)}`);
+  return data;
+}
+async function loadBookings() {
+  const bookings = await api('/api/v1/bookings');
+  const rows = document.getElementById('rows');
+  rows.replaceChildren();
+  for (const booking of bookings) {
+    const row = document.createElement('tr');
+    for (const field of ['booking_id','guest_name','checkin','checkout','room_code','adults','children']) {
+      const cell = document.createElement('td');
+      cell.textContent = String(booking[field]);
+      row.appendChild(cell);
+    }
+    rows.appendChild(row);
+  }
+}
+document.getElementById('load').addEventListener('click', async () => {
+  try { await loadBookings(); message.textContent = 'Reservas actualizadas.'; }
+  catch (error) { message.textContent = error.message; }
+});
+form.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!form.reportValidity()) return;
+  const payload = Object.fromEntries(new FormData(form));
+  payload.adults = Number(payload.adults);
+  payload.children = Number(payload.children);
+  payload.conversation_id = payload.conversation_id === '' ? null : Number(payload.conversation_id);
+  const submit = document.getElementById('submit');
+  submit.disabled = true;
+  let created = false;
+  try {
+    const booking = await api('/api/v1/bookings', {method:'POST',body:JSON.stringify(payload)});
+    created = true;
+    message.textContent = `Reserva ${booking.booking_id} confirmada.`;
+    document.getElementById('confirmed').checked = false;
+    await loadBookings();
+  } catch (error) {
+    message.textContent = (created ? 'La reserva se confirmó, pero no se pudo actualizar la lista. ' : '') + error.message;
+  } finally { submit.disabled = false; }
+});
+</script>
+</body></html>
