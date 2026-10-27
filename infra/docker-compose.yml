@@ -5,7 +5,7 @@ x-chatwoot-env: &chatwoot-env
   NODE_ENV: production
   INSTALLATION_ENV: docker
   SECRET_KEY_BASE: ${SECRET_KEY_BASE}
-  FRONTEND_URL: http://localhost:3000
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
   FORCE_SSL: "false"
   ENABLE_ACCOUNT_SIGNUP: "false"
   POSTGRES_HOST: postgres

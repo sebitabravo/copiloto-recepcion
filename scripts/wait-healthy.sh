@@ -5,7 +5,7 @@ set -euo pipefail
 wait_for() {
   local name="$1" url="$2" tries="${3:-90}"
   for _ in $(seq 1 "$tries"); do
-    if curl -fsS -o /dev/null "$url"; then
+    if curl -fs -o /dev/null "$url"; then
       echo "OK   $name ($url)"
       return 0
     fi

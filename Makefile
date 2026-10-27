@@ -1,7 +1,7 @@
 # Copiloto de Recepción · demo Hotel Bordeluz
 COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
 
-.PHONY: up down reset env ps logs test seed health e2e
+.PHONY: up down reset env ps logs test seed health e2e creds
 
 env:
 	./scripts/bootstrap.sh
@@ -45,3 +45,6 @@ down:
 reset:
 	@read -p "ATENCIÓN: borra TODOS los volúmenes (conversaciones, base de Chatwoot, reservas simuladas). ¿Seguir? [s/N] " ok; \
 	  [ "$$ok" = "s" ] && $(COMPOSE) down -v && rm -f .env.runtime landing/config.js
+
+creds:
+	./scripts/show-credentials.sh

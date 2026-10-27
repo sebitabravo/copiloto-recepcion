@@ -125,7 +125,7 @@
           row.append(label, value);
           tbody.append(row);
         }
-        status.textContent = `Actualizado a las ${new Date().toLocaleTimeString("es-CL")}. Se renueva cada 15 s.`;
+        status.textContent = `Actualizado a las ${new Date().toLocaleTimeString("es-CL")} · se renueva cada 15 s`;
       } catch (error) {
         if (error.name !== "AbortError" && request === activeRequest) {
           status.textContent = "No se pudieron actualizar las métricas. Se reintentará en 15 s.";

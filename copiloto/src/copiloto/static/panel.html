@@ -98,7 +98,7 @@
           <dt>Fechas</dt><dd>${stay ?? "—"}</dd>
           <dt>Huéspedes</dt><dd>${esc(guests)}</dd>
           <dt>Habitación</dt><dd>${esc(s.room_name || (d.checkin ? "A definir por recepción" : null))}</dd>
-          <dt>Lectura PMS</dt><dd>${esc(d.read_at)}${d.simulated ? ' <span class="tag">simulada</span>' : ""}</dd>
+          <dt>Lectura PMS</dt><dd>${esc(d.read_label || d.read_at)}${d.simulated ? ' <span class="tag">simulada</span>' : ""}</dd>
           <dt>Pre-reserva</dt><dd>${esc(preText)}</dd>
         </dl>
         <a class="btn" href="${esc(s.pms_url)}" target="_blank" rel="noopener"

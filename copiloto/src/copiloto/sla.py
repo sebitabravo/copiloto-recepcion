@@ -45,7 +45,8 @@ class SlaWorker:
                     await self.chatwoot.add_labels(state.conversation_id, ["sla-vencido"])
                     await self.chatwoot.send_message(
                         state.conversation_id,
-                        f"SLA vencido: pasaron {int(elapsed)} s sin respuesta humana (meta {self.settings.sla_red_s} s).",
+                        f"SLA vencido: pasaron {int(elapsed)} s sin respuesta humana "
+                        f"(meta {self.settings.sla_red_s} s).",
                         private=True)
                     state.sla_red_done = state.sla_amber_done = True
                 elif elapsed >= self.settings.sla_amber_s and not state.sla_amber_done:

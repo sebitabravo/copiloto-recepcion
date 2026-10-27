@@ -377,6 +377,7 @@ class Copiloto:
         latency_ms = int((time.monotonic() - started) * 1000)
         record_event(self.db, ctx.conversation_id, "pms_read", self.clock(), {"ok": True, "latency_ms": latency_ms})
         data["read_at"] = reading.read_at
+        data["read_label"] = self._read_label(reading.read_at)
         data["simulated"] = reading.simulated
         offers = sorted(reading.offers, key=lambda offer: offer.nightly_price_clp)[:5]
         data["offers"] = [offer.code for offer in offers]
@@ -398,6 +399,14 @@ class Copiloto:
         return offer.name.removeprefix("Habitación ")
 
     @staticmethod
+    def _read_label(read_at: str) -> str:
+        """'2026-10-27T17:39:54-03:00' → '27-10-2026 17:39'."""
+        if len(read_at) < 16:
+            return read_at
+        year, month, day = read_at[:10].split("-")
+        return f"{day}-{month}-{year} {read_at[11:16]}"
+
+    @staticmethod
     def _clock_text(read_at: str) -> str:
         return read_at[11:16] if len(read_at) >= 16 else read_at
 
@@ -406,7 +415,7 @@ class Copiloto:
         for offer in offers:
             lines.append(f"• {self._short_name(offer)} ({offer.m2:g} m²): {money(offer.nightly_price_clp)} por noche"
                          f" · quedan {offer.available_units}")
-        read_date = reading.read_at[:10]
+        read_date = self._read_label(reading.read_at)[:10]
         simulated = " Precios y cupos simulados (prototipo)." if reading.simulated else ""
         return (f"Disponible según lectura del PMS a las {self._clock_text(reading.read_at)} del {read_date}:\n"
                 + "\n".join(lines)
@@ -474,7 +483,8 @@ class Copiloto:
         ]
         if data.get("read_at"):
             sim = " (simulada)" if data.get("simulated") else ""
-            lines.append(f"Lectura PMS: {data['read_at']}{sim}. Revalidar antes de confirmar.")
+            when = data.get("read_label", data["read_at"])
+            lines.append(f"Lectura PMS: {when}{sim}. Revalidar antes de confirmar.")
         prebooking = store.active_prebooking(self.db, ctx.conversation_id)
         if prebooking and prebooking["status"] == "active":
             lines.append(f"Pre-reserva auxiliar hasta las {self._local_text(prebooking['expires_at'])} "

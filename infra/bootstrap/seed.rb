@@ -81,6 +81,9 @@ app.user = admin
 app.content = [{ 'type' => 'frame', 'url' => panel_url }]
 app.save!
 
+# Sin esto Chatwoot redirige siempre a /installation/onboarding en una instalación nueva
+::Redis::Alfred.delete(::Redis::Alfred::CHATWOOT_INSTALLATION_ONBOARDING)
+
 puts "RUNTIME_VAR CHATWOOT_ACCOUNT_ID=#{account.id}"
 puts "RUNTIME_VAR CHATWOOT_ADMIN_TOKEN=#{admin.access_token.token}"
 puts "RUNTIME_VAR CHATWOOT_BOT_TOKEN=#{bot.access_token.token}"
