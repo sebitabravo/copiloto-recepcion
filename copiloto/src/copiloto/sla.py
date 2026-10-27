@@ -39,21 +39,35 @@ class SlaWorker:
             "AND sla_stopped_at IS NULL AND sla_red_done = 0").fetchall()
         for row in rows:
             conversation_id = row["conversation_id"]
-            state = store.get_state(self.db, conversation_id)
-            elapsed = now - state.sla_started_at
             try:
-                if elapsed >= self.settings.sla_red_s:
-                    await self.chatwoot.add_labels(conversation_id, ["sla-vencido"])
-                    await self.chatwoot.send_message(
-                        conversation_id,
-                        f"SLA vencido: pasaron {int(elapsed)} s sin respuesta humana "
-                        f"(meta {self.settings.sla_red_s} s).", private=True)
-                    store.mark_sla(self.db, conversation_id, red=True)
-                elif elapsed >= self.settings.sla_amber_s and not state.sla_amber_done:
-                    await self.chatwoot.add_labels(conversation_id, ["sla-ambar"])
-                    store.mark_sla(self.db, conversation_id, amber=True)
+                await self._check_one(conversation_id, now)
             except Exception:
                 logger.exception("No se pudo actualizar el SLA de la conversación %s", conversation_id)
+
+    def _running(self, conversation_id: int):
+        """Estado fresco si el reloj sigue corriendo; None si se detuvo o reinició mientras tanto."""
+        state = store.get_state(self.db, conversation_id)
+        if state.sla_started_at is None or state.sla_stopped_at is not None:
+            return None
+        return state
+
+    async def _check_one(self, conversation_id: int, now: float) -> None:
+        state = self._running(conversation_id)
+        if state is None:
+            return
+        elapsed = now - state.sla_started_at
+        if elapsed >= self.settings.sla_red_s:
+            await self.chatwoot.add_labels(conversation_id, ["sla-vencido"])
+            if self._running(conversation_id) is None:
+                return
+            await self.chatwoot.send_message(
+                conversation_id,
+                f"SLA vencido: pasaron {int(elapsed)} s sin respuesta humana "
+                f"(meta {self.settings.sla_red_s} s).", private=True)
+            store.mark_sla(self.db, conversation_id, red=True)
+        elif elapsed >= self.settings.sla_amber_s and not state.sla_amber_done:
+            await self.chatwoot.add_labels(conversation_id, ["sla-ambar"])
+            store.mark_sla(self.db, conversation_id, amber=True)
 
     async def run(self) -> None:
         while True:

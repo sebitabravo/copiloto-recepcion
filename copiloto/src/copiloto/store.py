@@ -120,7 +120,8 @@ SAFE_PAYLOAD_KEYS = ("greeting", "in_shift", "complete", "inbound_ts", "faq_id",
 
 
 def anonymous_id(conversation_id: int, salt: str) -> int:
-    """Seudónimo irreversible y negativo: sigue sirviendo para contar conversaciones, pero no enlaza a Chatwoot."""
+    """Seudónimo negativo con sal secreta: sigue sirviendo para contar conversaciones, pero no se puede
+    enlazar con el id de Chatwoot sin conocer la sal."""
     digest = hashlib.sha256(f"{salt}:{conversation_id}".encode()).digest()
     return -(int.from_bytes(digest[:7], "big") + 1)
 

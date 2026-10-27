@@ -123,6 +123,17 @@ class Copiloto:
         if contact_name and not state.contact_name:
             state.contact_name = contact_name
         ctx = Context(conversation_id, text, normalize(text), channel, now, state)
+        if state.step == "handed_off":
+            returning_greeting = ctx.plain.strip("!¡., ") in GREETING_WORDS
+            record_event(self.db, conversation_id, "inbound", now, {"text": text, "greeting": returning_greeting})
+            if now <= state.data.get("handoff_at", 0):
+                # El mensaje llegó antes del traspaso y esperó el lock: ya lo ve recepción
+                return
+            # La conversación volvió a pending (p. ej. se resolvió y el huésped escribió de nuevo)
+            state.reset_session()
+            store.clear_sla(self.db, conversation_id)
+            store.save_state(self.db, state, now)
+            return await self._restart_session(ctx)
         greeting = state.step == "start" and ctx.plain.strip("!¡., ") in GREETING_WORDS
         record_event(self.db, conversation_id, "inbound", now, {"text": text, "greeting": greeting})
         try:
@@ -133,22 +144,39 @@ class Copiloto:
         finally:
             store.save_state(self.db, ctx.state, now)
 
-    async def _safe_handoff_after_failure(self, ctx: Context) -> None:
-        """Último recurso: que una persona vea la conversación aunque el flujo haya fallado."""
+    async def _restart_session(self, ctx: Context) -> None:
+        """Huésped que vuelve tras un traspaso: empieza una consulta nueva con el mismo flujo."""
+        greeting = ctx.plain.strip("!¡., ") in GREETING_WORDS
         try:
+            await self._route(ctx, greeting)
+        except Exception:
+            logger.exception("Falla en el flujo de la conversación %s; se deriva a recepción", ctx.conversation_id)
+            await self._safe_handoff_after_failure(ctx)
+        finally:
+            store.save_state(self.db, ctx.state, ctx.now)
+
+    async def _safe_handoff_after_failure(self, ctx: Context) -> None:
+        """Último recurso: que una persona vea la conversación, con su nota, aunque el flujo haya fallado."""
+        try:
+            now = self.clock()
+            in_shift = self.settings.in_shift(now)
+            if ctx.state.step != "handed_off":
+                self._persist_handoff(ctx, "error", now, in_shift)
             await self._say(ctx, "Tuve un problema técnico. Paso tu consulta a recepción para que te ayuden.")
-            await self.chatwoot.add_labels(ctx.conversation_id, ["comercial"])
-            await self.chatwoot.assign_team(ctx.conversation_id)
-            await self.chatwoot.set_status(ctx.conversation_id, "open")
+            await self.chatwoot.send_message(ctx.conversation_id, self._note(ctx, "error", in_shift, now),
+                                             private=True)
+            await self._open_for_humans(ctx, in_shift)
         except Exception:
             logger.exception("No se pudo derivar la conversación %s", ctx.conversation_id)
 
+    async def _open_for_humans(self, ctx: Context, in_shift: bool) -> None:
+        labels = ["comercial"] + ([] if in_shift else ["nocturna"])
+        await self.chatwoot.add_labels(ctx.conversation_id, labels)
+        await self.chatwoot.assign_team(ctx.conversation_id)
+        await self.chatwoot.set_status(ctx.conversation_id, "open")
+
     async def _route(self, ctx: Context, greeting: bool) -> None:
         state = ctx.state
-        if state.step == "handed_off":
-            # La conversación volvió a pending (p. ej. se resolvió y el huésped escribió de nuevo)
-            state.reset_session()
-            store.clear_sla(self.db, ctx.conversation_id)
         if state.step == "start":
             await self._welcome(ctx)
             state.step = "menu"
@@ -484,7 +512,8 @@ class Copiloto:
         else:
             guests = "sin huéspedes capturados"
         reasons = {"commercial": "consulta comercial", "human_requested": "pidió hablar con una persona",
-                   "pms_down": "PMS sin respuesta: verificar cupos a mano"}
+                   "pms_down": "PMS sin respuesta: verificar cupos a mano",
+                   "error": "falla técnica del copiloto: retomar la conversación a mano"}
         lines = [
             "Pre-información del copiloto",
             f"Huésped: {ctx.state.contact_name or 'sin nombre'} (conversación #{ctx.conversation_id})",
@@ -524,9 +553,18 @@ class Copiloto:
                        f"{self.settings.shift_end}). Dejé tu consulta registrada y recepción te responde desde las "
                        f"{self.settings.shift_start}.")
 
-        # La frontera del traspaso (estado, eventos y reloj) se persiste antes de abrir la conversación a
-        # recepción: así una respuesta humana inmediata nunca llega antes que el inicio del cronómetro.
+        self._persist_handoff(ctx, reason, now, in_shift, complete)
+        await self._say(ctx, intro + closing)
+        await self.chatwoot.send_message(ctx.conversation_id, note, private=True)
+        await self._open_for_humans(ctx, in_shift)
+
+    def _persist_handoff(self, ctx: Context, reason: str, now: float, in_shift: bool,
+                         complete: bool = False) -> None:
+        """La frontera del traspaso (estado, eventos y reloj) se persiste antes de abrir la conversación a
+        recepción: así una respuesta humana inmediata nunca llega antes que el inicio del cronómetro."""
+        state = ctx.state
         state.step = "handed_off"
+        state.data["handoff_at"] = now
         store.save_state(self.db, state, now)
         record_event(self.db, ctx.conversation_id, "handoff", now, {"reason": reason})
         record_event(self.db, ctx.conversation_id, "commercial_started", now, {"in_shift": in_shift})
@@ -534,13 +572,6 @@ class Copiloto:
             store.start_sla(self.db, ctx.conversation_id, now)
         else:
             record_event(self.db, ctx.conversation_id, "night_capture", now, {"complete": complete})
-
-        await self._say(ctx, intro + closing)
-        labels = ["comercial"] + ([] if in_shift else ["nocturna"])
-        await self.chatwoot.send_message(ctx.conversation_id, note, private=True)
-        await self.chatwoot.add_labels(ctx.conversation_id, labels)
-        await self.chatwoot.assign_team(ctx.conversation_id)
-        await self.chatwoot.set_status(ctx.conversation_id, "open")
 
     # ---------- eventos externos ----------
 
@@ -552,12 +583,15 @@ class Copiloto:
     async def on_booking_confirmed(self, conversation_id: int | None, booking_id: int) -> None:
         """Reserva confirmada por una persona en el PMS (webhook de pms-mock)."""
         now = self.clock()
-        if not mark_processed(self.db, f"booking:{booking_id}", now):
+        key = f"booking:{booking_id}"
+        if self.db.execute("SELECT 1 FROM processed_messages WHERE message_id = ?", (key,)).fetchone():
             return
         record_event(self.db, conversation_id or 0, "booking_confirmed", now, {"booking_id": booking_id})
+        if conversation_id is not None:
+            store.convert_prebooking(self.db, conversation_id)
+        mark_processed(self.db, key, now)
         if conversation_id is None:
             return
-        store.convert_prebooking(self.db, conversation_id)
         try:
             await self.chatwoot.send_message(
                 conversation_id, f"Reserva #{booking_id} cerrada por recepción en el PMS.", private=True)

@@ -63,7 +63,8 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     async def purge_loop() -> None:
         while True:
             try:
-                result = store.purge_personal_data(db, clock(), settings.retention_days, settings.webhook_secret)
+                result = store.purge_personal_data(db, clock(), settings.retention_days,
+                                                  settings.pms_events_secret or "copiloto")
                 logger.info("Purga de retención: %s", result)
             except Exception:
                 logger.exception("Falla en la purga de retención")

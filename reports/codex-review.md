@@ -135,3 +135,20 @@ Cada hallazgo se verificó leyendo el código antes de actuar.
 | 8 | Corregido (parcial) | La purga seudonimiza `conversation_id` y deja solo claves no identificables; la retención en Chatwoot queda como política del hotel (aviso de privacidad y docs lo dicen) |
 | 9 | Corregido | `booking_id` se deduplica con `processed_messages`. Test en `test_app.py` |
 | 10 | Corregido | La respuesta sin cupo incluye fecha y hora de la lectura |
+
+## Segunda revisión: skill `code-review` (nivel medium, sobre `copiloto/src`, `pms_mock/src`, `infra`, `scripts`)
+
+| Hallazgo | Estado |
+|---|---|
+| Worker SLA: `now - None` y alerta tras respuesta humana | Corregido: revalida el estado antes y después de cada await (`_running`); test `test_sla_worker_survives_a_clock_cleared_mid_check` |
+| Fallback tras falla sin nota/eventos/SLA | Corregido: `_persist_handoff` + nota con motivo `error`; test `test_unexpected_failure_hands_off_with_note_and_events` |
+| `booking:N` marcado antes de aplicar efectos | Corregido: se marca después de registrar y convertir |
+| Mensaje en cola resetea el SLA de un traspaso activo | Corregido: `handoff_at`; los mensajes anteriores al traspaso se ignoran. Test `test_message_queued_behind_the_handoff_does_not_reset_the_clock` |
+| «hola» de un huésped que vuelve cae en fallback y cuenta como consulta | Corregido: el reinicio de sesión ocurre antes de evaluar el saludo |
+| `PANEL_TOKEN` en la query string quedaba en access logs | Corregido: uvicorn corre con `--no-access-log` |
+| Seudónimo con `WEBHOOK_SECRET` (también está en la base de Chatwoot) | Corregido: sal = `PMS_EVENTS_SECRET`, que Chatwoot no guarda |
+| Quick tunnel expone todo Chatwoot | Documentado como riesgo explícito en `docs/canales.md` |
+| Rutas `async def` con SQLite en el event loop | Aceptado: consultas locales cortas; el hilo único evita compartir la conexión entre hilos |
+| Métricas cuentan solo el primer traspaso por conversación | Aceptado y documentado: una conversación reabierta no se cuenta como lead nuevo |
+| `scripts/e2e.py` usa la fecha fija 2027-03-15 | Pendiente: vence en marzo de 2027 |
+| Purga fila por fila | Aceptado: volumen de prototipo |

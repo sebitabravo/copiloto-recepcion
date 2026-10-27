@@ -9,7 +9,8 @@ Chatwoot registra el webhook de Telegram con `FRONTEND_URL`, así que necesita u
 
 1. En Telegram habla con **@BotFather**, crea un bot y copia el token.
 2. `./scripts/tunnel.sh` (Quick Tunnel de Cloudflare vía Docker con tag fijado) y copia la URL
-   `https://xxxx.trycloudflare.com`. La URL cambia cada vez; deja la terminal abierta.
+   `https://xxxx.trycloudflare.com`. La URL cambia cada vez; deja la terminal abierta. **El túnel expone Chatwoot completo (login y API) a
+   internet**: úsalo solo durante la prueba, con la contraseña demo fuerte, y ciérralo al terminar.
 3. En otra terminal: `FRONTEND_URL=https://xxxx.trycloudflare.com docker compose -f infra/docker-compose.yml
    --project-directory . up -d chatwoot sidekiq`.
 4. En Chatwoot: Configuración → Bandejas → Agregar → **Telegram**, pega el token.

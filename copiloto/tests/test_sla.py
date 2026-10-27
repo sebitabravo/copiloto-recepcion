@@ -116,3 +116,44 @@ async def test_sla_starts_at_handoff_time_not_at_inbound_time(harness):
     harness.clock.advance(30)
     await harness.say("1")
     assert store.get_state(harness.db, 1).sla_started_at == harness.clock.now
+
+
+async def test_returning_guest_greeting_gets_the_menu_not_a_fallback(harness):
+    await handed_off(harness)
+    harness.clock.advance(400)
+    await harness.say("hola", status="pending")
+    assert not any("No estoy seguro" in t for t in harness.chatwoot.guest_texts())
+    assert harness.chatwoot.messages[-1]["options"], "debe terminar en el menú"
+    assert json.loads(harness.events("inbound")[-1]["payload"])["greeting"] is True
+
+
+async def test_message_queued_behind_the_handoff_does_not_reset_the_clock(harness):
+    await handed_off(harness)
+    started = store.get_state(harness.db, 1).sla_started_at
+    # Mensaje que llegó antes del traspaso (misma marca de tiempo) y recién se procesa
+    await harness.say("gracias", status="pending")
+    assert store.get_state(harness.db, 1).sla_started_at == started
+    assert store.get_state(harness.db, 1).step == "handed_off"
+
+
+async def test_sla_worker_survives_a_clock_cleared_mid_check(harness, settings):
+    await handed_off(harness)
+    worker = SlaWorker(settings, harness.db, harness.chatwoot, harness.clock)
+    harness.clock.advance(200)
+    harness.chatwoot.during["add_labels"] = lambda: store.clear_sla(harness.db, 1)
+    await worker.tick()
+    assert not any("SLA vencido" in n for n in harness.chatwoot.notes(1))
+
+
+async def test_unexpected_failure_hands_off_with_note_and_events(harness):
+    async def boom(*args):
+        raise RuntimeError("falla inesperada")
+    harness.pms.availability = boom
+    await harness.say("quiero reservar")
+    await harness.say("15/11 al 18/11")
+    await harness.say("2")
+    await harness.say("0")
+    assert harness.chatwoot.statuses[1] == "open"
+    assert any("falla técnica" in n for n in harness.chatwoot.notes(1))
+    assert json.loads(harness.events("handoff")[0]["payload"])["reason"] == "error"
+    assert store.get_state(harness.db, 1).sla_started_at is not None
