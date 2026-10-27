@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel · Copiloto de Recepción</title>
+<style>
+  :root {
+    --bg:#f6f0e6; --card:#fffaf2; --ink:#2f2418; --muted:#7a6a55; --line:#e3d6c0; --accent:#8c6a3f;
+    --ok:#2e7d32; --warn:#b26a00; --bad:#c62828; --btn-ink:#fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1d1812; --card:#272017; --ink:#efe5d3; --muted:#b5a58c; --line:#3b3226; --accent:#d1a971;
+            --ok:#66bb6a; --warn:#ffb74d; --bad:#ef5350; --btn-ink:#1d1812; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui, sans-serif; }
+  h1 { font-size:13px; margin:0 0 8px; color:var(--muted); font-weight:600; letter-spacing:.04em; text-transform:uppercase; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; }
+  .timer { display:flex; align-items:baseline; justify-content:space-between; }
+  .clock { font-size:34px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .goal { color:var(--muted); font-size:13px; }
+  .bar { height:8px; border-radius:4px; background:var(--line); overflow:hidden; margin-top:8px; }
+  .bar > span { display:block; height:100%; width:0; background:var(--ok); transition:width .4s, background .4s; }
+  .state-ok { color:var(--ok); } .state-warn { color:var(--warn); } .state-bad { color:var(--bad); }
+  .state-idle { color:var(--muted); }
+  dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:4px 12px; }
+  dt { color:var(--muted); } dd { margin:0; }
+  .tag { display:inline-block; font-size:12px; padding:1px 8px; border-radius:999px; border:1px solid var(--line); }
+  .btn { display:block; text-align:center; text-decoration:none; background:var(--accent); color:var(--btn-ink);
+         padding:10px 12px; border-radius:8px; font-weight:600; margin-top:10px; }
+  .btn[aria-disabled="true"] { opacity:.45; pointer-events:none; }
+  .note { color:var(--muted); font-size:12px; margin-top:8px; }
+  .empty { color:var(--muted); text-align:center; padding:24px 8px; }
+</style>
+</head>
+<body>
+<main id="app" aria-live="polite">
+  <p class="empty">Selecciona una conversación para ver el cronómetro y la pre-información.</p>
+</main>
+<script>
+(() => {
+  const app = document.getElementById("app");
+  const params = new URLSearchParams(location.search);
+  let conversationId = params.get("conversation_id");
+  let snapshot = null;
+  let skew = 0;
+
+  const fmt = (seconds) => {
+    const s = Math.max(0, Math.floor(seconds));
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  };
+  const esc = (value) => String(value ?? "—").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const money = (n) => "$" + Number(n).toLocaleString("es-CL");
+
+  function timerView(sla, nowSeconds) {
+    if (!sla.started_at) return {text: "—", label: "Sin cronómetro: aún no hay traspaso en turno", css: "state-idle", pct: 0};
+    const end = sla.stopped_at ?? nowSeconds;
+    const elapsed = end - sla.started_at;
+    const pct = Math.min(100, (elapsed / sla.red_s) * 100);
+    if (sla.stopped_at) {
+      const within = elapsed < sla.red_s;
+      return {text: fmt(elapsed), label: within ? "Respondido a tiempo" : "Respondido fuera de meta",
+              css: within ? "state-ok" : "state-bad", pct};
+    }
+    if (elapsed >= sla.red_s) return {text: fmt(elapsed), label: "Plazo vencido: responder ya", css: "state-bad", pct};
+    if (elapsed >= sla.amber_s) return {text: fmt(elapsed), label: "Por vencer", css: "state-warn", pct};
+    return {text: fmt(elapsed), label: "En plazo", css: "state-ok", pct};
+  }
+
+  function render() {
+    if (!snapshot) return;
+    const s = snapshot, d = s.data || {};
+    const now = Date.now() / 1000 + skew;
+    const t = timerView(s.sla, now);
+    const color = {"state-ok": "var(--ok)", "state-warn": "var(--warn)", "state-bad": "var(--bad)"}[t.css] || "var(--line)";
+    const guests = d.adults ? `${d.adults} adulto(s), ${d.children ?? 0} niño(s)` : null;
+    const stay = d.checkin ? `${esc(d.checkin)} → ${esc(d.checkout)}` : null;
+    const pre = s.prebooking;
+    const preText = !pre ? "Sin pre-reserva" :
+      pre.status === "active" ? `Activa · vence en ${fmt(pre.expires_at - now)}` :
+      ({expired: "Vencida (no tocó el PMS)", converted: "Cerrada en el PMS", superseded: "Reemplazada"}[pre.status] || pre.status);
+    app.innerHTML = `
+      <section class="card" aria-label="Cronómetro">
+        <h1>Respuesta a tiempo</h1>
+        <div class="timer">
+          <span class="clock ${t.css}">${t.text}</span>
+          <span class="goal">meta ${fmt(s.sla.red_s)}</span>
+        </div>
+        <div class="${t.css}">${esc(t.label)}</div>
+        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(t.pct)}">
+          <span style="width:${t.pct}%; background:${color}"></span></div>
+      </section>
+      <section class="card" aria-label="Pre-información">
+        <h1>Pre-información lista</h1>
+        <dl>
+          <dt>Huésped</dt><dd>${esc(s.contact_name)}</dd>
+          <dt>Fechas</dt><dd>${stay ?? "—"}</dd>
+          <dt>Huéspedes</dt><dd>${esc(guests)}</dd>
+          <dt>Habitación</dt><dd>${esc(s.room_name || (d.checkin ? "A definir por recepción" : null))}</dd>
+          <dt>Lectura PMS</dt><dd>${esc(d.read_at)}${d.simulated ? ' <span class="tag">simulada</span>' : ""}</dd>
+          <dt>Pre-reserva</dt><dd>${esc(preText)}</dd>
+        </dl>
+        <a class="btn" href="${esc(s.pms_url)}" target="_blank" rel="noopener"
+           ${d.checkin ? "" : 'aria-disabled="true"'}>Confirmar en el PMS</a>
+        <p class="note">El copiloto nunca confirma. Revalida la lectura en el PMS y confirma una persona.</p>
+      </section>`;
+  }
+
+  async function refresh() {
+    if (!conversationId) return;
+    try {
+      const response = await fetch(`/api/panel/${encodeURIComponent(conversationId)}`);
+      if (!response.ok) throw new Error(response.status);
+      snapshot = await response.json();
+      skew = snapshot.now - Date.now() / 1000;
+      render();
+    } catch (error) {
+      app.innerHTML = '<p class="empty">No pude leer el estado de esta conversación.</p>';
+    }
+  }
+
+  function onContext(payload) {
+    let message = payload;
+    if (typeof message === "string") { try { message = JSON.parse(message); } catch (e) { return; } }
+    if (!message || message.event !== "appContext") return;
+    const id = message.data && message.data.conversation && message.data.conversation.id;
+    if (id && String(id) !== String(conversationId)) { conversationId = id; snapshot = null; refresh(); }
+  }
+
+  window.addEventListener("message", (event) => onContext(event.data));
+  window.parent.postMessage("chatwoot-dashboard-app:fetch-info", "*");
+  setInterval(render, 1000);
+  setInterval(refresh, 5000);
+  refresh();
+})();
+</script>
+</body>
+</html>
