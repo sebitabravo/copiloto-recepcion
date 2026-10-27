@@ -1,0 +1,414 @@
+# Datos del Hotel Boutique Bordeluz para el prototipo académico INNOVA3.
+# Cada dato lleva `source` y `status` (verificado | pendiente_validar).
+# Los precios, la distribución de las 20 habitaciones y el horario de turno son SIMULADOS o por validar.
+hotel:
+  name: Hotel Boutique Bordeluz
+  address: "Sector Molco, Camino Villarrica-Pucón Km 12.5, Las Chilcas, Villarrica, Araucanía"
+  maps_url: "https://www.google.com/maps/search/?api=1&query=Hotel+Boutique+Bordeluz+Villarrica"
+  whatsapp: "+56 963949710"
+  email: comercial@hotelbordeluz.cl
+  total_rooms: 20
+  capacity_guests: 70
+  source: https://www.hotelbordeluz.cl/contacto
+  status: verificado
+  conflicts:
+    - field: address.km
+      detail: "El sitio oficial dice Km 12.5; algunos agregadores dicen Km 2.5."
+      status: pendiente_validar
+    - field: beach_distance
+      detail: "La página de habitaciones dice 35 m de la playa; la de contacto dice 50 m (Playa Calfuray)."
+      status: pendiente_validar
+
+location:
+  headline: "Estamos en el sector Molco, camino Villarrica-Pucón Km 12.5, frente a la playa Calfurray."
+  detail: "Quedamos entre Villarrica y Pucón (12,5 km a cada una), a unos 35 m de la playa."
+  distances:
+    - {place: "Playa Calfuray", distance: "35 a 50 m"}
+    - {place: "Villarrica", distance: "12,5 km"}
+    - {place: "Pucón", distance: "12,5 km"}
+    - {place: "Supermercado La Sureña", distance: "1,5 km"}
+    - {place: "Caburgua", distance: "33 km"}
+    - {place: "Centro de Ski Pillán", distance: "40 km"}
+    - {place: "Base Volcán Villarrica", distance: "50 km"}
+    - {place: "Aeropuerto", distance: "98 km"}
+  source: https://www.hotelbordeluz.cl/contacto
+  status: verificado
+
+shift:
+  # Horario del turno humano de recepción. Configurable por entorno (SHIFT_START / SHIFT_END).
+  timezone: America/Santiago
+  start: "08:00"
+  end: "22:00"
+  source: "Supuesto de diseño; E1 indica consultas nocturnas sin respuesta, agregadores dicen recepción 24 h"
+  status: pendiente_validar
+
+privacy:
+  retention_days: 90
+  retention_status: pendiente_validar
+  responsible_contact: comercial@hotelbordeluz.cl
+
+photos:
+  # Solo URLs públicas del sitio; no se copian binarios.
+  gallery_url: https://www.hotelbordeluz.cl/galeria
+  rooms_url: https://www.hotelbordeluz.cl/habitaciones
+  source: https://www.hotelbordeluz.cl/galeria
+  status: verificado
+
+policies:
+  checkin: "15:00"
+  checkout: "12:00"
+  early_checkin: "Ingresos antes de las 11:00 tienen un costo de 50% de una noche, sujeto a disponibilidad."
+  late_checkout: "Salidas después de las 12:00 tienen el costo de una noche, sujeto a disponibilidad."
+  deposit: "La reserva se confirma con un abono del 50% y los datos de una tarjeta de crédito en garantía."
+  cancellation_high: "Temporada alta (15 dic - 1 mar): sin penalidad con 15 días o más; 1 noche con 7 días o más; 2 noches con 2 días; 3 noches el mismo día."
+  cancellation_low: "Temporada baja (mar - 14 dic): sin penalidad con 7 días o más; 1 noche con 2 días; la estadía completa el mismo día."
+  children: "Menores de 2 años gratis en cuna; menores de 6 años gratis en camas existentes con desayuno; niño mayor o adulto extra en cama adicional $25.000 por noche."
+  min_stay_high: "Segunda quincena de diciembre, enero, febrero y mitad de marzo: mínimo 3 noches."
+  payment_cards: "American Express, Visa y Mastercard."
+  source: https://files-public-web.s3-us-west-2.amazonaws.com/24678/pos/117cc77f899be528dca9d6571de64472c9f0be20.pdf
+  status: verificado
+
+promotions:
+  source: https://www.hotelbordeluz.cl/promociones
+  status: verificado
+  items:
+    - name: "3 días 2 noches para dos + 1 día Termas Trancura"
+      price_clp: 99500
+    - name: "3 días 2 noches para dos + 1 día Termas Montevivo"
+      price_clp: 94500
+    - name: "Escapada romántica para dos (habitación doble con jacuzzi, espumante, chocolates, termas)"
+      price_clp: 140000
+      valid_until: "2026-12-30"
+
+# FAQ aprobadas. `keywords` alimentan el reconocimiento determinista del bot (sin LLM).
+faqs:
+  - id: piscina
+    label: Piscina
+    keywords: [piscina, pileta, nadar, temperada]
+    answer: "Tenemos piscina temperada, disponible durante todo el año y incluida en tu estadía."
+    source: https://www.hotelbordeluz.cl/servicios
+    status: verificado
+  - id: tinajas
+    label: Tinajas calientes
+    keywords: [tinaja, tinajas, jacuzzi, hidromasaje, agua caliente]
+    answer: "Contamos con tinajas de agua caliente, para usar de día o de noche. Tienen un valor adicional que te confirma recepción."
+    source: https://www.hotelbordeluz.cl/servicios
+    status: verificado
+  - id: desayuno
+    label: Desayuno
+    keywords: [desayuno, desayunar, buffet, buffete, comida, comedor]
+    answer: "Todas las habitaciones incluyen desayuno continental (buffet en temporada alta), en un comedor con vista al lago."
+    source: https://www.hotelbordeluz.cl/servicios
+    status: verificado
+  - id: checkin
+    label: Horarios de check-in y check-out
+    keywords: [check-in, checkin, check in, check-out, checkout, check out, horario de ingreso, hora de llegada, hora de salida, a que hora]
+    answer: "El check-in es desde las 15:00 y el check-out hasta las 12:00. Early check-in o late check-out dependen de disponibilidad y tienen costo."
+    source: términos y condiciones (PDF del sitio)
+    status: verificado
+  - id: cancelacion
+    label: Cancelación
+    keywords: [cancelar, cancelacion, cancelación, anular, penalidad, reembolso, devolucion]
+    answer: "En temporada baja no hay penalidad si cancelas con 7 días o más; en temporada alta (15 dic - 1 mar), con 15 días o más. Después se cobran noches de penalidad. Recepción te detalla tu caso."
+    source: términos y condiciones (PDF del sitio)
+    status: verificado
+  - id: ninos
+    label: Niños y camas adicionales
+    keywords: [niño, niños, nino, ninos, bebe, bebé, cuna, cama adicional, hijos, familia]
+    answer: "Menores de 2 años se alojan gratis en cuna y menores de 6 años gratis en las camas existentes, con desayuno. Un niño mayor o adulto extra en cama adicional cuesta $25.000 por noche. Las camas adicionales se piden y las confirma el hotel."
+    source: términos y condiciones (PDF del sitio)
+    status: verificado
+  - id: pago
+    label: Pago y garantía
+    keywords: [pago, pagar, tarjeta, abono, garantia, garantía, deposito, depósito, transferencia]
+    answer: "La reserva se confirma con un abono del 50% y los datos de una tarjeta de crédito en garantía. Aceptamos American Express, Visa y Mastercard."
+    source: términos y condiciones (PDF del sitio)
+    status: verificado
+  - id: estadia_minima
+    label: Estadía mínima
+    keywords: [estadia minima, estadía mínima, minimo de noches, mínimo de noches, minimo noches]
+    answer: "En temporada alta (segunda quincena de diciembre, enero, febrero y mitad de marzo) la estadía mínima es de 3 noches."
+    source: términos y condiciones (PDF del sitio)
+    status: verificado
+  - id: estacionamiento
+    label: Estacionamiento
+    keywords: [estacionamiento, parking, auto, vehiculo, vehículo, aparcar]
+    answer: "Las habitaciones cuentan con estacionamiento."
+    source: https://www.hotelbordeluz.cl/habitaciones
+    status: verificado
+  - id: wifi
+    label: WiFi y climatización
+    keywords: [wifi, wi-fi, internet, aire acondicionado, calefaccion, calefacción]
+    answer: "Las habitaciones tienen WiFi, aire acondicionado y calefacción, baño privado en suite y televisor."
+    source: https://www.hotelbordeluz.cl/habitaciones
+    status: verificado
+  - id: promociones
+    label: Promociones
+    keywords: [promocion, promoción, promociones, oferta, ofertas, paquete, termas, descuento]
+    answer: "Hoy publicamos: 3 días 2 noches para dos + 1 día de Termas Trancura ($99.500), con Termas Montevivo ($94.500) y la Escapada Romántica ($140.000, hasta el 30-dic-2026). Recepción confirma vigencia y cupos."
+    source: https://www.hotelbordeluz.cl/promociones
+    status: verificado
+  - id: restaurante
+    label: Restaurante
+    keywords: [restaurante, restaurant, almuerzo, cena, domingo]
+    answer: "Hay restaurante a pasos del hotel. Los días y horarios de atención los confirma recepción."
+    source: https://www.hotelbordeluz.cl/contacto
+    status: pendiente_validar
+    status_note: "Una reseña de 2025 indica restaurante cerrado los domingos; no confirmado por el hotel."
+  - id: mascotas
+    label: Mascotas
+    keywords: [mascota, mascotas, perro, perros, gato, gatos, pet]
+    answer: "La política de mascotas no está publicada en nuestro sitio. Recepción te confirma si es posible."
+    source: "No publicado en el sitio ni en los términos"
+    status: pendiente_validar
+  - id: recepcion_horario
+    label: Horario de recepción
+    keywords: [recepcion 24, recepción 24, horario de recepcion, horario de recepción, atienden de noche]
+    answer: "El equipo de recepción responde mensajes en su horario de turno. Si escribes fuera de horario, dejamos tu consulta registrada para que la vean al comenzar."
+    source: "Conflicto: agregadores dicen recepción 24 h; entrevista E1 indica consultas nocturnas sin respuesta"
+    status: pendiente_validar
+
+services:
+  - {name: "Tinajas de agua caliente", note: "valor adicional"}
+  - {name: "Piscina temperada", note: "todo el año"}
+  - {name: "Desayuno continental", note: "buffet en temporada alta"}
+  - {name: "Comedor con vista al lago", note: ""}
+  - {name: "Estacionamiento", note: ""}
+  - {name: "WiFi", note: ""}
+
+rooms:
+- code: single_doble_vista_jardin
+  name: Habitación Single Doble Vista Jardín
+  max_adults: 2
+  max_children: 0
+  m2: 18
+  amenities:
+  - Aire acondicionado
+  - WiFi
+  - Baño en suite
+  - Baño privado
+  - Televisor
+  - Aire acondicionado y calefacción
+  - Servicio a la habitación
+  - Estacionamiento
+  description: Habitación Single Doble cómoda en hotel boutique ubicado entre Villarrica y Pucón, ideal
+    para viajeros individuales. A 35 metros de la playa, ofrece descanso y tranquilidad. Incluye desayuno
+    continental (buffet en temporada alta) y acceso a piscina temperada. Tinajas calientes disponibles
+    con valor adicional. Reserva directo y disfruta tu pausa.
+  source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  status: verificado
+- code: doble_terraza_vista_lago
+  name: Habitación Doble Terraza Vista Lago
+  max_adults: 1
+  max_children: 1
+  m2: 26
+  amenities:
+  - Aire acondicionado
+  - WiFi
+  - Baño en suite
+  - Baño privado
+  - Televisor
+  - Aire acondicionado y calefacción
+  - Secador de cabello y amenities
+  - Servicio a la habitación
+  - aire acondicionado
+  - Ropa de cama y toallas de algodón
+  - Estacionamiento
+  description: Habitación doble en hotel boutique ubicado entre Villarrica y Pucón, con terraza y vista
+    al entorno natural y lago. A solo 35 metros de la playa, ideal para descanso en pareja. Incluye desayuno
+    continental (buffet en temporada alta) y acceso a piscina temperada. Tinajas calientes disponibles
+    con valor adicional. Reserva directo y disfruta el descanso boutique.
+  source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  status: pendiente_validar
+  status_note: El sitio publica 1 adulto + 1 niño para una habitación doble; confirmar capacidad real
+    con recepción.
+- code: doble_vista_piscina
+  name: Habitación Doble Vista Piscina
+  max_adults: 2
+  max_children: 1
+  m2: 15
+  amenities:
+  - Aire acondicionado
+  - WiFi
+  - Baño en suite
+  - Baño privado
+  - Televisor
+  - Servicio a la habitación
+  description: Cómoda habitación doble en hotel boutique entre Villarrica y Pucón, con vista directa a
+    la piscina temperada. Ubicación tranquila, a 35 metros de la playa, ideal para desconectar. Incluye
+    desayuno continental (buffet en temporada alta). Tinajas calientes disponibles con valor adicional.
+    Reserva ahora y vive una estadía relajante.
+  source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  status: verificado
+- code: doble_con_jacuzzi
+  name: Habitación Doble con Jacuzzi
+  max_adults: 2
+  max_children: 1
+  m2: 32
+  amenities:
+  - Aire acondicionado
+  - WiFi
+  - Baño en suite
+  - Baño privado
+  - Servicio a la habitación
+  - Hidromasaje
+  - aire acondicionado
+  - Bañera
+  - Estacionamiento
+  description: Habitación doble exclusiva en hotel boutique ubicado entre Villarrica y Pucón, con jacuzzi
+    privado y terraza. Perfecta para escapadas románticas, a solo 35 metros de la playa. Incluye desayuno
+    continental (buffet en temporada alta) y acceso a piscina temperada. Tinajas calientes con valor adicional.
+    Reserva directo y vive una experiencia única.
+  source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  status: verificado
+- code: triple_vista_interior_estacionamiento
+  name: Habitación Triple Vista Interior Estacionamiento
+  max_adults: 3
+  max_children: 2
+  m2: 24
+  amenities:
+  - Aire acondicionado
+  - WiFi
+  - Baño en suite
+  - Baño privado
+  - Televisor
+  description: Habitación triple funcional en hotel boutique ubicado entre Villarrica y Pucón, ideal para
+    estadías prácticas y cómodas. Con fácil acceso a servicios y a 35 metros de la playa. Incluye desayuno
+    continental (buffet en temporada alta) y acceso a piscina temperada. Tinajas con valor adicional.
+    Reserva directo y descansa sin preocupaciones.
+  source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  status: verificado
+- code: triple_vista_parcial_lago
+  name: Habitación Triple Vista Parcial Lago
+  max_adults: 3
+  max_children: 2
+  m2: 24
+  amenities:
+  - Aire acondicionado
+  - WiFi
+  - Baño en suite
+  - Baño privado
+  - Televisor
+  description: Habitación triple en hotel boutique ubicado entre Villarrica y Pucón, con vista parcial
+    al lago y ambiente cómodo. Ideal para familias pequeñas, a solo 35 metros de la playa. Incluye desayuno
+    continental (buffet en temporada alta) y acceso a piscina temperada. Tinajas calientes con valor adicional.
+    Reserva directo y asegura tu estadía.
+  source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  status: verificado
+- code: triple_con_terraza_vista_al_lago
+  name: Habitación Triple con terraza Vista al Lago
+  max_adults: 3
+  max_children: 2
+  m2: 32
+  amenities:
+  - Aire acondicionado
+  - WiFi
+  - Baño en suite
+  - Baño privado
+  - Televisor
+  description: Habitación triple en hotel boutique entre Villarrica y Pucón, con terraza y vista al lago.
+    Ideal para compartir en familia, a 35 metros de la playa. Incluye desayuno continental (buffet en
+    temporada alta) y acceso a piscina temperada. Tinajas calientes disponibles con valor adicional. Reserva
+    ahora y disfruta la experiencia.
+  source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  status: verificado
+- code: cuadruple_terraza_vista_al_lago
+  name: Habitación Cuádruple Terraza Vista al Lago
+  max_adults: 4
+  max_children: 3
+  m2: 36
+  amenities:
+  - Aire acondicionado
+  - WiFi
+  - Baño en suite
+  - Baño privado
+  - Televisor
+  - Servicio a la habitación
+  - Estacionamiento
+  description: Habitación cuádruple en hotel boutique entre Villarrica y Pucón, con terraza y vista al
+    lago. Ideal para familias, a solo 35 metros de la playa. Incluye desayuno continental (buffet en temporada
+    alta) y acceso a piscina temperada. Tinajas calientes disponibles con valor adicional. Reserva directo
+    y crea recuerdos.
+  source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  status: verificado
+- code: cuadruple_vista_interior_estacionamiento
+  name: Habitación Cuádruple Vista Interior Estacionamiento
+  max_adults: 4
+  max_children: 3
+  m2: 36
+  amenities:
+  - Aire acondicionado
+  - WiFi
+  - Baño en suite
+  - Baño privado
+  - Baño compartido
+  - Televisor
+  - Estacionamiento
+  description: Habitación cuádruple funcional en hotel boutique entre Villarrica y Pucón, pensada para
+    familias que buscan comodidad y buena ubicación. A solo 35 metros de la playa. Incluye desayuno continental
+    (buffet en temporada alta) y acceso a piscina temperada. Tinajas calientes disponibles con valor adicional.
+    Reserva directo y aprovecha tu estadía.
+  source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  status: verificado
+- code: cuadruple_vista_parcial_lago
+  name: Habitación Cuádruple Vista Parcial Lago
+  max_adults: 4
+  max_children: 3
+  m2: 36
+  amenities:
+  - Aire acondicionado
+  - WiFi
+  - Baño en suite
+  - Baño privado
+  - Televisor
+  - Servicio a la habitación
+  - Estacionamiento
+  description: Cómoda habitación cuádruple en hotel boutique ubicado entre Villarrica y Pucón, con vista
+    parcial al lago y ambiente tranquilo. A 35 metros de la playa, ideal para familias. Incluye desayuno
+    continental (buffet en temporada alta) y acceso a piscina temperada. Tinajas con valor adicional.
+    Reserva ahora y disfruta en familia.
+  source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  status: verificado
+- code: triple_con_vista_estacionamiento_entrada
+  name: Habitación Triple Con Vista Estacionamiento Entrada Exterior
+  max_adults: 3
+  max_children: 1
+  m2: 18
+  amenities:
+  - Desayuno incluido en la tarifa
+  - WiFi
+  - Baño en suite
+  - Baño privado
+  - Televisor
+  - Servicio a la habitación
+  description: Habitación triple cómoda y funcional, ideal para familias o grupos que buscan una estadía
+    práctica en un hotel boutique ubicado entre Villarrica y Pucón. Cuenta con vista al estacionamiento
+    y acceso exterior independiente. Incluye desayuno continental y buffet en temporada alta, piscina
+    temperada y cercanía a la playa a solo 35 metros. Tinajas calientes disponibles con valor adicional.
+  source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  status: verificado
+- code: doble_sin_vista
+  name: Habitación Doble Sin Vista
+  max_adults: 2
+  max_children: 1
+  m2: 12
+  amenities:
+  - WiFi
+  - Baño en suite
+  - Baño privado
+  - Televisor
+  - Parqueo gratuito
+  - NAVEGACIÓN
+  - CONTACTO
+  - © 2026 ASTRA Hotel. Todos los derechos reservados.
+  - Al utilizar este sitio web, acepta el uso de cookies.
+  - ' | '
+  - de
+  - BordeLuz
+  - ¡Hola bienvenido! ¿En qué puedo ayudarte?
+  description: Habitación doble funcional en nuestro hotel boutique ubicado entre Villarrica y Pucón,
+    ideal para quienes priorizan descanso y excelente tarifa. Espacio privado y cómodo, sin vista exterior.
+    Incluye desayuno continental y buffet en temporada alta, acceso a piscina temperada y playa a solo
+    35 metros. Tinajas calientes disponibles con valor adicional.
+  source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  status: verificado

@@ -1,0 +1,11 @@
+.env
+.env.runtime
+*.sqlite
+*.sqlite3
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+.DS_Store
+node_modules/
+landing/config.js
