@@ -29,6 +29,7 @@
   --wa-ink: #111b21;
   --wa-muted: #667781;
   --wa-line: #e2ddd4;
+  --wa-link: #006b58;
   --ok: #2c6340;
   --ok-bg: #e6eee2;
   --error: #9c2a22;
@@ -68,6 +69,7 @@
     --wa-ink: #e9edef;
     --wa-muted: #8696a0;
     --wa-line: #2a3942;
+    --wa-link: #7ee0c6;
     --ok: #9bd2a3;
     --ok-bg: #1e3125;
     --error: #ffc0b8;
@@ -977,7 +979,7 @@ section:first-of-type { border-top: 0; }
   border: 1px solid var(--wa-line);
   border-radius: 999px;
   background: var(--wa-in);
-  color: #008069;
+  color: var(--wa-link);
   font-size: .75rem;
   text-align: left;
   box-shadow: 0 1px 1px rgb(11 20 26 / 8%);
@@ -985,7 +987,7 @@ section:first-of-type { border-top: 0; }
 }
 
 .quick-replies button:hover:not(:disabled) {
-  border-color: #008069;
+  border-color: var(--wa-link);
   transform: translateY(-1px);
 }
 
@@ -1780,8 +1782,9 @@ body.is-hidden * {
 /* ---------- Adaptación ---------- */
 
 @media (max-width: 1000px) {
-  .hero { gap: 34px; }
-  .stage { height: 470px; }
+  /* Una columna desde mil: con dos, la copia queda tan angosta que las métricas se cortan. */
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 34px; padding-block: 34px 54px; }
+  .stage { height: 470px; order: -1; transform: scale(.94); }
   .chip-a { right: -4px; }
   .capabilities { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .how-grid { grid-template-columns: minmax(0, 1fr); gap: 34px; }

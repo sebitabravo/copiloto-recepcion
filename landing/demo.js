@@ -426,29 +426,63 @@
     button.addEventListener('click', () => runScenario(button.dataset.scenario));
   });
 
-  // El canal real de Chatwoot sigue disponible como alternativa secundaria.
+  // El canal real de Chatwoot se carga solo al usarlo: su SDK pesa más que toda la página.
   const chatStatus = get('chat-status');
-  window.addEventListener('chatwoot:ready', () => { chatStatus.textContent = 'La bandeja real de recepción está lista.'; });
-  get('open-chat').addEventListener('click', () => {
-    const unavailable = 'El chat no está disponible: ¿levantaste el stack con make up?';
-    if (window.$chatwoot && typeof window.$chatwoot.toggle === 'function') {
-      try { window.$chatwoot.toggle('open'); chatStatus.textContent = 'Chat de recepción abierto.'; }
-      catch (_) { chatStatus.textContent = unavailable; }
-    } else chatStatus.textContent = unavailable;
-  });
-  (function () {
+  const chatUnavailable = 'El chat no está disponible: ¿levantaste el stack con make up?';
+  let chatwootReady = false;
+  let chatOpenRequested = false;
+  let chatwootLoad = null;
+
+  function openChatwoot() {
+    if (!window.$chatwoot || typeof window.$chatwoot.toggle !== 'function') return false;
+    try {
+      window.$chatwoot.toggle('open');
+      chatStatus.textContent = 'Chat de recepción abierto.';
+      return true;
+    } catch (_) { return false; }
+  }
+
+  function loadChatwoot() {
+    if (chatwootLoad) return chatwootLoad;
+    const cfg = window.COPILOTO_CONFIG;
+    if (!cfg || !cfg.websiteToken) return Promise.reject(new Error('sin token'));
     window.chatwootSettings = { locale: "es", position: "right", type: "expanded_bubble",
                                 launcherTitle: "Habla con recepción", hideMessageBubble: true };
-    var cfg = window.COPILOTO_CONFIG;
-    if (!cfg || !cfg.websiteToken) { return; }
-    var script = document.createElement("script");
-    script.src = cfg.chatwootUrl + "/packs/js/sdk.js";
-    script.async = true;
-    script.onload = function () {
-      window.chatwootSDK.run({ websiteToken: cfg.websiteToken, baseUrl: cfg.chatwootUrl });
-    };
-    document.body.appendChild(script);
-  })();
+    chatwootLoad = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = cfg.chatwootUrl + "/packs/js/sdk.js";
+      script.async = true;
+      script.onload = () => {
+        try {
+          window.chatwootSDK.run({ websiteToken: cfg.websiteToken, baseUrl: cfg.chatwootUrl });
+          resolve();
+        } catch (error) { reject(error); }
+      };
+      script.onerror = () => reject(new Error('carga fallida'));
+      document.body.appendChild(script);
+    });
+    return chatwootLoad;
+  }
+
+  window.addEventListener('chatwoot:ready', () => {
+    chatwootReady = true;
+    chatStatus.textContent = 'La bandeja real de recepción está lista.';
+    if (chatOpenRequested) { chatOpenRequested = false; openChatwoot(); }
+  });
+
+  get('open-chat').addEventListener('click', async () => {
+    if (openChatwoot()) return;
+    chatStatus.textContent = 'Abriendo el canal de recepción…';
+    chatOpenRequested = true;
+    try {
+      await loadChatwoot();
+      // Si el SDK avisa que está listo, el evento abre el chat; si no, el próximo clic lo hace.
+      if (chatwootReady) { chatOpenRequested = false; openChatwoot(); }
+    } catch (_) {
+      chatOpenRequested = false;
+      chatStatus.textContent = chatUnavailable;
+    }
+  });
   // Barra fija: borde y progreso de lectura cuando la página ya se desplazó.
   const topbar = get('topbar');
   const progress = get('scroll-progress');
