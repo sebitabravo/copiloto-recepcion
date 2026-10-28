@@ -6,5 +6,4 @@ COPY pyproject.toml uv.lock ./
 COPY src ./src
 RUN uv sync --frozen --no-dev
 EXPOSE 8100
-CMD ["uvicorn", "copiloto.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8100",
-     "--no-access-log"]
+CMD ["uvicorn", "copiloto.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8100", "--no-access-log"]
