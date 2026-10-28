@@ -1,4 +1,5 @@
 import itertools
+from dataclasses import replace
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -72,6 +73,8 @@ class FakeChatwoot:
 class FakePms(PmsAdapter):
     def __init__(self):
         self.calls = 0
+        self.bookings: list[dict] = []
+        self.book_error: Exception | None = None
         self.down = False
         self.offers = [
             RoomOffer("doble_con_jacuzzi", "Habitación Doble con Jacuzzi", 2, 1, 32, 2, 85000),
@@ -85,11 +88,24 @@ class FakePms(PmsAdapter):
         return PmsReading("2026-10-28T15:00:00-03:00", "pms-mock", True, list(self.offers))
 
 
+async def _fake_book(self, guest_name, room_code, checkin, checkout, adults, children, conversation_id):
+    if self.book_error:
+        raise self.book_error
+    booking = {"booking_id": 7 + len(self.bookings), "guest_name": guest_name, "room_code": room_code,
+               "checkin": checkin.isoformat(), "checkout": checkout.isoformat(), "adults": adults,
+               "children": children, "conversation_id": conversation_id}
+    self.bookings.append(booking)
+    return booking
+
+
+FakePms.book = _fake_book
+
+
 class Harness:
-    def __init__(self, settings, hotel, db, chatwoot, pms, clock):
+    def __init__(self, settings, hotel, db, chatwoot, pms, clock, agent=None):
         self.settings, self.hotel, self.db = settings, hotel, db
         self.chatwoot, self.pms, self.clock = chatwoot, pms, clock
-        self.core = Copiloto(settings, hotel, db, chatwoot, pms, clock)
+        self.core = Copiloto(settings, hotel, db, chatwoot, pms, clock, agent)
         self._ids = itertools.count(1)
 
     def payload(self, text, conversation_id=1, status="pending", message_type="incoming", sender_type="contact",
@@ -145,3 +161,59 @@ def pytest_collection_modifyitems(items):
         if item.get_closest_marker("anyio") is None and getattr(item.function, "__code__", None) \
                 and item.function.__code__.co_flags & 0x80:
             item.add_marker(pytest.mark.anyio)
+
+
+class FakeLlm:
+    """LLM guionado: devuelve respuestas predefinidas y registra lo que se le envió."""
+
+    def __init__(self, script):
+        self.script = list(script)
+        self.calls: list[dict] = []
+
+    async def chat(self, messages, tools=None, max_tokens=500, temperature=0.3):
+        import copy
+        self.calls.append({"messages": copy.deepcopy(messages),
+                           "tools": [t["function"]["name"] for t in tools or []]})
+        item = self.script.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+def say(text, tokens=100):
+    from copiloto.ai.llm import LlmReply
+    return LlmReply(text, [], tokens, {"role": "assistant", "content": text})
+
+
+def call(name, call_id="c1", **arguments):
+    import json
+
+    from copiloto.ai.llm import LlmReply, ToolCall
+    raw = json.dumps(arguments)
+    tool = ToolCall(call_id, name, raw)
+    message = {"role": "assistant", "content": None, "tool_calls": [
+        {"id": call_id, "type": "function", "function": {"name": name, "arguments": raw}}]}
+    return LlmReply(None, [tool], 50, message)
+
+
+@pytest.fixture
+def ai_settings(settings):
+    return replace(settings, ai_mode="full", llm_api_key="k" * 20, pms_staff_token="t" * 20)
+
+
+@pytest.fixture
+def make_ai(ai_settings, clock):
+    """Fábrica: build(script) -> (Harness con agente guionado, FakeLlm)."""
+    from copiloto.ai.agent import Agent
+
+    def build(script, settings=None):
+        settings = settings or ai_settings
+        db = connect(":memory:")
+        init_db(db)
+        hotel = HotelData.load(settings.hotel_data_path)
+        pms = FakePms()
+        llm = FakeLlm(script)
+        agent = Agent(llm, hotel, pms, settings, clock)
+        return Harness(settings, hotel, db, FakeChatwoot(), pms, clock, agent), llm
+
+    return build

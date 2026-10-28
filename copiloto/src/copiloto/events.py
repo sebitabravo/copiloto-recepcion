@@ -12,7 +12,10 @@ Todas las métricas (`metrics.py`) salen de la tabla `events`. Convenciones de `
 - human_first_reply:  {"user_id": int}
 - prebooking_created: {"prebooking_id": int}
 - prebooking_expired: {"prebooking_id": int}
-- booking_confirmed:  {"booking_id": int}
+- booking_confirmed:  {"booking_id": int, "source": "personal" | "ia"}
+- ai_reply:           {"latency_ms": int, "tools": [str], "tokens": int | None}   # nunca guarda texto
+- ai_booking:         {"booking_id": int}
+- ai_guardrail:       {"rule": str}      # la salida de la IA se corrigió (p. ej. confirmación sin reserva)
 
 `ts` son segundos epoch UTC (REAL).
 """
@@ -24,7 +27,7 @@ from collections.abc import Iterable
 EVENT_KINDS = frozenset({
     "inbound", "faq_answered", "location_shown", "commercial_started", "pms_read", "handoff",
     "human_first_reply", "night_capture", "prebooking_created", "prebooking_expired",
-    "booking_confirmed",
+    "booking_confirmed", "ai_reply", "ai_booking", "ai_guardrail",
 })
 
 SCHEMA = """
@@ -53,6 +56,15 @@ CREATE TABLE IF NOT EXISTS conversation_state (
     sla_stopped_at REAL,
     sla_amber_done INTEGER NOT NULL DEFAULT 0,
     sla_red_done INTEGER NOT NULL DEFAULT 0,
+    updated_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ai_sessions (
+    session_id TEXT PRIMARY KEY,
+    history TEXT NOT NULL DEFAULT '[]',
+    state TEXT NOT NULL DEFAULT '{}',
+    msg_count INTEGER NOT NULL DEFAULT 0,
+    created_at REAL NOT NULL,
     updated_at REAL NOT NULL
 );
 

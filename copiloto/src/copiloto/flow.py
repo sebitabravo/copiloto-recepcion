@@ -13,15 +13,27 @@ import time
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from copiloto import store
+from copiloto.ai import sessions as ai_sessions
+from copiloto.ai.agent import Agent
+from copiloto.ai.llm import LlmUnavailable
+from copiloto.ai.tools import ToolHooks
 from copiloto.chatwoot import ChatwootClient
 from copiloto.config import Settings
 from copiloto.events import mark_processed, record_event
 from copiloto.hotel import Faq, HotelData
 from copiloto.pms import PmsAdapter, PmsReading, PmsUnavailable, RoomOffer
-from copiloto.textutil import normalize, parse_count, parse_guests, parse_stay
+from copiloto.textutil import (
+    normalize,
+    parse_count,
+    parse_guests,
+    parse_nights,
+    parse_one_date,
+    parse_stay,
+    parse_weekday_range,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +55,7 @@ PHOTO_TERMS = ("foto", "fotos", "galeria", "imagenes", "habitaciones", "tipos de
 LOCATION_TERMS = ("ubicacion", "donde", "direccion", "como llegar", "mapa", "llegar", "queda")
 MAX_ADULTS = 4
 MAX_CHILDREN = 3
+AI_CONVERSATION_CAP = 60
 
 
 @dataclass
@@ -65,7 +78,8 @@ def plural(count: int, singular: str, plural_form: str) -> str:
 
 class Copiloto:
     def __init__(self, settings: Settings, hotel: HotelData, db: sqlite3.Connection, chatwoot: ChatwootClient,
-                 pms: PmsAdapter, clock: Callable[[], float] = time.time):
+                 pms: PmsAdapter, clock: Callable[[], float] = time.time, agent: Agent | None = None):
+        self.agent = agent
         self.settings = settings
         self.hotel = hotel
         self.db = db
@@ -141,7 +155,10 @@ class Copiloto:
         greeting = state.step == "start" and ctx.plain.strip("!¡., ") in GREETING_WORDS
         record_event(self.db, conversation_id, "inbound", now, {"greeting": greeting})
         try:
-            await self._route(ctx, greeting)
+            if self.agent is not None and state.step in ("start", "ai"):
+                await self._ai_route(ctx, greeting)
+            else:
+                await self._route(ctx, greeting)
         except Exception:
             logger.exception("Falla en el flujo de la conversación %s; se deriva a recepción", conversation_id)
             await self._safe_handoff_after_failure(ctx)
@@ -152,7 +169,10 @@ class Copiloto:
         """Huésped que vuelve tras un traspaso: empieza una consulta nueva con el mismo flujo."""
         greeting = ctx.plain.strip("!¡., ") in GREETING_WORDS
         try:
-            await self._route(ctx, greeting)
+            if self.agent is not None:
+                await self._ai_route(ctx, greeting)
+            else:
+                await self._route(ctx, greeting)
         except Exception:
             logger.exception("Falla en el flujo de la conversación %s; se deriva a recepción", ctx.conversation_id)
             await self._safe_handoff_after_failure(ctx)
@@ -228,10 +248,14 @@ class Copiloto:
 
     async def _welcome(self, ctx: Context) -> None:
         name = self.hotel.hotel["name"]
+        if self.agent is not None:
+            intro = (f"¡Hola! Soy el asistente de recepción del {name} (demo). Uso inteligencia artificial de un "
+                     "tercero para entenderte, así que no escribas datos personales reales. ")
+        else:
+            intro = (f"¡Hola! Soy el Copiloto de Recepción del {name} (demo). Resuelvo al tiro las consultas "
+                     "frecuentes y paso tu solicitud a recepción, que es quien valida y cierra cada reserva. ")
         await self._say(ctx, (
-            f"¡Hola! Soy el Copiloto de Recepción del {name} (demo). Resuelvo al tiro las consultas frecuentes "
-            "y paso tu solicitud a recepción, que es quien valida y cierra cada reserva. "
-            f"Al escribirme aceptas el tratamiento de tus datos según el aviso de privacidad: "
+            intro + "Al escribirme aceptas el tratamiento de tus datos según el aviso de privacidad: "
             f"{self.settings.public_url}/privacidad"
         ))
         await self._show_location(ctx)
@@ -344,27 +368,47 @@ class Copiloto:
         # La ubicación ya se mostró en el saludo (R2): recién ahora se piden datos.
         ctx.state.step = "ask_dates"
         ctx.state.data.pop("fallbacks", None)
-        await self._say(ctx, "Para revisar disponibilidad necesito tus fechas. Escríbelas así: «15/01 al 18/01», "
-                             "«del 15 al 18 de enero» o «este finde».")
+        await self._say(ctx, "Para revisar disponibilidad necesito tus fechas: ¿desde cuándo y hasta cuándo te "
+                             "gustaría quedarte? También me sirve si me dices la fecha de llegada y cuántas noches.")
 
     def _today(self, ctx: Context) -> date:
         return self.settings.local(ctx.now).date()
 
     async def _dates_step(self, ctx: Context) -> None:
-        stay = parse_stay(ctx.text, self._today(ctx))
+        today = self._today(ctx)
+        data = ctx.state.data
+        stay = parse_stay(ctx.text, today) or parse_weekday_range(ctx.text, today)
+        pending = date.fromisoformat(data["pending_checkin"]) if data.get("pending_checkin") else None
+        nights = parse_nights(ctx.text)
+        one = parse_one_date(ctx.text, today)
+        if stay is None and pending:
+            if one and one > pending:
+                stay = (pending, one)
+            elif nights:
+                stay = (pending, pending + timedelta(days=nights))
+        elif stay is None and one and nights:
+            stay = (one, one + timedelta(days=nights))
+        if stay is None and one and not pending:
+            if one < today:
+                await self._say(ctx, "Esa fecha ya pasó. ¿Para qué día quieres llegar?")
+                return
+            data["pending_checkin"] = one.isoformat()
+            await self._say(ctx, f"Anotado: llegas el {one.strftime('%d-%m-%Y')}. ¿Hasta qué día te quedarías, o "
+                                 "cuántas noches serían?")
+            return
         if stay is None:
             faq = self.hotel.match_faq(ctx.text)
             if faq:
                 await self._answer_faq(ctx, faq)
-                await self._say(ctx, "Cuando quieras, dime tus fechas (ej. «15/01 al 18/01»).")
+                await self._say(ctx, "Cuando quieras, cuéntame para qué fechas estás pensando.")
             else:
-                await self._say(ctx, "No pude leer las fechas. Prueba con «15/01 al 18/01» o «este finde».")
+                await self._say(ctx, "No logré entender las fechas. ¿Me dices desde qué día y hasta cuál, o la "
+                                     "fecha de llegada y cuántas noches?")
             return
-        if stay[0] < self._today(ctx):
-            await self._say(ctx, "Esas fechas ya pasaron. Indícame fechas desde hoy en adelante "
-                                 "(ej. «15/01 al 18/01»).")
+        if stay[0] < today:
+            await self._say(ctx, "Esas fechas ya pasaron. Indícame fechas desde hoy en adelante.")
             return
-        data = ctx.state.data
+        data.pop("pending_checkin", None)
         data["checkin"], data["checkout"] = stay[0].isoformat(), stay[1].isoformat()
         adults, children = parse_guests(ctx.text)
         if adults:
@@ -380,7 +424,7 @@ class Copiloto:
             await self._say(ctx, "¿Cuántos adultos viajan? (1 a 4)")
         elif data.get("children") is None:
             ctx.state.step = "ask_children"
-            await self._say(ctx, "¿Y niños? Escribe 0 si no viajan niños.")
+            await self._say(ctx, "¿Viajan niños? Si no, dime «sin niños».")
         else:
             await self._check_availability(ctx)
 
@@ -398,9 +442,10 @@ class Copiloto:
     async def _children_step(self, ctx: Context) -> None:
         _, children = parse_guests(ctx.text)
         if children is None:
-            children = 0 if ctx.plain in ("no", "sin ninos", "sin niños") else parse_count(ctx.text)
+            no_kids = re.search(r"\b(no|sin|ninguno|ninguna|nadie)\b", ctx.plain) and not re.search(r"\d", ctx.plain)
+            children = 0 if no_kids else parse_count(ctx.text)
         if children is None or not 0 <= children <= MAX_CHILDREN:
-            await self._say(ctx, f"Escribe cuántos niños viajan (0 a {MAX_CHILDREN}).")
+            await self._say(ctx, f"¿Cuántos niños viajan? Puedes decirme un número de 0 a {MAX_CHILDREN}.")
             return
         ctx.state.data["children"] = children
         await self._check_availability(ctx)
@@ -503,7 +548,7 @@ class Copiloto:
     def _local_text(self, epoch: float, fmt: str = "%H:%M") -> str:
         return self.settings.local(epoch).strftime(fmt)
 
-    def _note(self, ctx: Context, reason: str, in_shift: bool, now: float) -> str:
+    def _note(self, ctx: Context, reason: str, in_shift: bool, now: float, detail: str = "") -> str:
         data = ctx.state.data
         rooms = self.hotel.room(data["room_code"]) if data.get("room_code") else None
         if data.get("checkin"):
@@ -519,7 +564,8 @@ class Copiloto:
             guests = "sin huéspedes capturados"
         reasons = {"commercial": "consulta comercial", "human_requested": "pidió hablar con una persona",
                    "pms_down": "PMS sin respuesta: verificar cupos a mano",
-                   "error": "falla técnica del copiloto: retomar la conversación a mano"}
+                   "error": "falla técnica del copiloto: retomar la conversación a mano",
+                   "ai_handoff": "el asistente con IA derivó la conversación"}
         lines = [
             "Pre-información del copiloto",
             f"Huésped: {ctx.state.contact_name or 'sin nombre'} (conversación #{ctx.conversation_id})",
@@ -537,6 +583,8 @@ class Copiloto:
             lines.append(f"Pre-reserva auxiliar hasta las {self._local_text(prebooking['expires_at'])} "
                          "(no bloquea el PMS).")
         lines.append(f"Motivo: {reasons.get(reason, reason)}")
+        if detail:
+            lines.append(f"Detalle del asistente: {detail}")
         if in_shift:
             deadline = self._local_text(now + self.settings.sla_red_s)
             lines.append(f"Meta: responder antes de las {deadline} ({self.settings.sla_red_s // 60}:00).")
@@ -544,13 +592,13 @@ class Copiloto:
             lines.append(f"Captura fuera de turno: atender desde las {self.settings.shift_start}.")
         return "\n".join(lines)
 
-    async def _handoff(self, ctx: Context, reason: str, intro: str = "") -> None:
+    async def _handoff(self, ctx: Context, reason: str, intro: str = "", detail: str = "") -> None:
         state = ctx.state
         data = state.data
         now = self.clock()
         in_shift = self.settings.in_shift(now)
         complete = bool(data.get("checkin") and data.get("adults") and data.get("children") is not None)
-        note = self._note(ctx, reason, in_shift, now)
+        note = self._note(ctx, reason, in_shift, now, detail)
         if in_shift:
             closing = ("Ya pasé tu consulta a recepción con estos datos. Una persona te responde en breve; "
                        "ella valida disponibilidad y cierra la reserva contigo.")
@@ -594,20 +642,104 @@ class Copiloto:
         if store.stop_sla(self.db, conversation_id, now):
             record_event(self.db, conversation_id, "human_first_reply", now, {"user_id": user_id})
 
-    async def on_booking_confirmed(self, conversation_id: int | None, booking_id: int) -> None:
-        """Reserva confirmada por una persona en el PMS (webhook de pms-mock)."""
+    async def on_booking_confirmed(self, conversation_id: int | None, booking_id: int,
+                                   source: str = "personal") -> None:
+        """Reserva creada en el PMS (webhook de pms-mock): por una persona o por el asistente con IA."""
         now = self.clock()
         key = f"booking:{booking_id}"
         if self.db.execute("SELECT 1 FROM processed_messages WHERE message_id = ?", (key,)).fetchone():
             return
-        record_event(self.db, conversation_id or 0, "booking_confirmed", now, {"booking_id": booking_id})
+        record_event(self.db, conversation_id or 0, "booking_confirmed", now,
+                     {"booking_id": booking_id, "source": source})
         if conversation_id is not None:
             store.convert_prebooking(self.db, conversation_id)
         mark_processed(self.db, key, now)
-        if conversation_id is None:
-            return
+        if conversation_id is None or source == "ia":
+            return  # la nota de una reserva hecha por la IA la escribe el propio asistente
         try:
             await self.chatwoot.send_message(
                 conversation_id, f"Reserva #{booking_id} cerrada por recepción en el PMS.", private=True)
         except Exception:
             logger.exception("No se pudo anotar la reserva en la conversación %s", conversation_id)
+
+    # ---------- asistente con IA ----------
+
+    async def _ai_route(self, ctx: Context, greeting: bool) -> None:
+        state = ctx.state
+        session_id = f"cw:{ctx.conversation_id}"
+        session = ai_sessions.load(self.db, session_id, ctx.now)
+        if state.step == "start":
+            await self._welcome(ctx)
+            state.step = "ai"
+            session.state["seen_location"] = True
+            if greeting:
+                await self._say(ctx, "¿En qué te puedo ayudar? Pregúntame por la ubicación, los servicios o cuéntame "
+                                     "para cuándo quieres reservar.")
+                ai_sessions.save(self.db, session, ctx.now)
+                return
+        session.msg_count += 1
+        if session.msg_count > AI_CONVERSATION_CAP:
+            await self._handoff(ctx, "human_requested")
+            return
+        hooks = self._ai_hooks(ctx)
+        try:
+            result = await self.agent.respond(session, ctx.text, hooks)
+        except LlmUnavailable:
+            state.step = "menu"
+            ai_sessions.save(self.db, session, ctx.now)
+            await self._say(ctx, "Mi asistente inteligente no está disponible ahora, así que sigo con el menú guiado.")
+            await self._send_menu(ctx)
+            return
+        ai_sessions.save(self.db, session, ctx.now)
+        record_event(self.db, ctx.conversation_id, "ai_reply", self.clock(),
+                     {"latency_ms": result.llm_ms, "tools": result.tools, "tokens": result.tokens})
+        for rule in result.guardrails:
+            record_event(self.db, ctx.conversation_id, "ai_guardrail", self.clock(), {"rule": rule})
+        if result.handed_off or result.reply is None:
+            return
+        if ctx.channel == WEB_WIDGET and result.quick_replies:
+            await self.chatwoot.send_select(ctx.conversation_id, result.reply,
+                                            [(text, text) for text in result.quick_replies])
+        else:
+            await self._say(ctx, result.reply)
+
+    def _ai_hooks(self, ctx: Context) -> ToolHooks:
+        conversation_id = ctx.conversation_id
+
+        async def on_availability(info: dict) -> None:
+            data = ctx.state.data
+            data.update(checkin=info["checkin"], checkout=info["checkout"], adults=info["adults"],
+                        children=info["children"], read_at=info["read_at"], read_label=info["read_label"],
+                        simulated=info["simulated"], room_code=None)
+            if not info["options"]:
+                return
+            with store.transaction(self.db):
+                prebooking_id = store.create_prebooking(self.db, conversation_id, data, ctx.now,
+                                                        self.settings.prebooking_minutes)
+                record_event(self.db, conversation_id, "prebooking_created", ctx.now,
+                             {"prebooking_id": prebooking_id})
+
+        async def on_booking(booking: dict) -> None:
+            ctx.state.data["room_code"] = booking["room_code"]
+            store.set_prebooking_room(self.db, conversation_id, booking["room_code"])
+            store.convert_prebooking(self.db, conversation_id)
+            record_event(self.db, conversation_id, "ai_booking", self.clock(), {"booking_id": booking["booking_id"]})
+            try:
+                await self.chatwoot.add_labels(conversation_id, ["reserva-ia"])
+                await self.chatwoot.send_message(conversation_id, (
+                    f"Reserva #{booking['booking_id']} creada por el asistente con IA en el PMS (demostración).\n"
+                    f"Huésped: {booking['guest_name']} · {booking['room_name']} · {booking['checkin']} a "
+                    f"{booking['checkout']} ({booking['nights']} noches) · total ${booking['total_clp']:,}"
+                ).replace(",", "."), private=True)
+            except Exception:
+                logger.exception("No se pudo anotar la reserva de la IA en la conversación %s", conversation_id)
+
+        async def handoff(reason: str) -> dict:
+            await self._handoff(ctx, "ai_handoff", detail=reason)
+            return {"avisado": True}
+
+        def record(kind: str, payload: dict) -> None:
+            record_event(self.db, conversation_id, kind, self.clock(), payload)
+
+        return ToolHooks(conversation_id=conversation_id, in_shift=self.settings.in_shift(ctx.now),
+                         on_availability=on_availability, on_booking=on_booking, handoff=handoff, record=record)

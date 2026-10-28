@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 import sqlite3
 import time
 from contextlib import asynccontextmanager
@@ -12,13 +13,19 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from copiloto import privacy, store
+from copiloto.ai import sessions as ai_sessions
+from copiloto.ai.agent import Agent
+from copiloto.ai.llm import LlmClient, LlmUnavailable
+from copiloto.ai.tools import ToolHooks
 from copiloto.chatwoot import ChatwootClient
 from copiloto.config import Settings
-from copiloto.events import connect, init_db
+from copiloto.events import connect, init_db, record_event
 from copiloto.flow import Copiloto
+from copiloto.guided import guided_reply
 from copiloto.hotel import HotelData
 from copiloto.pms import MockPxsolAdapter, PmsAdapter
 from copiloto.ratelimit import SlidingWindowLimiter
@@ -27,6 +34,8 @@ from copiloto.sla import SlaWorker
 logger = logging.getLogger(__name__)
 STATIC = Path(__file__).parent / "static"
 PURGE_INTERVAL_S = 86400
+DEMO_SESSION_ID = re.compile(r"^[A-Za-z0-9-]{16,64}$")
+DEMO_MAX_MESSAGE = 400
 
 
 def verify_signature(settings: Settings, headers, raw_body: bytes, now: float) -> bool:
@@ -66,7 +75,7 @@ async def read_capped(request: Request, limit: int) -> bytes:
 
 def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None = None,
                pms: PmsAdapter | None = None, clock=time.time, run_workers: bool = True,
-               db: sqlite3.Connection | None = None) -> FastAPI:
+               db: sqlite3.Connection | None = None, llm_agent: Agent | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     if settings.env == "production":
         settings.validate_runtime()
@@ -76,8 +85,11 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         init_db(db)
     chatwoot = chatwoot or ChatwootClient(settings.chatwoot_url, settings.chatwoot_account_id,
                                           settings.chatwoot_bot_token, settings.chatwoot_team_id)
-    pms = pms or MockPxsolAdapter(settings.pms_url, settings.pms_timeout_s)
-    core = Copiloto(settings, hotel, db, chatwoot, pms, clock)
+    pms = pms or MockPxsolAdapter(settings.pms_url, settings.pms_timeout_s, staff_token=settings.pms_staff_token)
+    agent = llm_agent or (Agent(LlmClient(settings.llm_base_url, settings.llm_api_key, settings.llm_model,
+                                          settings.llm_timeout_s), hotel, pms, settings, clock)
+                          if settings.ai_active else None)
+    core = Copiloto(settings, hotel, db, chatwoot, pms, clock, agent)
     sla = SlaWorker(settings, db, chatwoot, clock)
 
     async def purge_loop() -> None:
@@ -89,14 +101,25 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
                 logger.exception("Falla en la purga de retención")
             await asyncio.sleep(PURGE_INTERVAL_S)
 
+    async def demo_purge_loop() -> None:
+        while True:
+            try:
+                ai_sessions.purge_expired(db, clock(), settings.demo_session_ttl_s, "demo:")
+            except Exception:
+                logger.exception("Falla al purgar sesiones de la demo")
+            await asyncio.sleep(3600)
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        tasks = [asyncio.create_task(sla.run()), asyncio.create_task(purge_loop())] if run_workers else []
+        tasks = [asyncio.create_task(sla.run()), asyncio.create_task(purge_loop()),
+                 asyncio.create_task(demo_purge_loop())] if run_workers else []
         yield
         for task in tasks:
             task.cancel()
 
     app = FastAPI(title="Copiloto de Recepción", lifespan=lifespan)
+    app.add_middleware(CORSMiddleware, allow_origins=[settings.landing_origin], allow_methods=["GET", "POST"],
+                       allow_headers=["Content-Type"], max_age=600)
     app.state.core, app.state.sla, app.state.db, app.state.settings = core, sla, db, settings
 
     limiter = SlidingWindowLimiter(settings.public_rate_per_min, clock=clock)
@@ -155,7 +178,8 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
             booking_id = int(body["booking_id"])
         except (TypeError, ValueError):
             raise HTTPException(status_code=422, detail="booking_id inválido") from None
-        await core.on_booking_confirmed(body.get("conversation_id"), booking_id)
+        source = body.get("source") if body.get("source") in ("personal", "ia") else "personal"
+        await core.on_booking_confirmed(body.get("conversation_id"), booking_id, source)
         return {"status": "recorded"}
 
     @app.get("/panel", response_class=HTMLResponse, dependencies=limited)
@@ -201,5 +225,92 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     @app.get("/privacidad", response_class=HTMLResponse, dependencies=limited)
     async def privacy_page():
         return privacy.render(hotel)
+
+    demo_ip_limiter = SlidingWindowLimiter(settings.demo_ip_per_min, clock=clock)
+    demo_global_limiter = SlidingWindowLimiter(settings.demo_global_per_hour, 3600, clock=clock)
+
+    def demo_error(status: int, detail: str, retry_after: int | None = None) -> JSONResponse:
+        body = {"detail": detail}
+        headers = {}
+        if retry_after is not None:
+            body["retry_after_s"] = retry_after
+            headers["Retry-After"] = str(retry_after)
+        return JSONResponse(body, status_code=status, headers=headers)
+
+    async def demo_body(request: Request) -> dict | JSONResponse:
+        if not settings.demo_enabled:
+            return demo_error(503, "demo_disabled")
+        wait = demo_ip_limiter.check(request.client.host if request.client else "desconocido")
+        if wait is not None:
+            return demo_error(429, "Demasiadas solicitudes, espera un momento", int(wait) + 1)
+        try:
+            body = json.loads(await read_capped(request, 8192))
+        except ValueError:
+            return demo_error(400, "JSON inválido")
+        if not isinstance(body, dict):
+            return demo_error(400, "Cuerpo inválido")
+        session_id = body.get("session_id")
+        if not isinstance(session_id, str) or not DEMO_SESSION_ID.match(session_id):
+            return demo_error(422, "session_id inválido")
+        return body
+
+    @app.get("/api/demo/status", dependencies=limited)
+    async def demo_status():
+        return {"ai_enabled": agent is not None, "mode": settings.ai_mode if agent is not None else "off",
+                "model": settings.llm_model if agent is not None else None,
+                "autonomous_booking": settings.autonomous_booking and agent is not None,
+                "max_message_chars": DEMO_MAX_MESSAGE, "messages_per_session": settings.demo_messages_per_session,
+                "disclaimer": "Demo con IA de un tercero: no escribas datos personales reales."}
+
+    @app.post("/api/demo/chat")
+    async def demo_chat(request: Request):
+        body = await demo_body(request)
+        if isinstance(body, JSONResponse):
+            return body
+        message = body.get("message")
+        if not isinstance(message, str) or not message.strip() or len(message) > DEMO_MAX_MESSAGE:
+            return demo_error(400, f"El mensaje debe tener entre 1 y {DEMO_MAX_MESSAGE} caracteres")
+        session = ai_sessions.load(db, f"demo:{body['session_id']}", clock())
+        if session.msg_count >= settings.demo_messages_per_session:
+            return demo_error(429, "Límite de mensajes de esta conversación: reiníciala para seguir", 3600)
+        wait = demo_global_limiter.check("global")
+        if wait is not None:
+            return demo_error(429, "La demo alcanzó su límite por hora, vuelve en un rato", int(wait) + 1)
+        message = message.strip()
+        session.msg_count += 1
+        events: list[dict] = []
+        reply, quick, mode, usage = "", [], "guided", {"llm_ms": 0, "tokens": None}
+        if agent is not None:
+            hooks = ToolHooks(conversation_id=None, in_shift=settings.in_shift(clock()),
+                              record=lambda kind, payload: record_demo_event(kind, payload))
+            try:
+                result = await agent.respond(session, message, hooks)
+                reply, quick, mode, events = result.reply or "", result.quick_replies, "ai", result.events
+                usage = {"llm_ms": result.llm_ms, "tokens": result.tokens}
+                record_demo_event("ai_reply", {"latency_ms": result.llm_ms, "tools": result.tools,
+                                               "tokens": result.tokens})
+                for rule in result.guardrails:
+                    record_demo_event("ai_guardrail", {"rule": rule})
+            except LlmUnavailable:
+                events = [{"type": "fallback", "reason": "ia_no_disponible"}]
+                reply, quick = guided_reply(hotel, message)
+        else:
+            events = [{"type": "fallback", "reason": "ia_no_configurada"}]
+            reply, quick = guided_reply(hotel, message)
+        ai_sessions.save(db, session, clock())
+        return {"reply": reply, "mode": mode, "events": events, "quick_replies": quick[:4],
+                "usage": {"messages_left": max(settings.demo_messages_per_session - session.msg_count, 0),
+                          **usage}}
+
+    @app.post("/api/demo/reset")
+    async def demo_reset(request: Request):
+        body = await demo_body(request)
+        if isinstance(body, JSONResponse):
+            return body
+        ai_sessions.delete(db, f"demo:{body['session_id']}")
+        return {"status": "ok"}
+
+    def record_demo_event(kind: str, payload: dict) -> None:
+        record_event(db, 0, kind, clock(), payload)
 
     return app

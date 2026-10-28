@@ -31,3 +31,22 @@ def test_parse_guests_reads_adults_and_children():
 def test_parse_count_understands_words_and_digits():
     assert parse_count("dos") == 2 and parse_count("3") == 3 and parse_count("ninguno") == 0
     assert parse_count("quizás") is None
+
+
+from copiloto.textutil import parse_nights, parse_one_date, parse_weekday_range  # noqa: E402
+
+
+def test_natural_single_dates_and_nights():
+    assert parse_one_date("mañana", TODAY) == date(2026, 10, 29)
+    assert parse_one_date("pasado mañana", TODAY) == date(2026, 10, 30)
+    assert parse_one_date("llego el 15 de marzo", TODAY) == date(2027, 3, 15)
+    assert parse_one_date("el viernes", TODAY) == date(2026, 10, 30)
+    assert parse_one_date("quizás", TODAY) is None
+    assert parse_nights("3 noches") == 3 and parse_nights("tres noches") == 3 and parse_nights("una noche") == 1
+    assert parse_nights("hola") is None and parse_nights("90 noches") is None
+
+
+def test_weekday_ranges():
+    assert parse_weekday_range("del viernes al domingo", TODAY) == (date(2026, 10, 30), date(2026, 11, 1))
+    assert parse_weekday_range("sábado a lunes", TODAY) == (date(2026, 10, 31), date(2026, 11, 2))
+    assert parse_weekday_range("el viernes", TODAY) is None

@@ -147,6 +147,7 @@ def purge_personal_data(db: sqlite3.Connection, now: float, retention_days: int,
     cursor_state = db.execute("DELETE FROM conversation_state WHERE updated_at < ?", (cutoff,))
     cursor_pre = db.execute("DELETE FROM prebookings WHERE created_at < ?", (cutoff,))
     cursor_msgs = db.execute("DELETE FROM processed_messages WHERE ts < ?", (cutoff,))
+    cursor_ai = db.execute("DELETE FROM ai_sessions WHERE updated_at < ?", (cutoff,))
     anonymized = 0
     for row in db.execute("SELECT id, payload FROM events WHERE ts < ? AND conversation_id > 0",
                           (cutoff,)).fetchall():
@@ -159,4 +160,5 @@ def purge_personal_data(db: sqlite3.Connection, now: float, retention_days: int,
         db.execute("UPDATE events SET conversation_id = ? WHERE conversation_id = ? AND ts < ?",
                    (anonymous_id(row["conversation_id"], salt), row["conversation_id"], cutoff))
     return {"conversation_state": cursor_state.rowcount, "prebookings": cursor_pre.rowcount,
-            "events_anonymized": anonymized, "processed_messages": cursor_msgs.rowcount}
+            "events_anonymized": anonymized, "processed_messages": cursor_msgs.rowcount,
+            "ai_sessions": cursor_ai.rowcount}

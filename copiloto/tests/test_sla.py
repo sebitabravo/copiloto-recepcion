@@ -74,7 +74,7 @@ async def test_booking_confirmed_event_marks_prebooking_converted(harness):
     await handed_off(harness)
     await harness.core.on_booking_confirmed(1, 55)
     assert store.active_prebooking(harness.db, 1)["status"] == "converted"
-    assert json.loads(harness.events("booking_confirmed")[0]["payload"]) == {"booking_id": 55}
+    assert json.loads(harness.events("booking_confirmed")[0]["payload"]) == {"booking_id": 55, "source": "personal"}
     assert any("Reserva #55" in n for n in harness.chatwoot.notes(1))
 
 

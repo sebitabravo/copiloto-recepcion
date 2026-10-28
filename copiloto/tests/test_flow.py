@@ -234,3 +234,39 @@ async def test_past_dates_are_rejected_without_reading_the_pms(harness):
     assert any("ya pasaron" in t for t in harness.chatwoot.guest_texts())
     assert harness.pms.calls == 0
     assert store.get_state(harness.db, 1).step == "ask_dates"
+
+
+async def test_guided_flow_understands_a_date_and_nights_without_a_rigid_format(harness):
+    await harness.say("quiero reservar")
+    await harness.say("llego el 15 de noviembre")
+    assert any("Hasta qué día" in t or "cuántas noches" in t for t in harness.chatwoot.guest_texts())
+    await harness.say("tres noches")
+    assert any("adultos" in t for t in harness.chatwoot.guest_texts())
+    assert store.get_state(harness.db, 1).data["checkout"] == "2026-11-18"
+
+
+async def test_guided_flow_understands_tomorrow_and_weekend_ranges(harness):
+    await harness.say("quiero reservar", conversation_id=2)
+    await harness.say("mañana 2 noches", conversation_id=2)
+    assert store.get_state(harness.db, 2).data["checkin"] == "2026-10-29"
+    await harness.say("quiero reservar", conversation_id=3)
+    await harness.say("del viernes al domingo", conversation_id=3)
+    assert store.get_state(harness.db, 3).data["checkin"] == "2026-10-30"
+
+
+async def test_guided_prompts_never_ask_for_a_specific_format(harness):
+    await harness.say("quiero reservar")
+    await harness.say("no sé")
+    await harness.say("15/11 al 18/11")
+    await harness.say("2")
+    texts = " ".join(harness.chatwoot.guest_texts())
+    assert "Escríbelas así" not in texts and "Escribe 0" not in texts and "«15/01 al 18/01»" not in texts
+
+
+async def test_children_answer_accepts_natural_negatives(harness):
+    for conversation_id, answer in enumerate(["no", "sin niños", "ninguno", "no viajan niños"], start=20):
+        await harness.say("quiero reservar", conversation_id=conversation_id)
+        await harness.say("15/11 al 18/11", conversation_id=conversation_id)
+        await harness.say("2 adultos", conversation_id=conversation_id)
+        await harness.say(answer, conversation_id=conversation_id)
+        assert store.get_state(harness.db, conversation_id).data.get("children") == 0, answer

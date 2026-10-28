@@ -55,15 +55,26 @@ class _ReadingPayload(BaseModel):
     room_types: list[_OfferPayload]
 
 
+class PmsConflict(Exception):
+    """El PMS rechazó la reserva (sin cupo, capacidad o datos inválidos)."""
+
+
 class PmsAdapter(ABC):
     @abstractmethod
     async def availability(self, checkin: date, checkout: date, adults: int, children: int) -> PmsReading:
         """Lectura fechada de disponibilidad. Debe lanzar `PmsUnavailable` ante cualquier falla."""
 
+    async def book(self, guest_name: str, room_code: str, checkin: date, checkout: date, adults: int,
+                   children: int, conversation_id: int | None) -> dict:
+        """Crea una reserva. Solo la usa el modo de IA autónoma de la demo; por defecto no está soportada."""
+        raise NotImplementedError("Este adaptador no crea reservas")
+
 
 class MockPxsolAdapter(PmsAdapter):
-    def __init__(self, base_url: str, timeout_s: float = 4.0, http: httpx.AsyncClient | None = None):
+    def __init__(self, base_url: str, timeout_s: float = 4.0, http: httpx.AsyncClient | None = None,
+                 staff_token: str = ""):
         self._base_url = base_url.rstrip("/")
+        self._staff_token = staff_token
         self._http = http or httpx.AsyncClient(timeout=timeout_s)
 
     async def availability(self, checkin: date, checkout: date, adults: int, children: int) -> PmsReading:
@@ -77,6 +88,28 @@ class MockPxsolAdapter(PmsAdapter):
             return PmsReading(payload.read_at, payload.source, payload.simulated, offers)
         except (httpx.HTTPError, ValidationError, ValueError) as exc:
             raise PmsUnavailable(str(exc)) from exc
+
+
+    async def book(self, guest_name: str, room_code: str, checkin: date, checkout: date, adults: int,
+                   children: int, conversation_id: int | None) -> dict:
+        body = {"guest_name": guest_name, "room_code": room_code, "checkin": checkin.isoformat(),
+                "checkout": checkout.isoformat(), "adults": adults, "children": children,
+                "conversation_id": conversation_id, "source": "ia"}
+        try:
+            response = await self._http.post(f"{self._base_url}/api/v1/bookings", json=body,
+                                             headers={"X-Staff-Token": self._staff_token})
+        except httpx.HTTPError as exc:
+            raise PmsUnavailable(str(exc)) from exc
+        if response.status_code in (409, 422):
+            raise PmsConflict(response.text[:200])
+        if response.status_code >= 400:
+            raise PmsUnavailable(f"PMS respondió {response.status_code}")
+        try:
+            result = response.json()
+            return {"booking_id": int(result["booking_id"]),
+                    **{key: result[key] for key in ("room_code", "checkin", "checkout")}}
+        except (ValueError, KeyError, TypeError) as exc:
+            raise PmsUnavailable("Respuesta de reserva inválida") from exc
 
 
 class PxsolAdapter(PmsAdapter):

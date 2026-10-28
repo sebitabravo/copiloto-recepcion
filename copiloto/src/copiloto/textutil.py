@@ -104,3 +104,55 @@ def parse_guests(text: str) -> tuple[int | None, int | None]:
     if match:
         children = _first_number(match.group(1))
     return adults, children
+
+
+WEEKDAYS = {"lunes": 0, "martes": 1, "miercoles": 2, "jueves": 3, "viernes": 4, "sabado": 5, "domingo": 6}
+
+
+def _next_weekday(name: str, today: date, after: date | None = None) -> date:
+    base = after or today
+    delta = (WEEKDAYS[name] - base.weekday()) % 7
+    return base + timedelta(days=delta or (7 if after else 0))
+
+
+def parse_nights(text: str) -> int | None:
+    """'3 noches', 'tres noches', 'una noche' → número de noches (1 a 30)."""
+    match = re.search(r"(\d+|una|un|dos|tres|cuatro|cinco|seis|siete)\s+noches?", normalize(text))
+    if not match:
+        return None
+    nights = _first_number(match.group(1))
+    return nights if nights and 1 <= nights <= 30 else None
+
+
+def parse_one_date(text: str, today: date) -> date | None:
+    """Una sola fecha en lenguaje natural: 'mañana', 'el viernes', '15/03', '15 de marzo'."""
+    plain = normalize(text)
+    if re.search(r"\bpasado manana\b", plain):
+        return today + timedelta(days=2)
+    if re.search(r"\bmanana\b", plain):
+        return today + timedelta(days=1)
+    if re.search(r"\bhoy\b", plain):
+        return today
+    numeric = re.search(r"(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?", plain)
+    if numeric:
+        day, month, year = numeric.groups()
+        return _explicit_date(int(day), int(month), int(year) if year else None, today)
+    month_names = "|".join(MONTHS)
+    named = re.search(rf"(\d{{1,2}}) de ({month_names})", plain)
+    if named:
+        return _next_date(int(named.group(1)), MONTHS[named.group(2)], today)
+    weekday = re.search(r"\b(" + "|".join(WEEKDAYS) + r")\b", plain)
+    if weekday:
+        return _next_weekday(weekday.group(1), today)
+    return None
+
+
+def parse_weekday_range(text: str, today: date) -> tuple[date, date] | None:
+    """'del viernes al domingo' → próximas fechas de esos días."""
+    names = "|".join(WEEKDAYS)
+    match = re.search(rf"\b({names})\b\s*(?:al|a|hasta|-)\s*(?:el\s+)?({names})\b", normalize(text))
+    if not match:
+        return None
+    start = _next_weekday(match.group(1), today)
+    end = _next_weekday(match.group(2), today, after=start)
+    return start, end

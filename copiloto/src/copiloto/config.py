@@ -42,6 +42,21 @@ class Settings:
     sla_red_s: int = 180
     sla_interval_s: float = 10.0
     signature_tolerance_s: int = 300
+    # IA conversacional: off (flujo guiado), assisted (no reserva) o full (también reserva en el PMS simulado)
+    ai_mode: str = "off"
+    llm_base_url: str = "https://api.deepseek.com"
+    llm_api_key: str = ""
+    llm_model: str = "deepseek-flash"
+    llm_timeout_s: float = 25.0
+    llm_max_tokens: int = 500
+    ai_max_history: int = 12
+    pms_staff_token: str = ""
+    demo_enabled: bool = True
+    landing_origin: str = "http://localhost:8080"
+    demo_messages_per_session: int = 30
+    demo_ip_per_min: int = 20
+    demo_global_per_hour: int = 300
+    demo_session_ttl_s: int = 86400
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -59,6 +74,13 @@ class Settings:
             webhook_secret=env.get("WEBHOOK_SECRET", ""),
             pseudonym_salt=env.get("PSEUDONYM_SALT", ""),
             pms_events_secret=env.get("PMS_EVENTS_SECRET", ""),
+            ai_mode=env.get("AI_MODE", "off").strip().lower(),
+            llm_base_url=env.get("LLM_BASE_URL", cls.llm_base_url).rstrip("/"),
+            llm_api_key=env.get("LLM_API_KEY", ""),
+            llm_model=env.get("LLM_MODEL", cls.llm_model),
+            pms_staff_token=env.get("PMS_STAFF_TOKEN", ""),
+            demo_enabled=env.get("DEMO_ENABLED", "1") not in ("0", "false", "no"),
+            landing_origin=env.get("LANDING_ORIGIN", cls.landing_origin).rstrip("/"),
             panel_token=env.get("PANEL_TOKEN", ""),
             pms_url=env.get("PMS_URL", cls.pms_url),
             pms_staff_url=env.get("PMS_STAFF_URL", cls.pms_staff_url),
@@ -77,8 +99,21 @@ class Settings:
                    "PANEL_TOKEN": self.panel_token, "PSEUDONYM_SALT": self.pseudonym_salt,
                    "CHATWOOT_BOT_TOKEN": self.chatwoot_bot_token}
         weak = sorted(name for name, value in secrets.items() if len(value) < 16)
+        if self.ai_mode not in ("off", "assisted", "full"):
+            raise ValueError("AI_MODE debe ser off, assisted o full")
+        if self.ai_mode == "full" and self.llm_api_key and not self.pms_staff_token:
+            raise ValueError("AI_MODE=full necesita PMS_STAFF_TOKEN para crear reservas en el PMS")
         if weak:
             raise ValueError("Secretos ausentes o demasiado cortos (mínimo 16 caracteres): " + ", ".join(weak))
+
+    @property
+    def ai_active(self) -> bool:
+        """La IA solo se usa con modo distinto de off y una API key; sin key el asistente sigue guiado."""
+        return self.ai_mode in ("assisted", "full") and bool(self.llm_api_key)
+
+    @property
+    def autonomous_booking(self) -> bool:
+        return self.ai_active and self.ai_mode == "full" and bool(self.pms_staff_token)
 
     @property
     def tz(self) -> ZoneInfo:
