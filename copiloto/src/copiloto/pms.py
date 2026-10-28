@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import date
 
 import httpx
+from pydantic import BaseModel, Field, ValidationError
 
 
 class PmsUnavailable(Exception):
@@ -35,6 +36,25 @@ class PmsReading:
     offers: list[RoomOffer]
 
 
+class _OfferPayload(BaseModel):
+    """Contrato de una habitación en la respuesta del PMS. Un valor fuera de rango es un error de contrato."""
+
+    code: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    max_adults: int = Field(ge=1)
+    max_children: int = Field(ge=0)
+    m2: float = Field(gt=0)
+    available_units: int = Field(ge=0)
+    nightly_price_clp: int = Field(ge=0)
+
+
+class _ReadingPayload(BaseModel):
+    read_at: str = Field(min_length=16)
+    source: str = Field(min_length=1)
+    simulated: bool = False
+    room_types: list[_OfferPayload]
+
+
 class PmsAdapter(ABC):
     @abstractmethod
     async def availability(self, checkin: date, checkout: date, adults: int, children: int) -> PmsReading:
@@ -52,11 +72,10 @@ class MockPxsolAdapter(PmsAdapter):
         try:
             response = await self._http.get(f"{self._base_url}/api/v1/availability", params=params)
             response.raise_for_status()
-            body = response.json()
-            offers = [RoomOffer(**{key: item[key] for key in RoomOffer.__dataclass_fields__})
-                      for item in body["room_types"]]
-            return PmsReading(body["read_at"], body["source"], bool(body.get("simulated", False)), offers)
-        except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
+            payload = _ReadingPayload.model_validate(response.json())
+            offers = [RoomOffer(**offer.model_dump()) for offer in payload.room_types]
+            return PmsReading(payload.read_at, payload.source, payload.simulated, offers)
+        except (httpx.HTTPError, ValidationError, ValueError) as exc:
             raise PmsUnavailable(str(exc)) from exc
 
 

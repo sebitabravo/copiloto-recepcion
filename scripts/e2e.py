@@ -6,7 +6,7 @@ import sys
 import time
 import unicodedata
 from contextlib import closing
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -18,6 +18,9 @@ COPILOTO = "http://localhost:8100"
 PMS = "http://localhost:8200"
 POLL_SECONDS = 0.5
 WAIT_SECONDS = 20.0
+# Fechas relativas a hoy: una fecha fija vence y vuelve frágil la prueba
+CHECKIN = date.today() + timedelta(days=150)
+CHECKOUT = CHECKIN + timedelta(days=3)
 
 
 def read_runtime():
@@ -129,7 +132,7 @@ class Runner:
             team = ((conversation.get("meta") or {}).get("team") or {}).get("name", "")
             note = any(message.get("private") is True
                        and (message.get("content") or "").startswith("Pre-información del copiloto")
-                       and "2027-03-15" in (message.get("content") or "") for message in messages)
+                       and CHECKIN.isoformat() in (message.get("content") or "") for message in messages)
             ready = conversation.get("status") == expected_status
             if expected_status == "open":
                 ready = ready and "comercial" in labels and normalized(team) == "recepcion" and note
@@ -144,7 +147,7 @@ class Runner:
             return
         self.results.check(case, "commercial label", "comercial" in labels, "Expected comercial")
         self.results.check(case, "reception team", normalized(team) == "recepcion", "Expected recepción")
-        self.results.check(case, "private dated note", note, "Private pre-information includes 2027-03-15")
+        self.results.check(case, "private dated note", note, f"Private pre-information includes {CHECKIN.isoformat()}")
         if night:
             self.results.check(case, "night label", "nocturna" in labels, "Expected nocturna")
 
@@ -157,7 +160,7 @@ class Runner:
     def availability(self, case, night=False, opening=None, down=False):
         with closing(Guest(self.runtime)) as guest:
             for content, expected in (("quiero reservar", "necesito tus fechas"),
-                                      ("15/03/2027 al 18/03/2027", "¿Cuántos adultos"),
+                                      (f"{CHECKIN:%d/%m/%Y} al {CHECKOUT:%d/%m/%Y}", "¿Cuántos adultos"),
                                       ("2", "¿Y niños")):
                 elapsed, _ = guest.send_and_wait(content, expected)
                 self.results.check(case, f"reply to {content}", True, f"Expected response visible in {elapsed:.2f} s")
