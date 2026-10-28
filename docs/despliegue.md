@@ -74,7 +74,7 @@ en `.env.runtime` (gitignored). Nunca las commitees.
 ## Servidor
 
 1. Una VM con 4 GB de RAM y Docker. Copia el repo, corre `make up`.
-2. Pon un proxy con HTTPS delante (Caddy o nginx) y define `FRONTEND_URL` con la URL pública de Chatwoot.
+2. Pon un proxy con HTTPS delante (Caddy o nginx) y ajusta `FRONTEND_URL` en `infra/docker-compose.yml` a la URL pública de Chatwoot.
 3. `/api/panel/*` exige el `PANEL_TOKEN` (header `X-Panel-Token`; el seed lo deja en la URL del Dashboard
    App) y `/webhooks/*` verifican firma o secreto. **`/metricas*` no tiene autenticación** (solo contadores):
    protégelo con login en el proxy. Expón sin login solo `/webhooks/*`, `/panel` (HTML estático) y

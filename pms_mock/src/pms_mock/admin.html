@@ -26,8 +26,6 @@
   h1 { font-size:clamp(1.5rem,4vw,2rem); line-height:1.2; letter-spacing:-.035em; margin-bottom:12px; }
   h2 { font-size:1.25rem; letter-spacing:-.02em; margin-bottom:6px; }
   h3 { font-size:1rem; }
-  .eyebrow { color:var(--accent); font-size:.75rem; letter-spacing:.14em; text-transform:uppercase;
-             font-weight:750; margin-bottom:10px; }
   .muted, .helper, footer { color:var(--muted); }
   .helper { font-size:.875rem; margin:6px 0 0; }
   .topline, .section-heading, .session, .actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
@@ -64,7 +62,7 @@
   .token-row input { flex:1; }
   .token-row button { flex-shrink:0; }
   .access .primary { width:100%; margin-top:20px; }
-  .layout { display:grid; grid-template-columns:minmax(0,1fr) 280px; gap:24px; }
+  .layout { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; max-width:760px; }
   .section-heading { justify-content:space-between; margin-bottom:20px; }
   .step { display:inline-grid; place-items:center; width:28px; height:28px; border-radius:50%;
           background:var(--soft); color:var(--accent); margin-right:8px; font-size:.8rem; vertical-align:middle; }
@@ -93,13 +91,6 @@
   .notice p { margin:0; }
   .notice.success { background:var(--ok-bg); border-color:var(--ok); color:var(--ok); }
   .notice.error { background:var(--bad-bg); border-color:var(--bad); color:var(--bad); }
-  .guide { align-self:start; }
-  .guide ol { padding-left:22px; margin-bottom:0; }
-  .guide li { margin-bottom:16px; padding-left:5px; }
-  .guide li:last-child { margin-bottom:0; }
-  .guide strong { display:block; font-size:.9rem; }
-  .guide span { color:var(--muted); font-size:.85rem; }
-  .guide-note { border-top:1px solid var(--line); padding-top:18px; margin:22px 0 0; font-size:.85rem; }
   .bookings { margin-top:28px; }
   .table-wrap { width:100%; }
   table { border-collapse:collapse; width:100%; font-size:.875rem; table-layout:fixed; }
@@ -114,8 +105,7 @@
   footer { text-align:center; font-size:.8rem; margin-top:28px; }
   @media (max-width:860px) {
     .layout { grid-template-columns:minmax(0,1fr); }
-    .guide { display:none; }
-  }
+    }
   @media (max-width:640px) {
     main { padding-top:24px; }
     .card { padding:20px 16px; border-radius:14px; }
@@ -138,7 +128,6 @@
 <main>
   <header>
     <div class="topline">
-      <p class="eyebrow">El cuidado comienza en recepción</p>
       <span class="badge">PMS simulado</span>
     </div>
     <h1>Recepción · Hotel Boutique Bordeluz</h1>
@@ -150,8 +139,7 @@
 
   <section id="access" class="card access" aria-labelledby="access-title">
     <div class="access-icon" aria-hidden="true">⌑</div>
-    <p class="eyebrow">Un espacio para el equipo</p>
-    <h2 id="access-title">Bienvenido a recepción</h2>
+    <h2 id="access-title">Acceso del personal</h2>
     <p class="muted">Ingresa el token del personal para revisar y confirmar reservas.</p>
     <form id="access-form">
       <label for="token">Token del personal</label>
@@ -174,7 +162,6 @@
     </div>
     <div class="layout">
       <section class="card" aria-labelledby="booking-title">
-        <p class="eyebrow">Una nueva estadía</p>
         <h2 id="booking-title"><span class="step">1</span>Revisa y confirma la reserva</h2>
         <p class="muted">Completa los datos y consulta la disponibilidad actual.</p>
         <div id="conversation" class="notice" hidden>
@@ -248,29 +235,19 @@
         </form>
         <p id="form-status" class="error" role="alert" aria-live="polite"></p>
       </section>
-      <aside class="card guide" aria-labelledby="guide-title">
-        <p class="eyebrow">Atención con calma</p>
-        <h2 id="guide-title">Todo listo, paso a paso</h2>
-        <ol>
-          <li><strong>Escucha y revisa</strong><span>Verifica nombre, fechas y cantidad de huéspedes.</span></li>
-          <li><strong>Consulta los cupos</strong><span>La lectura muestra lo disponible en ese momento.</span></li>
-          <li><strong>Confirma personalmente</strong><span>La reserva queda registrada solo al presionar confirmar.</span></li>
-        </ol>
-        <p class="guide-note muted">Un detalle bien revisado hace una bienvenida más tranquila.</p>
-      </aside>
     </div>
     <section class="card bookings" aria-labelledby="bookings-title">
       <div class="section-heading">
-        <div><p class="eyebrow">El libro de recepción</p><h2 id="bookings-title">Reservas registradas</h2></div>
+        <div><h2 id="bookings-title">Reservas registradas</h2></div>
         <button id="refresh" type="button">Actualizar reservas</button>
       </div>
       <p id="table-status" class="helper" role="status" aria-live="polite"></p>
-      <div id="empty" class="empty" hidden>Aún no hay reservas. La primera bienvenida comienza aquí.</div>
+      <div id="empty" class="empty" hidden>Aún no hay reservas registradas.</div>
       <div id="table-wrap" class="table-wrap" hidden>
         <table>
           <caption>Las reservas más recientes aparecen primero.</caption>
           <thead><tr><th scope="col">Reserva</th><th scope="col">Huésped</th><th scope="col">Estancia</th>
-            <th scope="col">Habitación</th><th scope="col">Ocupación</th><th scope="col">Conversación</th></tr></thead>
+            <th scope="col">Habitación</th><th scope="col">Ocupación</th><th scope="col">Conversación</th><th scope="col">Origen</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -405,7 +382,7 @@
     }
     const count = nights(fields.checkin.value, fields.checkout.value);
     get('stay-summary').textContent = Number.isFinite(count) && count > 0 ?
-      `${count} ${count === 1 ? 'noche' : 'noches'} de descanso` : 'Elige las fechas de la estadía';
+      `${count} ${count === 1 ? 'noche' : 'noches'}` : 'Elige las fechas de la estadía';
     get('party-summary').textContent = partyLabel(Number(fields.adults.value), Number(fields.children.value));
     get('reviewed').disabled = availabilityKey !== signature() || created;
     get('submit').disabled = submitting || created || !staffToken || Object.keys(errors).length > 0 ||
@@ -506,16 +483,17 @@
     get('rows').replaceChildren();
     get('empty').hidden = bookings.length > 0;
     get('table-wrap').hidden = bookings.length === 0;
-    const labels = ['Reserva', 'Huésped', 'Estancia', 'Habitación', 'Ocupación', 'Conversación'];
+    const labels = ['Reserva', 'Huésped', 'Estancia', 'Habitación', 'Ocupación', 'Conversación', 'Origen'];
     for (const booking of [...bookings].sort((a, b) => b.booking_id - a.booking_id)) {
       const row = document.createElement('tr');
       if (booking.booking_id === newestBookingId) row.classList.add('new-booking');
       const type = roomTypes.find(item => item.code === booking.room_code);
       const count = nights(booking.checkin, booking.checkout);
       const values = [`#${booking.booking_id}${booking.booking_id === newestBookingId ? ' · Nueva' : ''}`,
-        booking.guest_name, `${dateLabel(booking.checkin)} → ${dateLabel(booking.checkout)} · ${count} noches`,
+        booking.guest_name, `${dateLabel(booking.checkin)} → ${dateLabel(booking.checkout)} · ${count === 1 ? '1 noche' : `${count} noches`}`,
         type ? type.name : 'Habitación no disponible en el catálogo', partyLabel(booking.adults, booking.children),
-        booking.conversation_id == null ? 'Sin vincular' : `#${booking.conversation_id}`];
+        booking.conversation_id == null ? 'Sin vincular' : `#${booking.conversation_id}`,
+        booking.source === 'ia' ? 'Asistente con IA' : 'Recepción'];
       values.forEach((value, index) => {
         const cell = document.createElement('td');
         cell.dataset.label = labels[index];

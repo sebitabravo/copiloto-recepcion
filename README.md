@@ -94,11 +94,9 @@ make backup # respaldo en caliente de Chatwoot y las bases SQLite en backups/
 
 - [Manual de recepción](docs/manual-recepcion.md)
 - [Despliegue](docs/despliegue.md)
-- [Canales: Telegram y WhatsApp](docs/canales.md)
 - [Costos](docs/costos.md)
 - [Privacidad (Ley 21.719)](docs/privacidad.md)
 - [Asistente con IA](docs/ia.md) y su [API de la demo](docs/demo-api.md)
-- [Revisión de AgroVoz y Wenuke](docs/revision-agrovoz-wenuke.md)
 
 ## Datos del hotel y qué falta validar
 
@@ -111,8 +109,8 @@ Quedan **pendientes de validar con el hotel**: Km 12.5 vs 2.5 de la dirección, 
 
 - **PMS real**: Pxsol no tiene API pública documentada. `PxsolAdapter` es un stub con el contrato; la
   integración real necesita credenciales del hotel y el acuerdo con el proveedor.
-- **WhatsApp**: requiere una app en Meta (login humano) y tiene cuota gratuita limitada. Nunca conectes el
-  número real del hotel a esta demo. Ver [canales](docs/canales.md).
+- **Canales**: la demo usa el chat web. WhatsApp y Telegram no están incluidos ni se probaron; nunca conectes el
+  número real del hotel a esta demo.
 - **IA opcional**: con `LLM_API_KEY` el asistente entiende lenguaje libre y, en la demo, reserva por sí solo en el
   PMS simulado (`AI_MODE=full`); sin key funciona con el flujo guiado. EVA2 describe un bot determinista que no
   confirma: eso equivale a `AI_MODE=assisted`. Ver [asistente con IA](docs/ia.md).
