@@ -29,7 +29,7 @@ from copiloto.events import connect, init_db, record_event
 from copiloto.flow import Copiloto
 from copiloto.guided import guided_reply
 from copiloto.hotel import HotelData
-from copiloto.pms import MockPxsolAdapter, PmsAdapter
+from copiloto.pms import PmsAdapter, build_pms_adapter
 from copiloto.ratelimit import SlidingWindowLimiter
 from copiloto.sla import SlaWorker
 
@@ -91,7 +91,7 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         init_db(db)
     chatwoot = chatwoot or ChatwootClient(settings.chatwoot_url, settings.chatwoot_account_id,
                                           settings.chatwoot_bot_token, settings.chatwoot_team_id)
-    pms = pms or MockPxsolAdapter(settings.pms_url, settings.pms_timeout_s, staff_token=settings.pms_staff_token)
+    pms = pms or build_pms_adapter(settings)
     agent = llm_agent or (Agent(LlmClient(settings.llm_base_url, settings.llm_api_key, settings.llm_model,
                                           settings.llm_timeout_s), hotel, pms, settings, clock)
                           if settings.ai_active else None)

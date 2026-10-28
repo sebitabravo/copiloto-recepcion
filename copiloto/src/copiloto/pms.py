@@ -1,8 +1,8 @@
 """Adaptador del PMS. El resto del copiloto solo conoce `PmsAdapter`.
 
-`MockPxsolAdapter` habla con el servicio pms-mock. `PxsolAdapter` es el contrato pendiente para el
-PMS real: Pxsol no publica una API; la integración requiere credenciales del hotel y el contrato
-del proveedor (fase 2 real de EVA2).
+`HttpPmsAdapter` habla con cualquier PMS que exponga el contrato de docs/conector-pms.md, y el
+servicio pms-mock lo implementa. `UnavailablePmsAdapter` cubre al hotel que todavía no tiene PMS
+conectado: el copiloto orienta y deriva, sin prometer disponibilidad.
 """
 
 from abc import ABC, abstractmethod
@@ -70,18 +70,28 @@ class PmsAdapter(ABC):
         raise NotImplementedError("Este adaptador no crea reservas")
 
 
-class MockPxsolAdapter(PmsAdapter):
+class HttpPmsAdapter(PmsAdapter):
+    """Conector HTTP contra el contrato del copiloto (ver docs/conector-pms.md).
+
+    Rutas, cabecera de autorización y token se configuran por hotel: el mismo código sirve para el
+    PMS simulado y para un PMS real que exponga el contrato, sin escribir una clase nueva.
+    """
+
     def __init__(self, base_url: str, timeout_s: float = 4.0, http: httpx.AsyncClient | None = None,
-                 staff_token: str = ""):
+                 staff_token: str = "", availability_path: str = "/api/v1/availability",
+                 booking_path: str = "/api/v1/bookings", auth_header: str = "X-Staff-Token"):
         self._base_url = base_url.rstrip("/")
         self._staff_token = staff_token
+        self._availability_path = availability_path
+        self._booking_path = booking_path
+        self._auth_header = auth_header
         self._http = http or httpx.AsyncClient(timeout=timeout_s)
 
     async def availability(self, checkin: date, checkout: date, adults: int, children: int) -> PmsReading:
         params = {"checkin": checkin.isoformat(), "checkout": checkout.isoformat(),
                   "adults": adults, "children": children}
         try:
-            response = await self._http.get(f"{self._base_url}/api/v1/availability", params=params)
+            response = await self._http.get(f"{self._base_url}{self._availability_path}", params=params)
             response.raise_for_status()
             payload = _ReadingPayload.model_validate(response.json())
             offers = [RoomOffer(**offer.model_dump()) for offer in payload.room_types]
@@ -89,15 +99,14 @@ class MockPxsolAdapter(PmsAdapter):
         except (httpx.HTTPError, ValidationError, ValueError) as exc:
             raise PmsUnavailable(str(exc)) from exc
 
-
     async def book(self, guest_name: str, room_code: str, checkin: date, checkout: date, adults: int,
                    children: int, conversation_id: int | None) -> dict:
         body = {"guest_name": guest_name, "room_code": room_code, "checkin": checkin.isoformat(),
                 "checkout": checkout.isoformat(), "adults": adults, "children": children,
                 "conversation_id": conversation_id, "source": "ia"}
         try:
-            response = await self._http.post(f"{self._base_url}/api/v1/bookings", json=body,
-                                             headers={"X-Staff-Token": self._staff_token})
+            response = await self._http.post(f"{self._base_url}{self._booking_path}", json=body,
+                                             headers={self._auth_header: self._staff_token})
         except httpx.HTTPError as exc:
             raise PmsUnavailable(str(exc)) from exc
         if response.status_code in (409, 422):
@@ -112,9 +121,24 @@ class MockPxsolAdapter(PmsAdapter):
             raise PmsUnavailable("Respuesta de reserva inválida") from exc
 
 
-class PxsolAdapter(PmsAdapter):
-    """Stub del PMS real. Contrato esperado: misma firma que `MockPxsolAdapter.availability`,
-    lectura de solo consulta y con sello de hora; la confirmación de reservas es siempre humana."""
+# Nombre histórico: el servicio pms-mock expone el contrato y se habla igual que con un PMS real.
+MockPxsolAdapter = HttpPmsAdapter
+
+
+class UnavailablePmsAdapter(PmsAdapter):
+    """Hotel sin PMS integrado: toda lectura falla y el copiloto deriva a recepción.
+
+    Es el modo de la fase 1: orientación y captura funcionan sin exponer disponibilidad.
+    """
 
     async def availability(self, checkin: date, checkout: date, adults: int, children: int) -> PmsReading:
-        raise NotImplementedError("Integración Pxsol pendiente: requiere credenciales y contrato del proveedor")
+        raise PmsUnavailable("El hotel no tiene PMS conectado: recepción verifica los cupos")
+
+
+def build_pms_adapter(settings) -> PmsAdapter:
+    """Elige el conector según configuración; `PMS_ADAPTER=none` deja el copiloto sin PMS."""
+    if settings.pms_adapter == "none":
+        return UnavailablePmsAdapter()
+    return HttpPmsAdapter(settings.pms_url, settings.pms_timeout_s, staff_token=settings.pms_staff_token,
+                          availability_path=settings.pms_availability_path,
+                          booking_path=settings.pms_booking_path, auth_header=settings.pms_auth_header)

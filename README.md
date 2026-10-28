@@ -25,6 +25,10 @@ nocturnas, pre-reservas— y pide nombre y contraseña, para que cada **nota del
 Los límites de escala y la comparación con la competencia están en
 [escalabilidad](docs/escalabilidad.md); la evidencia de mercado, en [mercado](docs/mercado.md).
 
+El PMS se integra por **contrato**, no por código nuevo: rutas, cabecera y token se configuran por
+hotel, y `PMS_ADAPTER=none` deja al copiloto operando sin PMS (orienta y deriva, nunca promete
+cupos). El contrato y el checklist de incorporación están en [conector de PMS](docs/conector-pms.md).
+
 ```
 Huésped ─ widget web / Telegram / WhatsApp
             │

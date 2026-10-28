@@ -30,6 +30,11 @@ class Settings:
     pms_url: str = "http://pms-mock:8200"
     pms_staff_url: str = "http://localhost:8200"
     pms_timeout_s: float = 4.0
+    # Conector del PMS: "http" usa el contrato de docs/conector-pms.md; "none" deja al hotel sin PMS.
+    pms_adapter: str = "http"
+    pms_availability_path: str = "/api/v1/availability"
+    pms_booking_path: str = "/api/v1/bookings"
+    pms_auth_header: str = "X-Staff-Token"
     public_url: str = "http://localhost:8100"
     timezone: str = "America/Santiago"
     shift_start: str = "08:00"
@@ -86,6 +91,10 @@ class Settings:
             panel_token=env.get("PANEL_TOKEN", ""),
             pms_url=env.get("PMS_URL", cls.pms_url),
             pms_staff_url=env.get("PMS_STAFF_URL", cls.pms_staff_url),
+            pms_adapter=env.get("PMS_ADAPTER", cls.pms_adapter).strip().lower(),
+            pms_availability_path=env.get("PMS_AVAILABILITY_PATH", cls.pms_availability_path),
+            pms_booking_path=env.get("PMS_BOOKING_PATH", cls.pms_booking_path),
+            pms_auth_header=env.get("PMS_AUTH_HEADER", cls.pms_auth_header),
             public_url=env.get("COPILOTO_PUBLIC_URL", cls.public_url),
             timezone=env.get("TIMEZONE", cls.timezone),
             shift_start=env.get("SHIFT_START", cls.shift_start),
