@@ -272,7 +272,8 @@ def main():
         runner = Runner(runtime, results)
         try:
             runner.recreate("pms-mock", {"SIMULATE_DOWN": "0"})
-            runner.recreate("copiloto", {"SHIFT_START": "00:00", "SHIFT_END": "00:00", "SIMULATE_DOWN": "0"})
+            runner.recreate("copiloto", {"SHIFT_START": "00:00", "SHIFT_END": "00:00", "SIMULATE_DOWN": "0",
+                                         "AI_MODE": "off"})
             results.check("setup", "services ready", True, "PMS available; reception forced in shift")
             run_case(results, "FAQ", runner.faq)
             run_case(results, "availability", lambda: runner.availability("availability"))
@@ -281,14 +282,15 @@ def main():
                 now = datetime.now(ZoneInfo("America/Santiago"))
                 opening = (now + timedelta(hours=2)).strftime("%H:%M")
                 ending = (now + timedelta(hours=3)).strftime("%H:%M")
-                runner.recreate("copiloto", {"SHIFT_START": opening, "SHIFT_END": ending, "SIMULATE_DOWN": "0"})
+                runner.recreate("copiloto", {"SHIFT_START": opening, "SHIFT_END": ending, "SIMULATE_DOWN": "0",
+                                             "AI_MODE": "off"})
                 runner.availability("out of hours", night=True, opening=opening)
 
             run_case(results, "out of hours", night_case)
 
             def down_case():
                 runner.recreate("copiloto", {
-                    "SHIFT_START": "00:00", "SHIFT_END": "00:00", "SIMULATE_DOWN": "0"})
+                    "SHIFT_START": "00:00", "SHIFT_END": "00:00", "SIMULATE_DOWN": "0", "AI_MODE": "off"})
                 runner.recreate("pms-mock", {"SIMULATE_DOWN": "1"})
                 runner.availability("PMS down", down=True)
 

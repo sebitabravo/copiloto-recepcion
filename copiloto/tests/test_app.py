@@ -135,3 +135,16 @@ def test_signed_but_malformed_json_is_a_400(settings, harness):
     assert client.post("/webhooks/pms", content=b"[", headers=ok).status_code == 422
     assert client.post("/webhooks/pms", json={"kind": "booking_confirmed", "booking_id": "abc"},
                        headers=ok).status_code == 422
+
+
+def test_privacy_notice_discloses_the_third_party_model_only_when_ai_is_active(ai_settings, harness):
+    from dataclasses import replace
+
+    from conftest import FakeLlm
+    from copiloto.ai.agent import Agent
+    agent = Agent(FakeLlm([]), harness.hotel, harness.pms, ai_settings, lambda: 0.0)
+    on = TestClient(create_app(ai_settings, chatwoot=harness.chatwoot, pms=harness.pms, run_workers=False,
+                               db=harness.db, llm_agent=agent))
+    assert "modelo de lenguaje de un tercero" in on.get("/privacidad").text
+    off = make_client(replace(ai_settings, llm_api_key=""), harness)
+    assert "sin inteligencia artificial generativa" in off.get("/privacidad").text

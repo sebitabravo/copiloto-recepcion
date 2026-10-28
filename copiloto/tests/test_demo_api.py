@@ -53,6 +53,7 @@ def test_demo_booking_is_created_in_the_simulated_pms_with_a_booking_event(ai_se
     created = [e for e in body["events"] if e["type"] == "booking_created"]
     assert created and created[0]["simulated"] is True and created[0]["total_clp"] == 255000
     assert harness.pms.bookings[0]["conversation_id"] is None
+    assert len(harness.events("ai_booking", 0)) == 1
 
 
 def test_without_ai_the_demo_answers_in_guided_mode(ai_settings, harness):

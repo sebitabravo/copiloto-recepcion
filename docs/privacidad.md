@@ -9,7 +9,7 @@ documento resume cómo se aplica en el diseño. No reemplaza la revisión de un 
 | Finalidad | Orientar la consulta y derivar a recepción; el bot no decide ni confirma reservas |
 | Idempotencia | Cada mensaje de Chatwoot se procesa una sola vez (`processed_messages`) |
 | Retención | 90 días (por validar con el hotel): el copiloto borra estados y pre-reservas vencidos y deja los eventos sin texto, con identificadores seudonimizados (hash irreversible), solo como contadores |
-| Sin terceros de IA | No hay LLM: ningún mensaje sale a un proveedor de IA |
+| Terceros de IA | Sin `LLM_API_KEY` no hay LLM y ningún mensaje sale. Con IA, el texto va a un proveedor externo (DeepSeek en la demo): solo datos ficticios, y el aviso de privacidad lo informa. Evaluar la Ley 21.719 (transferencia internacional) antes de datos reales |
 | Derechos | Contacto del responsable: comercial@hotelbordeluz.cl |
 
 ## Pendiente

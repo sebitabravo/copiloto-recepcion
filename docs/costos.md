@@ -8,7 +8,7 @@
 | Dashboard Apps de Chatwoot | $0 | Están en el núcleo OSS (`app/models/dashboard_app.rb`) |
 | Widget web | $0 | Canal base de la demo |
 | copiloto, pms_mock | $0 | Python, FastAPI, SQLite |
-| LLM | $0 | El bot es determinista, sin LLM (decisión de EVA2) |
+| LLM | $0 sin IA; con IA, pago por uso | Sin `LLM_API_KEY` el bot es determinista. Con DeepSeek se paga por token (precios en https://api-docs.deepseek.com/quick_start/pricing, no verificados aquí). Una conversación de reserva completa usó unos 2.500 tokens en la prueba. Los topes de la demo acotan el gasto |
 | Telegram | $0 | Con Quick Tunnel de Cloudflare |
 | WhatsApp Cloud API | $0 hasta 1.000 mensajes de servicio al mes por número | Sin método de pago no entrega al agotarse |
 

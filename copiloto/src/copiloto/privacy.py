@@ -51,8 +51,7 @@ como pre-información y recepción las valida.</p>
 enlazables. Las conversaciones guardadas en la bandeja de recepción se eliminan según la política del hotel.</p>
 
 <h2>Con quién se comparten</h2>
-<p>Con el equipo de recepción del hotel. El asistente funciona sin inteligencia artificial generativa
-y no envía tus mensajes a terceros para analizarlos.</p>
+<p>Con el equipo de recepción del hotel. {ai_paragraph}</p>
 
 <h2>Tus derechos</h2>
 <p>Puedes pedir acceso, rectificación, supresión, oposición, bloqueo y portabilidad de tus datos
@@ -63,8 +62,17 @@ escribiendo a <a href="mailto:{contact}">{contact}</a>.</p>
 """
 
 
-def render(hotel: HotelData) -> str:
+AI_OFF = "El asistente funciona sin inteligencia artificial generativa y no envía tus mensajes a terceros."
+AI_ON = ("El asistente usa un modelo de lenguaje de un tercero ({provider}) para entender tus mensajes: el texto "
+         "de cada mensaje y los datos de tu consulta viajan a ese proveedor, que puede estar fuera de Chile. "
+         "Por eso no debes escribir datos personales reales: esta demostración usa datos ficticios. Guardamos "
+         "un historial acotado de la conversación solo para que el asistente mantenga el hilo, y se borra con la "
+         "retención.")
+
+
+def render(hotel: HotelData, ai_provider: str | None = None) -> str:
     return PAGE.format(
+        ai_paragraph=escape(AI_ON.format(provider=ai_provider)) if ai_provider else AI_OFF,
         hotel=escape(hotel.hotel["name"]),
         contact=escape(hotel.privacy["responsible_contact"]),
         retention=int(hotel.privacy["retention_days"]),

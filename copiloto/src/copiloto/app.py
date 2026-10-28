@@ -224,7 +224,7 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
 
     @app.get("/privacidad", response_class=HTMLResponse, dependencies=limited)
     async def privacy_page():
-        return privacy.render(hotel)
+        return privacy.render(hotel, settings.llm_model if agent is not None else None)
 
     demo_ip_limiter = SlidingWindowLimiter(settings.demo_ip_per_min, clock=clock)
     demo_global_limiter = SlidingWindowLimiter(settings.demo_global_per_hour, 3600, clock=clock)
@@ -291,6 +291,8 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
                                                "tokens": result.tokens})
                 for rule in result.guardrails:
                     record_demo_event("ai_guardrail", {"rule": rule})
+                if result.booking:
+                    record_demo_event("ai_booking", {"booking_id": result.booking["booking_id"]})
             except LlmUnavailable:
                 events = [{"type": "fallback", "reason": "ia_no_disponible"}]
                 reply, quick = guided_reply(hotel, message)

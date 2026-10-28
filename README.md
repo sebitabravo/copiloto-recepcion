@@ -3,7 +3,8 @@
 Prototipo funcional del asistente de recepción diseñado en los informes EVA1/EVA2 de INNOVA3 (INACAP).
 Orienta consultas por chat, muestra la **ubicación primero**, responde preguntas frecuentes en segundos,
 lee la disponibilidad del PMS **con sello de hora** y deriva a recepción con contexto y un cronómetro de
-3 minutos. **El bot nunca confirma una reserva**: la confirma una persona en el PMS.
+3 minutos. Con IA entiende lenguaje libre; en el diseño de los informes **el bot nunca confirma una reserva** y
+la confirma una persona en el PMS (en la demo, el modo `full` reserva en un PMS simulado).
 
 > Prototipo académico, no es el sitio oficial del hotel. Todos los datos de huéspedes son ficticios; los
 > precios, los cupos y la distribución de las 20 habitaciones del PMS son simulados.
@@ -92,6 +93,7 @@ make backup # respaldo en caliente de Chatwoot y las bases SQLite en backups/
 - [Canales: Telegram y WhatsApp](docs/canales.md)
 - [Costos](docs/costos.md)
 - [Privacidad (Ley 21.719)](docs/privacidad.md)
+- [Asistente con IA](docs/ia.md) y su [API de la demo](docs/demo-api.md)
 - [Revisión de AgroVoz y Wenuke](docs/revision-agrovoz-wenuke.md)
 
 ## Datos del hotel y qué falta validar
@@ -107,7 +109,9 @@ Quedan **pendientes de validar con el hotel**: Km 12.5 vs 2.5 de la dirección, 
   integración real necesita credenciales del hotel y el acuerdo con el proveedor.
 - **WhatsApp**: requiere una app en Meta (login humano) y tiene cuota gratuita limitada. Nunca conectes el
   número real del hotel a esta demo. Ver [canales](docs/canales.md).
-- **Sin LLM**: el flujo es determinista (decisión de EVA2 sobre sostenibilidad y control de contenido).
+- **IA opcional**: con `LLM_API_KEY` el asistente entiende lenguaje libre y, en la demo, reserva por sí solo en el
+  PMS simulado (`AI_MODE=full`); sin key funciona con el flujo guiado. EVA2 describe un bot determinista que no
+  confirma: eso equivale a `AI_MODE=assisted`. Ver [asistente con IA](docs/ia.md).
 - Las métricas (solo contadores) no tienen autenticación propia: en un servidor, publícalas detrás de un
   proxy con login (ver [despliegue](docs/despliegue.md)).
 - El procesamiento de mensajes es *a lo más una vez*: no hay duplicados, pero si Chatwoot cae justo mientras
