@@ -207,7 +207,7 @@ flujo guiado por reglas sí la cumple, y es el que se usa cuando el modelo no es
 
 | Anexo | Contenido |
 |---|---|
-| A | Código del prototipo, rama `feat/copiloto-recepcion` |
+| A | Código del prototipo en el repositorio del proyecto |
 | B | Batería de evaluación reproducible: `scripts/model_eval.py` |
 | C | Prueba del flujo completo: `scripts/e2e.py` |
 | D | Verificación previa a la presentación: `make demo` |
