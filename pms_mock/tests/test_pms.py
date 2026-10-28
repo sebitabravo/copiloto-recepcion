@@ -260,6 +260,7 @@ def test_booking_source_defaults_to_personal_and_accepts_ia(client):
 
 def test_existing_database_without_source_column_is_migrated(tmp_path, monkeypatch):
     import sqlite3
+
     from pms_mock.main import initialize, load_rooms
 
     path = tmp_path / "old.sqlite"
