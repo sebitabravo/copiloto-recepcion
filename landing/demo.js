@@ -4,8 +4,12 @@
   const config = window.COPILOTO_CONFIG || {};
   const baseUrl = (config.copilotoUrl || 'http://localhost:8100').replace(/\/+$/, '');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const initialText = 'Hola, soy el asistente de recepción de Hotel Bordeluz (demo con IA). Pregúntame por la ubicación, los servicios o reserva una habitación.';
-  const initialReplies = ['¿Cómo llego?', '¿Tienen piscina?', 'Quiero reservar para 2 adultos'];
+  const aiInitialText = 'Hola, soy el asistente de recepción de Hotel Bordeluz (demo con IA). Pregúntame por la ubicación, los servicios o reserva una habitación.';
+  const aiInitialReplies = ['¿Cómo llego?', '¿Tienen piscina?', 'Quiero reservar para 2 adultos'];
+  const guidedInitialText = 'Hola, soy el asistente de recepción de Hotel Bordeluz. En este modo respondo preguntas sobre la ubicación, los servicios y las políticas del hotel.';
+  const guidedInitialReplies = ['¿Cómo llego?', '¿Tienen piscina?', '¿Cuál es el horario de check-in?'];
+  const pendingInitialText = 'Hola, soy el asistente de recepción de Hotel Bordeluz. Pregúntame por la ubicación o los servicios del hotel.';
+  let aiEnabled = null;
   const input = get('message-input');
   const messageList = get('messages');
   const sessionKey = 'bordeluz-demo-session';
@@ -50,7 +54,9 @@
     input.disabled = blocked;
     get('send').disabled = blocked || !input.value.trim() || input.value.length > 400;
     get('reset').disabled = busy || scenarioRunning;
-    document.querySelectorAll('[data-scenario]').forEach(button => { button.disabled = blocked; });
+    document.querySelectorAll('[data-scenario]').forEach(button => {
+      button.disabled = blocked || (button.dataset.scenario === 'booking' && aiEnabled !== true);
+    });
     messageList.querySelectorAll('.quick-replies button').forEach(button => { button.disabled = blocked; });
     get('char-count').textContent = `${input.value.length}/400`;
     get('typing').hidden = !busy;
@@ -145,25 +151,47 @@
       throw {status:0, message:'No pudimos conectar con el asistente. Revisa que el servidor esté encendido y permita este origen, y reintenta.'};
     } finally { window.clearTimeout(timeout); }
   }
+  function initialGreeting() {
+    if (aiEnabled === true) return {text:aiInitialText, replies:aiInitialReplies};
+    if (aiEnabled === false) return {text:guidedInitialText, replies:guidedInitialReplies};
+    return {text:pendingInitialText, replies:guidedInitialReplies};
+  }
+  function updateInitialGreeting() {
+    // La carga de estado no debe reemplazar mensajes ni sugerencias de una conversación iniciada.
+    if (messageList.querySelector('.user')) return;
+    const first = messageList.querySelector('.assistant');
+    if (!first) return;
+    const greeting = initialGreeting();
+    first.querySelector('.bubble p').textContent = greeting.text;
+    suggestions(first, greeting.replies);
+    get('assistant-announcement').textContent = greeting.text;
+  }
   async function loadStatus() {
     get('status-error').hidden = true;
     try {
       const data = await request('/api/demo/status');
-      get('model-label').textContent = data.ai_enabled ? `Modelo: ${data.model || 'DeepSeek'}` : 'Flujo guiado · sin IA';
-      get('guided-banner').hidden = data.ai_enabled !== false;
-      get('capability').textContent = data.autonomous_booking ?
-        'En este servidor la IA puede crear la reserva de demostración por sí sola.' :
-        'En este servidor el asistente prepara la solicitud; la demostración no crea reservas autónomamente.';
-      get('connection-label').textContent = data.ai_enabled ? 'Demo con IA · lista para conversar' : 'Flujo guiado disponible';
+      aiEnabled = data.ai_enabled === true;
+      get('model-label').textContent = aiEnabled ? `Modelo: ${data.model || 'DeepSeek'}` : 'Flujo guiado · sin IA';
+      get('ai-disclaimer').hidden = !aiEnabled;
+      get('guided-banner').hidden = aiEnabled;
+      get('capability').hidden = !aiEnabled;
+      get('capability').textContent = !aiEnabled ? '' : data.autonomous_booking === true ?
+        'La IA puede crear la reserva de demostración por sí sola.' :
+        'La IA no crea reservas: deja la solicitud lista para recepción.';
+      document.querySelector('[data-scenario="booking"]').hidden = !aiEnabled;
+      get('connection-label').textContent = aiEnabled ? 'Demo con IA · lista para conversar' : 'Flujo guiado disponible';
       get('status-dot').classList.add('ready');
       if (!turns) get('messages-left').textContent = `Mensajes restantes: ${data.messages_per_session ?? '—'}`;
+      updateInitialGreeting();
+      updateControls();
     } catch (error) {
       get('status-error').hidden = false;
       get('status-error').querySelector('span').textContent = error.message;
       get('model-label').textContent = 'Conexión pendiente';
       get('connection-label').textContent = 'No se pudo comprobar la conexión';
       get('status-dot').classList.remove('ready');
-      get('capability').textContent = 'Las capacidades del servidor se mostrarán cuando esté disponible.';
+      // Sin una lectura nueva conservamos el último modo conocido, sin inventar capacidades.
+      updateControls();
     }
   }
   const iconPaths = {
@@ -250,7 +278,6 @@
       get('response-time').textContent = `Respuesta en ${typeof data.usage?.llm_ms === 'number' ?
         (data.usage.llm_ms / 1000).toLocaleString('es-CL', {maximumFractionDigits:2}) : '—'} s`;
       get('messages-left').textContent = `Mensajes restantes: ${data.usage?.messages_left ?? '—'}`;
-      if (data.mode === 'guided') get('guided-banner').hidden = false;
       await showEvents(data.events);
       success = true;
     } catch (error) {
@@ -274,7 +301,8 @@
     pinned = true;
     turns = 0;
     clearChatError();
-    addMessage('assistant', initialText, initialReplies);
+    const greeting = initialGreeting();
+    addMessage('assistant', greeting.text, greeting.replies);
     updateControls();
   }
   async function resetConversation() {
@@ -312,7 +340,7 @@
     }
   }
   async function runScenario(name) {
-    if (busy || scenarioRunning || coolingDown()) return;
+    if (busy || scenarioRunning || coolingDown() || (name === 'booking' && aiEnabled !== true)) return;
     const scenarios = {
       info:['¿Cómo llego al hotel?', '¿Tienen piscina y qué otros servicios ofrecen?'],
       booking:['Quiero reservar una habitación', exampleDates(), '2 adultos y 1 niño', 'La Doble con Jacuzzi',
@@ -380,10 +408,10 @@
     } else chatStatus.textContent = unavailable;
   });
   (function () {
+    window.chatwootSettings = { locale: "es", position: "right", type: "expanded_bubble",
+                                launcherTitle: "Habla con recepción", hideMessageBubble: true };
     var cfg = window.COPILOTO_CONFIG;
     if (!cfg || !cfg.websiteToken) { return; }
-    window.chatwootSettings = { locale: "es", position: "right", type: "expanded_bubble",
-                                launcherTitle: "Habla con recepción" };
     var script = document.createElement("script");
     script.src = cfg.chatwootUrl + "/packs/js/sdk.js";
     script.async = true;

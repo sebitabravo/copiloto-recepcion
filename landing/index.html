@@ -11,22 +11,31 @@
 <a class="skip" href="#main">Saltar al contenido</a>
 <div class="banner" role="note">Prototipo académico INNOVA3 · INACAP, no es el sitio oficial de Hotel Bordeluz.</div>
 <header class="hero-shell">
-  <div class="wrap topbar"><a class="brand" href="#">BORDELUZ <span>· laboratorio de recepción</span></a>
-    <nav aria-label="Navegación principal"><a href="#demo">Demo en vivo</a><a href="#como-funciona">Cómo funciona</a><a href="#vistas">El prototipo</a></nav>
+  <div class="wrap topbar"><a class="brand" href="#">Bordeluz</a>
+    <nav aria-label="Navegación principal"><a href="#demo">Demo</a><a href="#como-funciona">Cómo funciona</a></nav>
   </div>
-  <div class="wrap hero"><div><p class="eyebrow">Hospitalidad, con nuevas herramientas</p>
-    <h1>Una conversación.<br>Una mejor bienvenida.</h1>
-    <p class="subtitle">Copiloto de Recepción · demo Hotel Bordeluz</p>
-    <p class="lead">Pregunta, explora una estadía y mira cómo el asistente consulta al hotel y al PMS simulado, paso a paso.</p>
-    <div class="actions"><a class="button primary" href="#demo">Probar la demo <span aria-hidden="true">↗</span></a><a class="button" href="#como-funciona">Cómo funciona ↓</a></div>
-  </div><aside class="hero-note"><span class="orb" aria-hidden="true">✦</span><p class="eyebrow">No es magia. Son herramientas.</p><strong>La conversación a la izquierda.<br>Las acciones, a la vista.</strong><p>Un pequeño laboratorio para entender qué ocurre detrás de cada respuesta.</p><span class="pill">Todo es ficticio · Sin reservas reales</span></aside></div>
+  <div class="wrap hero">
+    <div>
+      <h1>Asistente de recepción con IA</h1>
+      <p class="subtitle">Demo para el Hotel Boutique Bordeluz: conversa, mira qué herramientas usa y reserva en un PMS simulado.</p>
+      <div class="actions"><a class="button primary" href="#demo">Probar la demo</a><a class="button" href="#como-funciona">Cómo funciona</a></div>
+    </div>
+    <aside class="hero-overview" aria-labelledby="overview-title">
+      <h2 id="overview-title">Qué vas a ver</h2>
+      <ul>
+        <li>Un asistente que entiende lenguaje natural</li>
+        <li>Las herramientas que usa en cada respuesta</li>
+        <li>Una reserva de demostración creada en un PMS simulado</li>
+      </ul>
+    </aside>
+  </div>
 </header>
 <main id="main" class="wrap" tabindex="-1">
   <section id="demo" aria-labelledby="demo-title">
-    <div class="section-heading"><div><p class="eyebrow">Prueba, pregunta, descubre</p><h2 id="demo-title">Tu próxima estadía empieza aquí</h2></div><span class="pill" id="model-label">Conectando con el asistente…</span></div>
-    <p class="disclaimer">Demo con IA de un tercero (DeepSeek). Todo es ficticio: no escribas datos personales reales. Las reservas se crean en un PMS simulado.</p>
-    <p id="capability" class="small">Consultando las capacidades de este servidor…</p>
-    <div id="guided-banner" class="notice" hidden>La IA no está configurada en este servidor: el asistente responde con el flujo guiado (sin IA)</div>
+    <div class="section-heading"><h2 id="demo-title">Pruébalo</h2><span class="pill" id="model-label">Conectando con el asistente…</span></div>
+    <p id="ai-disclaimer" class="disclaimer" hidden>Demo con IA de un tercero (DeepSeek). Todo es ficticio: no escribas datos personales reales. Las reservas se crean en un PMS simulado.</p>
+    <p id="capability" class="small" hidden></p>
+    <div id="guided-banner" class="notice" hidden>La IA no está configurada en este servidor: el asistente responde con el flujo guiado (sin IA).</div>
     <div id="status-error" class="notice error" hidden><span></span><button type="button">Reintentar</button></div>
     <div class="demo-grid">
       <div class="phone-column">
@@ -40,50 +49,25 @@
           <form id="chat-form" class="composer"><label class="sr-only" for="message-input">Tu mensaje al asistente</label><textarea id="message-input" rows="2" maxlength="400" placeholder="Escribe tu mensaje…" aria-describedby="input-help char-count"></textarea><div class="composer-bottom"><span id="char-count">0/400</span><button id="send" class="button primary" type="submit" disabled>Enviar <span aria-hidden="true">↑</span></button></div><p id="input-help">Enter para enviar · Shift + Enter para otra línea</p></form>
         </div>
         <button id="reset" class="text-button" type="button">↻ Reiniciar conversación</button>
+        <div class="secondary-chat"><button id="open-chat" class="text-button" type="button">Probar en la bandeja real de recepción</button><p>Es el canal real del hotel: la conversación llega a la bandeja de recepción.</p><p id="chat-status" class="small" role="status" aria-live="polite"></p></div>
       </div>
-      <aside class="thinking card" aria-labelledby="thinking-title"><div class="thinking-heading"><span class="pill">TRAZA EN VIVO</span><h2 id="thinking-title">Así piensa la IA</h2><p>No mostramos pensamientos internos: aquí ves las herramientas y acciones que devuelve el servidor.</p></div><div class="usage"><span id="response-time">Respuesta en — s</span><span id="messages-left">Mensajes restantes: —</span></div><div id="timeline-empty" class="timeline-empty"><span aria-hidden="true">✧</span><h3>Cada respuesta tiene un recorrido</h3><p>Envía un mensaje y aparecerán las consultas al hotel, lecturas del PMS y reservas de demostración.</p></div><div id="timeline" class="timeline"></div></aside>
+      <aside class="thinking card" aria-labelledby="thinking-title"><div class="thinking-heading"><h2 id="thinking-title">Así piensa la IA</h2><p>No mostramos pensamientos internos: aquí ves las herramientas y acciones que devuelve el servidor.</p></div><div class="usage"><span id="response-time">Respuesta en — s</span><span id="messages-left">Mensajes restantes: —</span></div><p id="timeline-empty" class="timeline-empty">Envía un mensaje para ver las herramientas y acciones del asistente.</p><div id="timeline" class="timeline"></div></aside>
     </div>
-    <div class="guided card"><div><p class="eyebrow">¿No sabes por dónde empezar?</p><h3>Ver una demo guiada</h3><p>Los mensajes se envían uno a uno al asistente real de esta demo. Puedes detenerla cuando quieras.</p></div><div class="scenario-buttons"><button type="button" data-scenario="info">Consultar la ubicación y servicios</button><button type="button" data-scenario="booking">Reservar de punta a punta</button><button type="button" data-scenario="human">Hablar con una persona</button><button type="button" id="cancel-scenario" hidden>Detener demo guiada</button></div><p id="scenario-status" role="status" aria-live="polite"></p></div>
-    <div class="secondary-chat"><p>¿Quieres ver la atención desde el canal del hotel?</p><button id="open-chat" class="text-button" type="button">Probar en la bandeja real de recepción ↗</button><p id="chat-status" class="small" role="status" aria-live="polite"></p></div>
+    <div class="guided card"><div><h3>Ver una demo guiada</h3><p>Los mensajes se envían uno a uno al asistente real de esta demo. Puedes detenerla cuando quieras.</p></div><div class="scenario-buttons"><button type="button" data-scenario="info">Consultar la ubicación y servicios</button><button type="button" data-scenario="booking" hidden>Reservar de punta a punta</button><button type="button" data-scenario="human">Hablar con una persona</button><button type="button" id="cancel-scenario" hidden>Detener demo guiada</button></div><p id="scenario-status" role="status" aria-live="polite"></p></div>
     <div id="assistant-announcement" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     <noscript><p>Activa JavaScript para conversar con el asistente y ver sus herramientas.</p></noscript>
   </section>
-  <section id="como-funciona" class="reveal" aria-labelledby="how-title"><p class="eyebrow">Del mensaje a la acción</p><h2 id="how-title">Cómo funciona</h2><p class="section-intro">La IA conversa; las herramientas consultan los datos y actúan sobre el entorno simulado.</p><ol class="flow"><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H9l-5 4Z"/></svg><span>01</span><h3>Huésped escribe</h3><p>Una pregunta o una solicitud de estadía.</p></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 3 6 6 3-6 3-3 6-3-6-6-3 6-3Z"/></svg><span>02</span><h3>La IA entiende y decide</h3><p>Elige qué herramienta usar según la consulta.</p></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h7v7H3zM14 4h7v7h-7zM8 15h8v6H8z"/></svg><span>03</span><h3>Hotel, PMS, reserva</h3><p>Datos del hotel y acciones de demostración.</p></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h8M8 12h8m-8 4h5"/></svg><span>04</span><h3>Respuesta y registro</h3><p>La respuesta y sus acciones quedan a la vista.</p></li></ol></section>
-  <section aria-labelledby="location-title">
-    <div class="card location">
-      <div><p class="eyebrow">Un lugar para hacer una pausa</p><h2 id="location-title">Dónde estamos</h2>
-        <p>Entre Villarrica y Pucón, a pocos metros de la playa Calfurray.</p></div>
-      <div>
-        <address>Sector Molco, Camino Villarrica-Pucón Km 12.5, Las Chilcas, Villarrica</address>
-        <a class="button" href="https://www.google.com/maps/search/?api=1&amp;query=Hotel+Boutique+Bordeluz+Villarrica" target="_blank" rel="noopener">Ver en Google Maps <span aria-hidden="true">↗</span><span class="small">(otra pestaña)</span></a>
-        <p class="small">Algunos detalles están pendientes de validación con el hotel.</p>
-      </div>
-    </div>
-  </section>
-
-  <section id="vistas" aria-labelledby="views-title">
-    <p class="eyebrow">Detrás de la conversación</p>
-    <h2 id="views-title">Vistas del prototipo</h2>
-    <p class="section-intro">Para explorar el trabajo del equipo. Estos accesos funcionan con el stack local levantado.</p>
-    <div class="views">
-      <a class="card view" href="http://localhost:3000" target="_blank" rel="noopener"><h3>Bandeja de recepción <span aria-hidden="true">↗</span></h3><p>Para recepción: responder conversaciones, revisar el contexto y continuar la atención.</p><span class="small">Se abre en otra pestaña</span></a>
-      <a class="card view" href="http://localhost:8200/admin" target="_blank" rel="noopener"><h3>PMS simulado <span aria-hidden="true">↗</span></h3><p>Para recepción: revisar las reservas de demostración creadas en el PMS simulado.</p><span class="small">Se abre en otra pestaña</span></a>
-      <a class="card view" href="http://localhost:8100/metricas" target="_blank" rel="noopener"><h3>Métricas <span aria-hidden="true">↗</span></h3><p>Para gerencia y evaluación: consultar tiempos, traspasos y resultados del prototipo.</p><span class="small">Se abre en otra pestaña</span></a>
-      <a class="card view" href="http://localhost:8100/privacidad" target="_blank" rel="noopener"><h3>Aviso de privacidad <span aria-hidden="true">↗</span></h3><p>Para todas las personas: conocer qué datos se usan, con qué finalidad y durante cuánto tiempo.</p><span class="small">Se abre en otra pestaña</span></a>
-    </div>
-  </section>
-
-  <section aria-labelledby="faq-title">
-    <p class="eyebrow">Antes de empezar</p><h2 id="faq-title">Preguntas frecuentes</h2>
-    <div class="questions">
-      <details><summary>¿Esto confirma mi reserva?</summary><p>En modo demo la IA crea una reserva de demostración en el PMS simulado si el servidor lo permite. En un hotel real la confirma una persona de recepción.</p></details>
-      <details><summary>¿Qué IA usa?</summary><p>Un modelo de lenguaje de DeepSeek con herramientas: cada dato sale del hotel o del PMS, no de la memoria del modelo. Si no está configurado, responde el flujo guiado sin IA.</p></details>
-      <details><summary>¿Qué datos guarda?</summary><p>Solo lo mínimo para orientar y derivar la consulta, como el nombre del canal, mensajes, fechas y cantidad de huéspedes. Usa datos ficticios en esta demo. <a href="http://localhost:8100/privacidad" target="_blank" rel="noopener">Ver aviso de privacidad (otra pestaña)</a>.</p></details>
-      <details><summary>¿Por qué dice que estamos ausentes?</summary><p>Porque nadie de recepción está conectado en la bandeja. Es el estado del equipo humano, no una confirmación de reserva; puedes probar el flujo del copiloto igualmente.</p></details>
-    </div>
+  <section id="como-funciona" class="reveal" aria-labelledby="how-title"><h2 id="how-title">Cómo funciona</h2><p class="section-intro">La IA conversa; las herramientas consultan los datos y actúan sobre el entorno simulado.</p><ol class="flow"><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H9l-5 4Z"/></svg><span>01</span><h3>Huésped escribe</h3><p>Una pregunta o una solicitud de estadía.</p></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 3 6 6 3-6 3-3 6-3-6-6-3 6-3Z"/></svg><span>02</span><h3>La IA entiende y decide</h3><p>Elige qué herramienta usar según la consulta.</p></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h7v7H3zM14 4h7v7h-7zM8 15h8v6H8z"/></svg><span>03</span><h3>Hotel, PMS, reserva</h3><p>Datos del hotel y acciones de demostración.</p></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h8M8 12h8m-8 4h5"/></svg><span>04</span><h3>Respuesta y registro</h3><p>La respuesta y sus acciones quedan a la vista.</p></li></ol>
+    <p class="prototype-links">El otro lado de la conversación:
+      <a href="http://localhost:3000" target="_blank" rel="noopener">Bandeja de recepción</a>
+      <span aria-hidden="true">·</span>
+      <a href="http://localhost:8200/admin" target="_blank" rel="noopener">PMS simulado</a>
+      <span aria-hidden="true">·</span>
+      <a href="http://localhost:8100/metricas" target="_blank" rel="noopener">Métricas</a>
+    </p>
   </section>
 </main>
-<footer><div class="wrap"><p><strong>Prototipo académico INNOVA3 · INACAP.</strong> Todos los datos de huéspedes son ficticios. Precios y disponibilidad del PMS son simulados. No es el sitio oficial del hotel ni un canal de reserva real.</p><p>Datos del hotel tomados de su sitio público; los marcados «pendiente de validar» requieren confirmación del hotel.</p></div></footer>
+<footer><div class="wrap"><p><strong>Prototipo académico INNOVA3 · INACAP.</strong> Todos los datos de huéspedes son ficticios. Precios y disponibilidad del PMS son simulados. No es el sitio oficial del hotel ni un canal de reserva real.</p><p><a href="http://localhost:8100/privacidad" target="_blank" rel="noopener">Aviso de privacidad</a></p></div></footer>
 <script src="config.js"></script>
 <script src="demo.js"></script>
 </body>
