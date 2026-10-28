@@ -1,3 +1,29 @@
+/* Fuentes propias en woff2, subset latin. display: optional evita el salto de layout cuando
+   la fuente llega tarde: la página usa la de respaldo y no cambia después. */
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("fonts/instrument-serif-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: optional;
+}
+
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("fonts/instrument-serif-italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: optional;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/inter-normal.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: optional;
+}
+
 /* Sistema visual: papel cálido, tipografía editorial y profundidad 3D.
    Paleta heredada del prototipo original (crema + bronce) refinada en
    contraste y jerarquía. */
@@ -452,7 +478,6 @@ nav .nav-cta:hover { background: var(--accent); color: var(--accent-ink); }
   border-radius: 50%;
   border: 1px dashed var(--line);
   opacity: .9;
-  animation: orbit 44s linear infinite;
 }
 
 .stage-orbit::after {
@@ -487,7 +512,6 @@ nav .nav-cta:hover { background: var(--accent); color: var(--accent-ink); }
     var(--shadow-lg),
     0 0 72px -16px color-mix(in oklab, var(--accent) 48%, transparent);
   transform-style: preserve-3d;
-  animation: float 9s ease-in-out infinite;
 }
 
 .hero-phone-status {
@@ -616,7 +640,6 @@ nav .nav-cta:hover { background: var(--accent); color: var(--accent-ink); }
 .chip-a {
   top: -16px;
   right: -26px;
-  animation: float 11s ease-in-out infinite reverse;
   transform: translateZ(80px);
 }
 
@@ -631,7 +654,6 @@ nav .nav-cta:hover { background: var(--accent); color: var(--accent-ink); }
   font-family: var(--font-ui);
   border-left: 3px solid var(--ok);
   transform: translateZ(100px);
-  animation: float 12s ease-in-out infinite reverse;
 }
 
 .ticket-float strong { font-size: .74rem; }
@@ -1750,15 +1772,6 @@ body.is-hidden * {
 @keyframes aurora {
   from { transform: translate(-2%, 1%) scale(1); }
   to { transform: translate(3%, -2%) scale(1.06); }
-}
-
-@keyframes float {
-  0%, 100% { translate: 0 0; }
-  50% { translate: 0 -12px; }
-}
-
-@keyframes orbit {
-  to { rotate: 360deg; }
 }
 
 @keyframes stack-float {

@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import yaml
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
@@ -257,6 +257,11 @@ def create_app() -> FastAPI:
     @application.get("/admin", response_class=HTMLResponse)
     def admin():
         return Path(__file__).with_name("admin.html").read_text(encoding="utf-8")
+
+    @application.get("/favicon.ico", include_in_schema=False)
+    def favicon():
+        # El navegador siempre pide el icono; sin esta ruta el panel deja un 404 en consola.
+        return Response(status_code=204)
 
     return application
 
