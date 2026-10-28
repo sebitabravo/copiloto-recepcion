@@ -5,6 +5,7 @@ Conversa en lenguaje natural, sin formatos rígidos, y verifica que la IA use la
 reserva de demostración en el PMS simulado. Cuesta unos pocos centavos de la API del modelo.
 """
 
+import random
 import sys
 import uuid
 from datetime import date, timedelta
@@ -17,7 +18,8 @@ ORIGIN = {"Origin": "http://localhost:8080"}
 
 def main() -> int:
     session = uuid.uuid4().hex
-    checkin = date.today() + timedelta(days=120)
+    # Fechas al azar: así corridas repetidas no agotan el cupo de las mismas noches del PMS simulado
+    checkin = date.today() + timedelta(days=random.randint(60, 300))
     checkout = checkin + timedelta(days=3)
     results: list[tuple[str, bool, str]] = []
 

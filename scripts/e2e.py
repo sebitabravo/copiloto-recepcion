@@ -161,7 +161,7 @@ class Runner:
         with closing(Guest(self.runtime)) as guest:
             for content, expected in (("quiero reservar", "necesito tus fechas"),
                                       (f"{CHECKIN:%d/%m/%Y} al {CHECKOUT:%d/%m/%Y}", "¿Cuántos adultos"),
-                                      ("2", "¿Y niños")):
+                                      ("2", "¿Viajan niños")):
                 elapsed, _ = guest.send_and_wait(content, expected)
                 self.results.check(case, f"reply to {content}", True, f"Expected response visible in {elapsed:.2f} s")
             if down:

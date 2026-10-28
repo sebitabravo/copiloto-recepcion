@@ -207,3 +207,15 @@ async def test_retention_purge_deletes_old_ai_sessions(make_ai):
 async def test_server_templates_never_claim_a_confirmation():
     from copiloto.ai.agent import SAFE_NO_BOOKING, STUCK
     assert "confirmad" not in (SAFE_NO_BOOKING + STUCK).lower()
+
+
+async def test_booking_a_room_that_is_not_among_the_offers_explains_the_alternatives(make_ai):
+    h, _ = make_ai([])
+    session = AiSession("cw:1", state={"last_availability": {
+        **STAY, "read_label": "x", "options": {"doble_sin_vista": {"name": "n", "price": 70000, "units": 1}},
+        "ts": h.clock()}})
+    runner = ToolRunner(h.hotel, h.pms, h.settings, h.clock, session, ToolHooks(conversation_id=1))
+    result = await runner.run("create_booking", {"guest_name": "Camila Rojas", "room_code": "doble_con_jacuzzi",
+                                                 "guest_confirmed": True, **STAY})
+    assert not result.ok and result.data["error"] == "habitacion_no_ofrecida"
+    assert result.data["opciones_vigentes"] == ["doble_sin_vista"] and h.pms.bookings == []

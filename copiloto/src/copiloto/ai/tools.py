@@ -228,10 +228,15 @@ class ToolRunner:
         fresh = last and self.clock() - last["ts"] <= self.settings.prebooking_minutes * 60
         same = last and (last["checkin"], last["checkout"], last["adults"], last["children"]) == (
             checkin.isoformat(), checkout.isoformat(), adults, children)
-        if not (fresh and same and room_code in last["options"]):
+        if not (fresh and same):
             return ToolResult(False, {"error": "sin_lectura_vigente",
                                       "instruccion": "Primero llama check_availability con esos mismos datos "
                                                      "y elige una opción de la lista."}, "Falta una lectura vigente")
+        if room_code not in last["options"]:
+            return ToolResult(False, {"error": "habitacion_no_ofrecida", "opciones_vigentes": list(last["options"]),
+                                      "instruccion": "Esa habitación no está entre las opciones disponibles para "
+                                                     "esas fechas. Ofrece una de las opciones vigentes."},
+                              "Esa habitación no está disponible para esas fechas")
         for made in self.session.state.get("bookings", []):
             if (made["guest_name"], made["room_code"], made["checkin"], made["checkout"]) == (
                     name, room_code, checkin.isoformat(), checkout.isoformat()):
