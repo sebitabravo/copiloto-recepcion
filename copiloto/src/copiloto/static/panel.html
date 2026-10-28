@@ -52,6 +52,12 @@
     return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
   };
   const esc = (value) => String(value ?? "—").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  // Las fechas se muestran como las lee una persona en recepción.
+  const fmtDate = (iso) => {
+    const [y, m, d] = String(iso ?? "").split("-");
+    return y && m && d ? `${d}/${m}/${y}` : String(iso ?? "—");
+  };
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const money = (n) => "$" + Number(n).toLocaleString("es-CL");
 
   function timerView(sla, nowSeconds) {
@@ -75,8 +81,8 @@
     const now = Date.now() / 1000 + skew;
     const t = timerView(s.sla, now);
     const color = {"state-ok": "var(--ok)", "state-warn": "var(--warn)", "state-bad": "var(--bad)"}[t.css] || "var(--line)";
-    const guests = d.adults ? `${d.adults} adulto(s), ${d.children ?? 0} niño(s)` : null;
-    const stay = d.checkin ? `${esc(d.checkin)} → ${esc(d.checkout)}` : null;
+    const guests = d.adults ? `${plural(d.adults, "adulto", "adultos")} · ${plural(d.children ?? 0, "niño", "niños")}` : null;
+    const stay = d.checkin ? `${fmtDate(d.checkin)} → ${fmtDate(d.checkout)}` : null;
     const pre = s.prebooking;
     const preText = !pre ? "Sin pre-reserva" :
       pre.status === "active" ? `Activa · vence en ${fmt(pre.expires_at - now)}` :
@@ -95,8 +101,8 @@
       <section class="card" aria-label="Pre-información">
         <h1>Pre-información lista</h1>
         <dl>
-          <dt>Huésped</dt><dd>${esc(s.contact_name)}</dd>
-          <dt>Fechas</dt><dd>${stay ?? "—"}</dd>
+          <dt>Contacto</dt><dd>${esc(s.contact_name)}</dd>
+          <dt>Fechas</dt><dd>${esc(stay)}</dd>
           <dt>Huéspedes</dt><dd>${esc(guests)}</dd>
           <dt>Habitación</dt><dd>${esc(s.room_name || (d.checkin ? "A definir por recepción" : null))}</dd>
           <dt>Lectura PMS</dt><dd>${esc(d.read_label || d.read_at)}${d.simulated ? ' <span class="tag">simulada</span>' : ""}</dd>
