@@ -269,7 +269,7 @@ def main():
         runner = Runner(runtime, results)
         try:
             runner.recreate("pms-mock", {"SIMULATE_DOWN": "0"})
-            runner.recreate("copiloto", {"SHIFT_START": "00:00", "SHIFT_END": "23:59", "SIMULATE_DOWN": "0"})
+            runner.recreate("copiloto", {"SHIFT_START": "00:00", "SHIFT_END": "00:00", "SIMULATE_DOWN": "0"})
             results.check("setup", "services ready", True, "PMS available; reception forced in shift")
             run_case(results, "FAQ", runner.faq)
             run_case(results, "availability", lambda: runner.availability("availability"))
@@ -285,7 +285,7 @@ def main():
 
             def down_case():
                 runner.recreate("copiloto", {
-                    "SHIFT_START": "00:00", "SHIFT_END": "23:59", "SIMULATE_DOWN": "0"})
+                    "SHIFT_START": "00:00", "SHIFT_END": "00:00", "SIMULATE_DOWN": "0"})
                 runner.recreate("pms-mock", {"SIMULATE_DOWN": "1"})
                 runner.availability("PMS down", down=True)
 

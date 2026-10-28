@@ -88,8 +88,11 @@ class Settings:
         return datetime.fromtimestamp(epoch, self.tz)
 
     def in_shift(self, epoch: float) -> bool:
-        """True si `epoch` cae dentro del turno humano (soporta turnos que cruzan medianoche)."""
+        """True si `epoch` cae dentro del turno humano. Soporta turnos que cruzan medianoche y, con inicio
+        igual al fin, un turno de 24 horas (sin la ventana muerta de un minuto de 23:59 a 00:00)."""
         start, end = _parse_hhmm(self.shift_start), _parse_hhmm(self.shift_end)
+        if start == end:
+            return True
         current = self.local(epoch).time().replace(second=0, microsecond=0)
         if start <= end:
             return start <= current < end

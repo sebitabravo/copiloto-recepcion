@@ -17,6 +17,34 @@ El stack se define en `infra/docker-compose.yml` con imágenes fijadas: `chatwoo
 Los puertos se publican solo en `127.0.0.1`. Para mostrar la demo a otros equipos de tu red define
 `BIND_ADDR=0.0.0.0` antes de `make up`; en ese caso protege el panel y las métricas (ver «Servidor»).
 
+## Requisitos medidos
+
+Con el stack en reposo dentro de una VM Docker de 4 GB y 1 CPU (OrbStack) los contenedores usan:
+Chatwoot ~570 MB, Sidekiq ~510 MB, Postgres ~70 MB, copiloto ~40 MB, pms-mock ~40 MB, Redis y nginx unos
+pocos MB: cerca de 1,3 GB en total. El mínimo recomendado sigue siendo 4 GB de RAM por el primer arranque de
+Chatwoot (migraciones). No es una medición de carga: no se probó con tráfico sostenido ni en un host de menor
+capacidad, y limitar CPU en una máquina potente no reproduce la contención de un servidor pequeño.
+
+## Verificación de las imágenes
+
+`make smoke` valida el compose (`docker compose config`), construye las imágenes de `copiloto` y `pms_mock` y
+comprueba que arrancan y responden `/health` con las mismas restricciones de producción (sin root, solo lectura,
+`cap_drop: ALL`). Corre también en CI. Existe porque una imagen puede fallar aunque los tests unitarios
+pasen, por ejemplo con una dependencia que no está en la imagen (caso AgroVoz #270).
+
+## Respaldo y restauración
+
+`make backup` deja en `backups/<fecha>/` (gitignored, permisos 600) un `pg_dump` de Chatwoot y copias
+consistentes de las bases SQLite del copiloto y del PMS. Cada SQLite se verifica con `PRAGMA integrity_check`.
+Para restaurar:
+
+```bash
+gunzip -c backups/<fecha>/chatwoot.sql.gz | docker compose -f infra/docker-compose.yml --project-directory . exec -T postgres psql -U postgres chatwoot
+```
+
+y para las SQLite detén el servicio, copia el archivo al volumen (`copiloto_state` o `pms_state`) y vuelve a
+levantarlo. Prueba la restauración antes de depender de ella.
+
 ## Endurecimiento
 
 - `copiloto` y `pms-mock` corren sin root, con sistema de archivos de solo lectura (`/tmp` en tmpfs),

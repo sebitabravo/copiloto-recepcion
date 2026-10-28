@@ -1,7 +1,7 @@
 # Copiloto de Recepción · demo Hotel Bordeluz
 COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
 
-.PHONY: up down reset env ps logs test seed health e2e creds
+.PHONY: up down reset env ps logs test seed health e2e creds smoke backup
 
 env:
 	./scripts/bootstrap.sh
@@ -48,3 +48,11 @@ reset:
 
 creds:
 	./scripts/show-credentials.sh
+
+# Construye las imágenes y comprueba que arrancan (lo que los tests unitarios no ven)
+smoke:
+	./scripts/smoke-docker.sh
+
+# Respaldo en caliente de Chatwoot y las bases SQLite en backups/
+backup:
+	./scripts/backup.sh
