@@ -182,6 +182,10 @@ def create_app() -> FastAPI:
     def health():
         return {"status": "ok"}
 
+    @application.get("/api/v1/room-types")
+    def room_types():
+        return [room.model_dump() for room in rooms]
+
     @application.get("/api/v1/availability")
     def availability(
         checkin: date, checkout: date,

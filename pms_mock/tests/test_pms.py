@@ -219,3 +219,26 @@ def test_admin_is_local_spanish_and_manual(client):
     assert "innerHTML" not in response.text
     assert '<script src=' not in response.text
     assert client.get("/api/v1/bookings", headers=TOKEN).json() == []
+
+
+def test_room_types_are_public_and_match_yaml_order(client):
+    response = client.get("/api/v1/room-types")
+    assert response.status_code == 200
+    rooms = response.json()
+    source = yaml.safe_load(DEFAULT_HOTEL_PATH.read_text())["rooms"]
+    fields = {"code", "name", "m2", "max_adults", "max_children"}
+    assert len(rooms) == 12
+    assert [room["code"] for room in rooms] == [room["code"] for room in source]
+    assert all(set(room) == fields for room in rooms)
+    assert rooms == [{field: room[field] for field in fields} for room in source]
+
+
+def test_admin_is_self_contained_html(client):
+    response = client.get("/admin")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "http://" not in response.text
+    assert "https://" not in response.text
+    assert "innerHTML" not in response.text
+    assert "localStorage" not in response.text
+    assert "sessionStorage" in response.text

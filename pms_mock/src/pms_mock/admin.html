@@ -1,84 +1,677 @@
 <!doctype html>
 <html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Recepción — Hotel Boutique Bordeluz</title>
-<style>body{font-family:system-ui,sans-serif;max-width:850px;margin:2rem auto;padding:0 1rem}label{display:block;margin:.7rem 0}input{padding:.5rem;max-width:95%}button{padding:.7rem;margin:.5rem 0}table{border-collapse:collapse;width:100%;overflow-wrap:anywhere}td,th{border:1px solid #ccc;padding:.4rem;text-align:left}#message{white-space:pre-wrap}</style>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recepción · Hotel Boutique Bordeluz</title>
+<style>
+  :root {
+    color-scheme: light; --bg:#f6f0e6; --card:#fffaf2; --ink:#2f2418; --muted:#6b5c49;
+    --line:#e3d6c0; --accent:#8c6a3f; --soft:#eee3d1; --button-ink:#fff;
+    --ok:#245b38; --ok-bg:#e8f1e6; --bad:#a62924; --bad-bg:#fff0eb;
+    --shadow:0 12px 36px #49341c09;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark; --bg:#1d1812; --card:#272017; --ink:#efe5d3; --muted:#b5a58c;
+      --line:#3b3226; --accent:#d1a971; --soft:#352b1e; --button-ink:#1d1812;
+      --ok:#9bd2a3; --ok-bg:#203326; --bad:#ffaaa0; --bad-bg:#3b2421; --shadow:0 12px 36px #0002;
+    }
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui, sans-serif; }
+  main { width:100%; max-width:1184px; margin:0 auto; padding:36px 16px 48px; }
+  h1, h2, h3, p { margin-top:0; }
+  h1 { font-size:clamp(1.5rem,4vw,2rem); line-height:1.2; letter-spacing:-.035em; margin-bottom:12px; }
+  h2 { font-size:1.25rem; letter-spacing:-.02em; margin-bottom:6px; }
+  h3 { font-size:1rem; }
+  .eyebrow { color:var(--accent); font-size:.75rem; letter-spacing:.14em; text-transform:uppercase;
+             font-weight:750; margin-bottom:10px; }
+  .muted, .helper, footer { color:var(--muted); }
+  .helper { font-size:.875rem; margin:6px 0 0; }
+  .topline, .section-heading, .session, .actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .topline { justify-content:space-between; margin-bottom:16px; }
+  .session { justify-content:flex-end; }
+  header { padding-bottom:20px; border-bottom:1px solid var(--line); margin-bottom:28px; }
+  header > p { max-width:680px; margin-bottom:0; }
+  .badge, .chip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line);
+                  border-radius:999px; padding:6px 12px; font-size:.8rem; font-weight:650;
+                  background:var(--soft); max-width:100%; overflow-wrap:anywhere; }
+  .badge::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--accent); }
+  .card { min-width:0; background:var(--card); border:1px solid var(--line); border-radius:18px;
+          padding:28px; box-shadow:var(--shadow); }
+  .access { max-width:510px; margin:40px auto; }
+  .access-icon { width:48px; height:48px; display:grid; place-items:center; border-radius:14px;
+                 background:var(--soft); color:var(--accent); font-size:1.4rem; margin-bottom:18px; }
+  label, legend { font-size:.9rem; font-weight:650; }
+  label { display:block; margin-bottom:7px; }
+  input, select, button { font:inherit; }
+  input, select { width:100%; min-width:0; min-height:48px; border:1px solid var(--line); border-radius:9px;
+                  padding:11px 12px; background:var(--bg); color:var(--ink); }
+  select { text-overflow:ellipsis; }
+  input:focus, select:focus { border-color:var(--accent); }
+  :focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+  input[aria-invalid="true"], select[aria-invalid="true"] { border-color:var(--bad); }
+  button { min-height:44px; border:1px solid var(--line); border-radius:9px; padding:10px 16px;
+           background:var(--card); color:var(--ink); cursor:pointer; font-weight:650; }
+  button:hover:not(:disabled) { background:var(--soft); }
+  button.primary { background:var(--accent); color:var(--button-ink); border-color:var(--accent); }
+  button.primary:hover:not(:disabled) { filter:brightness(.94); background:var(--accent); }
+  button:disabled { opacity:.48; cursor:not-allowed; }
+  button.link { border:0; background:none; padding:10px 4px; text-decoration:underline; color:var(--accent); }
+  .token-row { display:flex; gap:8px; }
+  .token-row input { flex:1; }
+  .token-row button { flex-shrink:0; }
+  .access .primary { width:100%; margin-top:20px; }
+  .layout { display:grid; grid-template-columns:minmax(0,1fr) 280px; gap:24px; }
+  .section-heading { justify-content:space-between; margin-bottom:20px; }
+  .step { display:inline-grid; place-items:center; width:28px; height:28px; border-radius:50%;
+          background:var(--soft); color:var(--accent); margin-right:8px; font-size:.8rem; vertical-align:middle; }
+  .fields { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .wide { grid-column:1 / -1; }
+  .field { min-width:0; }
+  .error { color:var(--bad); font-size:.85rem; margin:5px 0 0; }
+  fieldset { margin:0; padding:0; border:0; min-width:0; }
+  .stepper { display:flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; background:var(--bg); }
+  .stepper button { flex:0 0 48px; border:0; border-radius:0; font-size:1.3rem; }
+  .stepper input { text-align:center; border:0; border-radius:0; padding:8px 0; appearance:textfield; }
+  .stepper input::-webkit-inner-spin-button { appearance:none; }
+  .summary { background:var(--soft); border-radius:12px; padding:16px; margin:22px 0; }
+  .summary p { margin:0; }
+  .summary strong { display:block; margin-bottom:4px; }
+  .availability { margin:16px 0 20px; border-left:3px solid var(--accent); padding-left:14px; }
+  .availability p { margin:0 0 8px; }
+  .alternatives { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .alternatives button { font-size:.82rem; text-align:left; border-radius:999px; overflow-wrap:anywhere; }
+  .review { display:flex; align-items:flex-start; gap:10px; padding:14px 0; min-height:48px; }
+  .review input { width:22px; min-height:22px; height:22px; margin:1px 0 0; accent-color:var(--accent); flex-shrink:0; }
+  .review label { margin:0; min-height:44px; cursor:pointer; }
+  .submit-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .submit-row .primary { flex:1; }
+  .notice { border:1px solid var(--line); padding:16px 18px; border-radius:12px; margin-bottom:22px; }
+  .notice p { margin:0; }
+  .notice.success { background:var(--ok-bg); border-color:var(--ok); color:var(--ok); }
+  .notice.error { background:var(--bad-bg); border-color:var(--bad); color:var(--bad); }
+  .guide { align-self:start; }
+  .guide ol { padding-left:22px; margin-bottom:0; }
+  .guide li { margin-bottom:16px; padding-left:5px; }
+  .guide li:last-child { margin-bottom:0; }
+  .guide strong { display:block; font-size:.9rem; }
+  .guide span { color:var(--muted); font-size:.85rem; }
+  .guide-note { border-top:1px solid var(--line); padding-top:18px; margin:22px 0 0; font-size:.85rem; }
+  .bookings { margin-top:28px; }
+  .table-wrap { width:100%; }
+  table { border-collapse:collapse; width:100%; font-size:.875rem; table-layout:fixed; }
+  caption { text-align:left; color:var(--muted); padding-bottom:16px; }
+  th { text-align:left; font-size:.75rem; text-transform:uppercase; letter-spacing:.045em; color:var(--muted); }
+  th, td { border-bottom:1px solid var(--line); padding:14px 10px; vertical-align:top; overflow-wrap:anywhere; }
+  th:first-child, td:first-child { padding-left:0; width:10%; }
+  th:nth-child(3) { width:24%; }
+  .new-booking { background:var(--ok-bg); }
+  .new-booking td:first-child { color:var(--ok); font-weight:750; }
+  .empty { padding:32px 16px; text-align:center; border:1px dashed var(--line); border-radius:12px; }
+  footer { text-align:center; font-size:.8rem; margin-top:28px; }
+  @media (max-width:860px) {
+    .layout { grid-template-columns:minmax(0,1fr); }
+    .guide { display:none; }
+  }
+  @media (max-width:640px) {
+    main { padding-top:24px; }
+    .card { padding:20px 16px; border-radius:14px; }
+    .fields { grid-template-columns:minmax(0,1fr); gap:18px; }
+    .wide { grid-column:auto; }
+    .access { margin:24px auto; }
+    .session { justify-content:flex-start; }
+    .submit-row .primary { width:100%; flex:auto; }
+    table, tbody, tr, td { display:block; width:100%; }
+    thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+    tr { padding:14px; border:1px solid var(--line); border-radius:12px; margin-bottom:12px; }
+    th:first-child, td:first-child { width:100%; }
+    td, td:first-child { display:grid; grid-template-columns:88px minmax(0,1fr); gap:8px; padding:5px 0; border:0; }
+    td::before { content:attr(data-label); color:var(--muted); font-size:.75rem; font-weight:600; }
+    caption { display:block; }
+  }
+</style>
 </head>
 <body>
-<h1>Recepción · Hotel Boutique Bordeluz</h1>
-<p>PMS simulado. La distribución y los precios no son datos comerciales reales.</p>
-<label>Token del personal <input id="token" type="password" autocomplete="off"></label>
-<button id="load" type="button">Consultar reservas</button>
-<h2>Confirmar reserva</h2>
-<p>Revise todos los datos antes de confirmar. Esta acción crea una reserva.</p>
-<form id="booking">
-<label>Nombre del huésped <input name="guest_name" required maxlength="200"></label>
-<label>Entrada <input name="checkin" type="date" required></label>
-<label>Salida <input name="checkout" type="date" required></label>
-<label>Código del tipo de habitación <input name="room_code" required></label>
-<label>Adultos <input name="adults" type="number" min="1" value="1" required></label>
-<label>Niños <input name="children" type="number" min="0" value="0" required></label>
-<label>ID de conversación (opcional) <input name="conversation_id" type="number" step="1"></label>
-<label><input id="confirmed" type="checkbox" required> He revisado los datos y confirmo esta reserva.</label>
-<button id="submit" type="submit">Confirmar reserva</button>
-</form>
-<p id="message" role="status" aria-live="polite"></p>
-<h2>Reservas registradas</h2>
-<table><thead><tr><th>ID</th><th>Huésped</th><th>Entrada</th><th>Salida</th><th>Habitación</th><th>Adultos</th><th>Niños</th></tr></thead><tbody id="rows"></tbody></table>
+<main>
+  <header>
+    <div class="topline">
+      <p class="eyebrow">El cuidado comienza en recepción</p>
+      <span class="badge">PMS simulado</span>
+    </div>
+    <h1>Recepción · Hotel Boutique Bordeluz</h1>
+    <p class="muted">Cada reserva la confirma una persona. Revisa los datos del huésped y los cupos antes de confirmar.</p>
+    <div id="session" class="session" hidden>
+      <span class="helper">Acceso del personal activo</span><button id="logout" class="link" type="button">Salir</button>
+    </div>
+  </header>
+
+  <section id="access" class="card access" aria-labelledby="access-title">
+    <div class="access-icon" aria-hidden="true">⌑</div>
+    <p class="eyebrow">Un espacio para el equipo</p>
+    <h2 id="access-title">Bienvenido a recepción</h2>
+    <p class="muted">Ingresa el token del personal para revisar y confirmar reservas.</p>
+    <form id="access-form">
+      <label for="token">Token del personal</label>
+      <div class="token-row">
+        <input id="token" type="password" required autocomplete="off" spellcheck="false"
+               aria-describedby="access-help access-error">
+        <button id="toggle-token" type="button" aria-controls="token" aria-pressed="false">Mostrar</button>
+      </div>
+      <p id="access-help" class="helper">El acceso se guarda solo durante esta sesión del navegador.</p>
+      <p id="access-error" class="error" role="alert"></p>
+      <button id="login" class="primary" type="submit">Ingresar</button>
+    </form>
+  </section>
+
+  <div id="workspace" hidden>
+    <div id="success" class="notice success" role="status" aria-live="polite" hidden>
+      <strong id="success-title"></strong>
+      <p>La reserva quedó registrada en este PMS simulado.</p>
+      <button id="another" type="button">Hacer otra</button>
+    </div>
+    <div class="layout">
+      <section class="card" aria-labelledby="booking-title">
+        <p class="eyebrow">Una nueva estadía</p>
+        <h2 id="booking-title"><span class="step">1</span>Revisa y confirma la reserva</h2>
+        <p class="muted">Completa los datos y consulta la disponibilidad actual.</p>
+        <div id="conversation" class="notice" hidden>
+          <span id="conversation-chip" class="chip"></span>
+          <p class="helper">La reserva se vinculará a esta conversación.</p>
+        </div>
+        <form id="booking" novalidate>
+          <fieldset id="booking-fields">
+            <div class="fields">
+              <div class="field wide">
+                <label for="guest-name">Nombre del huésped</label>
+                <input id="guest-name" name="guest_name" required maxlength="200" autocomplete="name"
+                       placeholder="Nombre y apellido" aria-describedby="guest_name-error">
+                <p id="guest_name-error" class="error" aria-live="polite"></p>
+              </div>
+              <div class="field">
+                <label for="checkin">Check-in · llegada</label>
+                <input id="checkin" name="checkin" type="date" required aria-describedby="checkin-error">
+                <p id="checkin-error" class="error" aria-live="polite"></p>
+              </div>
+              <div class="field">
+                <label for="checkout">Check-out · salida</label>
+                <input id="checkout" name="checkout" type="date" required aria-describedby="checkout-error">
+                <p id="checkout-error" class="error" aria-live="polite"></p>
+              </div>
+              <div class="field wide">
+                <label for="room-code">Tipo de habitación</label>
+                <select id="room-code" name="room_code" required aria-describedby="room_code-error">
+                  <option value="">Selecciona una habitación</option>
+                </select>
+                <p id="room_code-error" class="error" aria-live="polite"></p>
+              </div>
+              <div class="field">
+                <label for="adults">Adultos</label>
+                <div class="stepper">
+                  <button type="button" data-step="-1" data-target="adults" aria-label="Quitar un adulto">−</button>
+                  <input id="adults" name="adults" type="number" min="1" value="1" required
+                         aria-describedby="adults-error" inputmode="numeric">
+                  <button type="button" data-step="1" data-target="adults" aria-label="Agregar un adulto">+</button>
+                </div>
+                <p id="adults-error" class="error" aria-live="polite"></p>
+              </div>
+              <div class="field">
+                <label for="children">Niños</label>
+                <div class="stepper">
+                  <button type="button" data-step="-1" data-target="children" aria-label="Quitar un niño">−</button>
+                  <input id="children" name="children" type="number" min="0" value="0" required
+                         aria-describedby="children-error" inputmode="numeric">
+                  <button type="button" data-step="1" data-target="children" aria-label="Agregar un niño">+</button>
+                </div>
+                <p id="children-error" class="error" aria-live="polite"></p>
+              </div>
+            </div>
+            <div class="summary" aria-live="polite">
+              <strong id="stay-summary">Tu próxima estadía</strong><p id="party-summary">1 adulto · 0 niños</p>
+            </div>
+            <button id="check-availability" type="button">Revisar disponibilidad</button>
+            <div id="availability" class="availability" role="status" aria-live="polite" hidden>
+              <p id="availability-text"></p><p id="read-at" class="helper"></p>
+              <div id="alternatives" class="alternatives" aria-label="Otras habitaciones disponibles"></div>
+            </div>
+            <div class="review">
+              <input id="reviewed" type="checkbox" disabled>
+              <label for="reviewed">Revisé los datos y la disponibilidad</label>
+            </div>
+            <div class="submit-row">
+              <button id="submit" class="primary" type="submit" disabled>Confirmar reserva</button>
+            </div>
+            <p class="helper">Los cupos y precios son simulados. La confirmación registra una reserva.</p>
+          </fieldset>
+        </form>
+        <p id="form-status" class="error" role="alert" aria-live="polite"></p>
+      </section>
+      <aside class="card guide" aria-labelledby="guide-title">
+        <p class="eyebrow">Atención con calma</p>
+        <h2 id="guide-title">Todo listo, paso a paso</h2>
+        <ol>
+          <li><strong>Escucha y revisa</strong><span>Verifica nombre, fechas y cantidad de huéspedes.</span></li>
+          <li><strong>Consulta los cupos</strong><span>La lectura muestra lo disponible en ese momento.</span></li>
+          <li><strong>Confirma personalmente</strong><span>La reserva queda registrada solo al presionar confirmar.</span></li>
+        </ol>
+        <p class="guide-note muted">Un detalle bien revisado hace una bienvenida más tranquila.</p>
+      </aside>
+    </div>
+    <section class="card bookings" aria-labelledby="bookings-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">El libro de recepción</p><h2 id="bookings-title">Reservas registradas</h2></div>
+        <button id="refresh" type="button">Actualizar reservas</button>
+      </div>
+      <p id="table-status" class="helper" role="status" aria-live="polite"></p>
+      <div id="empty" class="empty" hidden>Aún no hay reservas. La primera bienvenida comienza aquí.</div>
+      <div id="table-wrap" class="table-wrap" hidden>
+        <table>
+          <caption>Las reservas más recientes aparecen primero.</caption>
+          <thead><tr><th scope="col">Reserva</th><th scope="col">Huésped</th><th scope="col">Estancia</th>
+            <th scope="col">Habitación</th><th scope="col">Ocupación</th><th scope="col">Conversación</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+  <footer>Datos simulados del prototipo académico INNOVA3 · Uso del equipo de recepción</footer>
+</main>
 <script>
-const form = document.getElementById('booking');
-const message = document.getElementById('message');
-const params = new URLSearchParams(location.search);
-for (const name of ['checkin','checkout','room_code','adults','children','conversation_id']) {
-  if (params.has(name)) form.elements[name].value = params.get(name);
-}
-if (params.has('guest')) form.elements.guest_name.value = params.get('guest');
-async function api(path, options = {}) {
-  const response = await fetch(path, {...options, headers: {
-    'Content-Type': 'application/json',
-    'X-Staff-Token': document.getElementById('token').value,
-  }});
-  const data = await response.json();
-  if (!response.ok) throw new Error(`Error ${response.status}: ${JSON.stringify(data.detail)}`);
-  return data;
-}
-async function loadBookings() {
-  const bookings = await api('/api/v1/bookings');
-  const rows = document.getElementById('rows');
-  rows.replaceChildren();
-  for (const booking of bookings) {
-    const row = document.createElement('tr');
-    for (const field of ['booking_id','guest_name','checkin','checkout','room_code','adults','children']) {
-      const cell = document.createElement('td');
-      cell.textContent = String(booking[field]);
-      row.appendChild(cell);
-    }
-    rows.appendChild(row);
-  }
-}
-document.getElementById('load').addEventListener('click', async () => {
-  try { await loadBookings(); message.textContent = 'Reservas actualizadas.'; }
-  catch (error) { message.textContent = error.message; }
-});
-form.addEventListener('submit', async event => {
-  event.preventDefault();
-  if (!form.reportValidity()) return;
-  const payload = Object.fromEntries(new FormData(form));
-  payload.adults = Number(payload.adults);
-  payload.children = Number(payload.children);
-  payload.conversation_id = payload.conversation_id === '' ? null : Number(payload.conversation_id);
-  const submit = document.getElementById('submit');
-  submit.disabled = true;
+(() => {
+  'use strict';
+  const get = id => document.getElementById(id);
+  const form = get('booking');
+  const fields = form.elements;
+  const params = new URLSearchParams(location.search);
+  const storageKey = 'bordeluz.staff-token';
+  const unavailableText = 'El PMS no responde; reintenta en un momento';
+  const tokenError = 'Token inválido, revísalo con quien administra el sistema';
+  let staffToken = '';
+  let roomTypes = [];
+  let conversationId = null;
+  let availabilityKey = null;
+  let availabilityVersion = 0;
+  let submitting = false;
   let created = false;
-  try {
-    const booking = await api('/api/v1/bookings', {method:'POST',body:JSON.stringify(payload)});
-    created = true;
-    message.textContent = `Reserva ${booking.booking_id} confirmada.`;
-    document.getElementById('confirmed').checked = false;
-    await loadBookings();
-  } catch (error) {
-    message.textContent = (created ? 'La reserva se confirmó, pero no se pudo actualizar la lista. ' : '') + error.message;
-  } finally { submit.disabled = false; }
-});
+  let newestBookingId = null;
+  let sessionVersion = 0;
+  let prefilled = false;
+  const touched = new Set();
+  const money = new Intl.NumberFormat('es-CL', {style:'currency', currency:'CLP', maximumFractionDigits:0});
+
+  function localToday() {
+    const now = new Date();
+    return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0')].join('-');
+  }
+  function nextDay(value) {
+    const day = new Date(value + 'T12:00:00Z');
+    day.setUTCDate(day.getUTCDate() + 1);
+    return day.toISOString().slice(0, 10);
+  }
+  function nights(checkin, checkout) {
+    return (Date.parse(checkout + 'T00:00:00Z') - Date.parse(checkin + 'T00:00:00Z')) / 86400000;
+  }
+  function dateLabel(value) { return value.split('-').reverse().join('-'); }
+  function room() { return roomTypes.find(item => item.code === fields.room_code.value); }
+  function partyLabel(adults, children) {
+    return `${adults} ${adults === 1 ? 'adulto' : 'adultos'} · ${children} ${children === 1 ? 'niño' : 'niños'}`;
+  }
+  function signature() {
+    return [fields.checkin.value, fields.checkout.value, fields.adults.value,
+      fields.children.value, fields.room_code.value].join('|');
+  }
+  function saveToken(value) {
+    try {
+      if (value) sessionStorage.setItem(storageKey, value);
+      else sessionStorage.removeItem(storageKey);
+    } catch (_) { /* El acceso sigue en memoria si el navegador bloquea el almacenamiento. */ }
+  }
+  function logout(message = '') {
+    sessionVersion += 1;
+    staffToken = '';
+    saveToken('');
+    get('token').value = '';
+    get('token').type = 'password';
+    get('toggle-token').textContent = 'Mostrar';
+    get('toggle-token').setAttribute('aria-pressed', 'false');
+    get('workspace').hidden = true;
+    get('session').hidden = true;
+    get('access').hidden = false;
+    get('rows').replaceChildren();
+    get('access-error').textContent = message;
+    invalidateAvailability();
+    get('token').focus();
+  }
+  function friendlyValidation(detail) {
+    if (detail === 'checkout must be after checkin') return 'La salida debe ser posterior a la llegada.';
+    if (detail === 'Unknown room_code') return 'Selecciona un tipo de habitación de la lista.';
+    if (detail === 'Party exceeds room capacity') return 'La cantidad de huéspedes supera la capacidad de la habitación.';
+    return 'Revisa los datos indicados: nombre, fechas y cantidad de huéspedes.';
+  }
+  async function api(path, options = {}, token = staffToken) {
+    let response;
+    try {
+      response = await fetch(path, {...options, headers:{'Content-Type':'application/json',
+        'X-Staff-Token':token}, cache:'no-store'});
+    } catch (_) { throw {status:0, message:unavailableText}; }
+    let data;
+    try { data = await response.json(); } catch (_) { throw {status:response.status, message:unavailableText}; }
+    if (!response.ok) {
+      if (response.status === 401) {
+        logout(tokenError);
+        throw {status:401, message:tokenError};
+      }
+      const message = response.status === 409 ? 'Ya no hay cupo para esas fechas en ese tipo de habitación' :
+        response.status === 422 ? friendlyValidation(data.detail) : unavailableText;
+      throw {status:response.status, message, detail:data.detail};
+    }
+    return data;
+  }
+  function setFieldError(name, message) {
+    const input = fields[name];
+    const error = get(name + '-error');
+    if (error) error.textContent = message;
+    if (input) input.setAttribute('aria-invalid', String(Boolean(message)));
+  }
+  function validationErrors() {
+    const errors = {};
+    if (!fields.guest_name.value.trim() || fields.guest_name.value.length > 200) {
+      errors.guest_name = 'Escribe el nombre del huésped (hasta 200 caracteres).';
+    }
+    const today = localToday();
+    if (!fields.checkin.value || fields.checkin.value < today) errors.checkin = 'Elige una llegada desde hoy.';
+    if (!fields.checkout.value || fields.checkout.value <= fields.checkin.value || fields.checkout.value < today) {
+      errors.checkout = 'La salida debe ser al menos un día después de la llegada.';
+    }
+    const selected = room();
+    if (!selected) errors.room_code = 'Selecciona un tipo de habitación.';
+    for (const name of ['adults', 'children']) {
+      const value = Number(fields[name].value);
+      const minimum = name === 'adults' ? 1 : 0;
+      const maximum = selected ? selected[name === 'adults' ? 'max_adults' : 'max_children'] : minimum;
+      if (fields[name].value === '' || !Number.isInteger(value) || value < minimum || value > maximum) {
+        errors[name] = `Indica entre ${minimum} y ${maximum} ${name === 'adults' ? 'adultos' : 'niños'}.`;
+      }
+    }
+    return errors;
+  }
+  function updateForm(showAll = false) {
+    const errors = validationErrors();
+    for (const name of ['guest_name', 'checkin', 'checkout', 'room_code', 'adults', 'children']) {
+      setFieldError(name, (showAll || touched.has(name)) ? errors[name] || '' : '');
+    }
+    const count = nights(fields.checkin.value, fields.checkout.value);
+    get('stay-summary').textContent = Number.isFinite(count) && count > 0 ?
+      `${count} ${count === 1 ? 'noche' : 'noches'} de descanso` : 'Elige las fechas de la estadía';
+    get('party-summary').textContent = partyLabel(Number(fields.adults.value), Number(fields.children.value));
+    get('reviewed').disabled = availabilityKey !== signature() || created;
+    get('submit').disabled = submitting || created || !staffToken || Object.keys(errors).length > 0 ||
+      !get('reviewed').checked || availabilityKey !== signature();
+    get('check-availability').disabled = submitting || created || !roomTypes.length;
+    document.querySelectorAll('[data-step]').forEach(button => {
+      const input = fields[button.dataset.target];
+      const value = Number(input.value) + Number(button.dataset.step);
+      button.disabled = value < Number(input.min) || value > Number(input.max) || submitting || created;
+    });
+  }
+  function invalidateAvailability() {
+    availabilityVersion += 1;
+    availabilityKey = null;
+    get('reviewed').checked = false;
+    get('availability').hidden = true;
+    get('alternatives').replaceChildren();
+    updateForm();
+  }
+  function adjustCapacity() {
+    const selected = room();
+    for (const name of ['adults', 'children']) {
+      const input = fields[name];
+      input.max = selected ? selected[name === 'adults' ? 'max_adults' : 'max_children'] : input.min;
+      const value = Number(input.value);
+      if (Number.isFinite(value)) input.value = Math.min(Number(input.max), Math.max(Number(input.min), value));
+    }
+  }
+  function adjustDates() {
+    const today = localToday();
+    fields.checkin.min = today;
+    fields.checkout.min = fields.checkin.value && fields.checkin.value >= today ? nextDay(fields.checkin.value) : nextDay(today);
+    if (fields.checkin.value && fields.checkout.value && fields.checkout.value <= fields.checkin.value) {
+      fields.checkout.value = nextDay(fields.checkin.value);
+    }
+  }
+  function showConversation() {
+    get('conversation').hidden = conversationId === null;
+    get('conversation-chip').textContent = conversationId === null ? '' : `Conversación #${conversationId} de Chatwoot`;
+  }
+  function prefill() {
+    for (const name of ['checkin', 'checkout', 'adults', 'children']) {
+      if (params.has(name)) fields[name].value = params.get(name);
+    }
+    fields.guest_name.value = params.get('guest') || '';
+    fields.room_code.value = params.get('room_code') || '';
+    const value = params.get('conversation_id');
+    conversationId = value !== null && /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : null;
+    showConversation();
+    adjustCapacity();
+    adjustDates();
+    updateForm();
+  }
+  async function checkAvailability() {
+    const errors = validationErrors();
+    updateForm(true);
+    if (['checkin', 'checkout', 'room_code', 'adults', 'children'].some(name => errors[name])) return;
+    invalidateAvailability();
+    const version = availabilityVersion;
+    const key = signature();
+    const session = sessionVersion;
+    get('check-availability').disabled = true;
+    get('form-status').textContent = '';
+    get('availability').hidden = false;
+    get('availability-text').textContent = 'Consultando cupos…';
+    get('read-at').textContent = '';
+    try {
+      const query = new URLSearchParams({checkin:fields.checkin.value, checkout:fields.checkout.value,
+        adults:fields.adults.value, children:fields.children.value});
+      const data = await api('/api/v1/availability?' + query);
+      if (version !== availabilityVersion || key !== signature() || session !== sessionVersion) return;
+      const selected = data.room_types.find(item => item.code === fields.room_code.value);
+      get('availability-text').textContent = selected ?
+        `${selected.available_units === 1 ? 'Queda 1 unidad' : `Quedan ${selected.available_units} unidades`} · ${money.format(selected.nightly_price_clp)} por noche (simulado)` :
+        'Sin cupo para esas fechas';
+      const readAt = new Date(data.read_at);
+      get('read-at').textContent = 'Lectura del PMS: ' + readAt.toLocaleString('es-CL') + ' · los cupos pueden cambiar';
+      if (selected) availabilityKey = key;
+      for (const offer of data.room_types.filter(item => item.code !== fields.room_code.value)) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = `${offer.name} · ${offer.available_units} ${offer.available_units === 1 ? 'cupo' : 'cupos'}`;
+        button.addEventListener('click', () => {
+          fields.room_code.value = offer.code;
+          adjustCapacity();
+          invalidateAvailability();
+          checkAvailability();
+        });
+        get('alternatives').append(button);
+      }
+    } catch (error) {
+      if (version === availabilityVersion && session === sessionVersion && error.status !== 401) {
+        get('availability-text').textContent = error.message;
+      }
+    } finally { updateForm(); }
+  }
+  function renderBookings(bookings) {
+    get('rows').replaceChildren();
+    get('empty').hidden = bookings.length > 0;
+    get('table-wrap').hidden = bookings.length === 0;
+    const labels = ['Reserva', 'Huésped', 'Estancia', 'Habitación', 'Ocupación', 'Conversación'];
+    for (const booking of [...bookings].sort((a, b) => b.booking_id - a.booking_id)) {
+      const row = document.createElement('tr');
+      if (booking.booking_id === newestBookingId) row.classList.add('new-booking');
+      const type = roomTypes.find(item => item.code === booking.room_code);
+      const count = nights(booking.checkin, booking.checkout);
+      const values = [`#${booking.booking_id}${booking.booking_id === newestBookingId ? ' · Nueva' : ''}`,
+        booking.guest_name, `${dateLabel(booking.checkin)} → ${dateLabel(booking.checkout)} · ${count} noches`,
+        type ? type.name : 'Habitación no disponible en el catálogo', partyLabel(booking.adults, booking.children),
+        booking.conversation_id == null ? 'Sin vincular' : `#${booking.conversation_id}`];
+      values.forEach((value, index) => {
+        const cell = document.createElement('td');
+        cell.dataset.label = labels[index];
+        cell.textContent = String(value);
+        row.append(cell);
+      });
+      get('rows').append(row);
+    }
+  }
+  async function refreshBookings() {
+    const session = sessionVersion;
+    get('refresh').disabled = true;
+    get('table-status').textContent = 'Actualizando reservas…';
+    try {
+      const bookings = await api('/api/v1/bookings');
+      if (session !== sessionVersion) return;
+      renderBookings(bookings);
+      get('table-status').textContent = `${bookings.length} ${bookings.length === 1 ? 'reserva registrada' : 'reservas registradas'} · Lista actualizada`;
+    } catch (error) {
+      if (error.status !== 401 && session === sessionVersion) get('table-status').textContent = error.message;
+    } finally { get('refresh').disabled = false; }
+  }
+  async function login(token) {
+    if (!token) return;
+    get('login').disabled = true;
+    get('access-error').textContent = '';
+    const session = sessionVersion;
+    try {
+      const bookings = await api('/api/v1/bookings', {}, token);
+      const types = await api('/api/v1/room-types', {}, token);
+      if (session !== sessionVersion) return;
+      staffToken = token;
+      saveToken(token);
+      get('token').value = '';
+      roomTypes = types;
+      const selectedCode = fields.room_code.value;
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Selecciona una habitación';
+      fields.room_code.replaceChildren(placeholder);
+      for (const type of roomTypes) {
+        const option = document.createElement('option');
+        option.value = type.code;
+        option.textContent = `${type.name} · ${type.m2} m² · hasta ${type.max_adults} ${type.max_adults === 1 ? 'adulto' : 'adultos'} + ${type.max_children} ${type.max_children === 1 ? 'niño' : 'niños'}`;
+        fields.room_code.append(option);
+      }
+      if (!prefilled) {
+        prefill();
+        prefilled = true;
+      } else {
+        fields.room_code.value = selectedCode;
+        adjustCapacity();
+        adjustDates();
+      }
+      renderBookings(bookings);
+      get('access').hidden = true;
+      get('workspace').hidden = false;
+      get('session').hidden = false;
+      get('table-status').textContent = `${bookings.length} ${bookings.length === 1 ? 'reserva registrada' : 'reservas registradas'}`;
+      updateForm();
+      fields.guest_name.focus();
+    } catch (error) {
+      if (error.status !== 401) get('access-error').textContent = error.message;
+    } finally { get('login').disabled = false; }
+  }
+  function resetBooking() {
+    form.reset();
+    created = false;
+    conversationId = null;
+    touched.clear();
+    showConversation();
+    get('success').hidden = true;
+    get('form-status').textContent = '';
+    adjustDates();
+    adjustCapacity();
+    invalidateAvailability();
+    fields.guest_name.focus();
+  }
+  get('access-form').addEventListener('submit', event => {
+    event.preventDefault();
+    login(get('token').value.trim());
+  });
+  get('toggle-token').addEventListener('click', () => {
+    const show = get('token').type === 'password';
+    get('token').type = show ? 'text' : 'password';
+    get('toggle-token').textContent = show ? 'Ocultar' : 'Mostrar';
+    get('toggle-token').setAttribute('aria-pressed', String(show));
+  });
+  get('logout').addEventListener('click', () => logout());
+  get('another').addEventListener('click', resetBooking);
+  get('refresh').addEventListener('click', refreshBookings);
+  get('check-availability').addEventListener('click', checkAvailability);
+  get('reviewed').addEventListener('change', () => updateForm());
+  form.addEventListener('input', event => {
+    if (!event.target.name) return;
+    touched.add(event.target.name);
+    if (event.target.name === 'checkin') adjustDates();
+    if (event.target.name === 'room_code') adjustCapacity();
+    get('form-status').textContent = '';
+    invalidateAvailability();
+  });
+  form.addEventListener('focusout', event => {
+    if (event.target.name) { touched.add(event.target.name); updateForm(); }
+  });
+  document.querySelectorAll('[data-step]').forEach(button => button.addEventListener('click', () => {
+    const input = fields[button.dataset.target];
+    input.value = Number(input.value) + Number(button.dataset.step);
+    touched.add(input.name);
+    invalidateAvailability();
+  }));
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    updateForm(true);
+    if (get('submit').disabled) return;
+    submitting = true;
+    get('booking-fields').disabled = true;
+    get('submit').textContent = 'Confirmando…';
+    get('form-status').textContent = '';
+    updateForm();
+    const payload = {guest_name:fields.guest_name.value.trim(), checkin:fields.checkin.value,
+      checkout:fields.checkout.value, room_code:fields.room_code.value, adults:Number(fields.adults.value),
+      children:Number(fields.children.value), conversation_id:conversationId};
+    try {
+      const booking = await api('/api/v1/bookings', {method:'POST', body:JSON.stringify(payload)});
+      created = true;
+      newestBookingId = booking.booking_id;
+      get('success-title').textContent = `Reserva #${booking.booking_id} confirmada`;
+      get('success').hidden = false;
+      get('reviewed').checked = false;
+      await refreshBookings();
+      get('success').scrollIntoView({behavior:'smooth', block:'center'});
+    } catch (error) {
+      if (error.status !== 401) get('form-status').textContent = error.message;
+      if (error.status === 409) {
+        invalidateAvailability();
+        get('form-status').textContent = error.message + '. Vuelve a revisar la disponibilidad.';
+      }
+      if (error.status === 422 && Array.isArray(error.detail)) {
+        for (const issue of error.detail) {
+          const name = issue.loc[issue.loc.length - 1];
+          if (get(name + '-error')) setFieldError(name, 'Revisa este dato antes de confirmar.');
+        }
+      }
+    } finally {
+      submitting = false;
+      get('booking-fields').disabled = false;
+      get('submit').textContent = 'Confirmar reserva';
+      updateForm();
+    }
+  });
+  adjustDates();
+  updateForm();
+  let storedToken = '';
+  try { storedToken = sessionStorage.getItem(storageKey) || ''; } catch (_) { /* Almacenamiento no disponible. */ }
+  if (storedToken) login(storedToken);
+})();
 </script>
-</body></html>
+</body>
+</html>
