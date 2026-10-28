@@ -64,21 +64,20 @@ El primer arranque puede tardar varios minutos. Para detener: `make down`. Para 
 
 ## Capturas
 
-| Landing con widget | Menú y ubicación primero |
+| Landing pública | Demo con traza de herramientas |
 |---|---|
-| ![Landing](docs/img/01-landing.png) | ![Widget](docs/img/02-widget-menu.png) |
+| ![Landing](docs/img/01-landing.webp) | ![Demo](docs/img/02-demo.webp) |
 
-| Disponibilidad con lectura fechada | Panel de recepción en Chatwoot |
+| Conexiones en vivo | Panel de recepción |
 |---|---|
-| ![Disponibilidad](docs/img/03-widget-disponibilidad.png) | ![Panel](docs/img/04-chatwoot-panel.png) |
+| ![En vivo](docs/img/03-en-vivo.webp) | ![Panel](docs/img/04-panel.webp) |
 
-| Cronómetro vencido | PMS simulado | Métricas |
-|---|---|---|
-| ![SLA](docs/img/05-sla-vencido.png) | ![PMS](docs/img/06-pms-admin.png) | ![Métricas](docs/img/07-metricas.png) |
+| Métricas del piloto | PMS simulado |
+|---|---|
+| ![Métricas](docs/img/05-metricas.webp) | ![PMS](docs/img/06-pms-admin.webp) |
 
-| La IA en acción: traza de herramientas |
-|---|
-| ![Demo con IA](docs/img/08-demo-ia.png) |
+El recorrido completo, las decisiones y lo que falló en el camino están en el
+[caso de estudio](docs/caso-de-estudio.md).
 
 ## Pruebas y operación
 
