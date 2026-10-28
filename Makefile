@@ -2,7 +2,7 @@
 COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
 
 .DEFAULT_GOAL := help
-.PHONY: help up down reset env ps logs test seed health e2e creds smoke backup
+.PHONY: help up down reset env ps logs test seed health e2e creds smoke backup ai-smoke
 
 help: ## Muestra esta ayuda
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z0-9_-]+:.*## / {printf "  \033[1m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -60,3 +60,7 @@ smoke: ## Construye las imágenes y comprueba que arrancan
 # Respaldo en caliente de Chatwoot y las bases SQLite en backups/
 backup: ## Respaldo en caliente en backups/
 	./scripts/backup.sh
+
+# Prueba en vivo de la IA (necesita LLM_API_KEY en .env; consume unos pocos centavos de la API)
+ai-smoke: ## Prueba en vivo del asistente con IA
+	uv run --with httpx python scripts/ai-smoke.py

@@ -27,6 +27,7 @@ website_token="$(sed -n 's/^CHATWOOT_WEBSITE_TOKEN=//p' "$runtime")"
 cat >landing/config.js <<EOF
 window.COPILOTO_CONFIG = {
   chatwootUrl: "http://localhost:3000",
+  copilotoUrl: "http://localhost:8100",
   websiteToken: "${website_token}",
 };
 EOF

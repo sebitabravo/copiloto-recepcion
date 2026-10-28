@@ -35,7 +35,7 @@ rec2 = upsert_user(account, name: 'Recepción Turno Tarde', email: 'recepcion2@b
 
 labels = {
   'faq' => '#2E7D32', 'comercial' => '#1565C0', 'nocturna' => '#6A1B9A',
-  'sla-ambar' => '#F9A825', 'sla-vencido' => '#C62828'
+  'sla-ambar' => '#F9A825', 'sla-vencido' => '#C62828', 'reserva-ia' => '#00897B'
 }
 labels.each do |title, color|
   label = Label.find_or_initialize_by(account: account, title: title)

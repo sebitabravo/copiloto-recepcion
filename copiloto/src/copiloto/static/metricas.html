@@ -69,6 +69,11 @@
         <p class="value" id="cost">—</p>
         <p class="detail">Pesos chilenos (CLP), sin contar saludos</p>
       </article>
+      <article class="tile">
+        <h2>Respuestas con IA</h2>
+        <p class="value" id="ai-replies">—</p>
+        <p class="detail">Mediana <span id="ai-latency">—</span> · reservas hechas por la IA: <span id="ai-bookings">—</span></p>
+      </article>
     </section>
     <section class="events" aria-labelledby="events-title">
       <h2 id="events-title">Eventos del período</h2>
@@ -113,6 +118,9 @@
         setValue("night-capture", data.night_capture_rate_pct, " %");
         setValue("conversion", data.direct_conversion_pct, " %");
         setValue("cost", data.cost_per_query_clp, " CLP", true);
+        setValue("ai-replies", data.ai_replies, "");
+        setValue("ai-latency", data.ai_latency_median_s, " s");
+        setValue("ai-bookings", data.ai_bookings, "");
         const tbody = document.getElementById("event-counts");
         tbody.replaceChildren();
         for (const [kind, count] of Object.entries(data.counts).sort()) {

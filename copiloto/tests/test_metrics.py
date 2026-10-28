@@ -179,3 +179,19 @@ def test_range_filtering(conn):
     assert result["commercial_response_compliance_pct"] == 0
     assert result["night_capture_rate_pct"] is None
     assert result["direct_conversion_pct"] == 0
+
+
+def test_ai_metrics_count_replies_tools_latency_and_bookings(conn):
+    add(conn, 1, "ai_reply", 1, latency_ms=1000, tools=["check_availability"], tokens=300)
+    add(conn, 1, "ai_reply", 2, latency_ms=3000, tools=["check_availability", "create_booking"], tokens=500)
+    add(conn, 1, "ai_booking", 3, booking_id=9)
+    add(conn, 1, "ai_guardrail", 4, rule="confirmation_without_booking")
+    result = compute(conn)
+    assert result["ai_replies"] == 2 and result["ai_latency_median_s"] == 2.0
+    assert result["ai_bookings"] == 1 and result["ai_guardrail_hits"] == 1 and result["ai_tokens"] == 800
+    assert result["ai_tools"] == {"check_availability": 2, "create_booking": 1}
+
+
+def test_ai_metrics_are_empty_without_ai_events(conn):
+    result = compute(conn)
+    assert result["ai_replies"] == 0 and result["ai_latency_median_s"] is None and result["ai_tools"] == {}

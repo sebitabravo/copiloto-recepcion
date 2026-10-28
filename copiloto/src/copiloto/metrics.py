@@ -19,6 +19,7 @@ def compute_metrics(conn: sqlite3.Connection, start: float, end: float, config) 
     complete_captures = set()
     latencies = []
     queries = 0
+    ai_latencies, ai_tools, ai_tokens = [], {}, 0
 
     for row in rows:
         kind = row["kind"]
@@ -37,6 +38,11 @@ def compute_metrics(conn: sqlite3.Connection, start: float, end: float, config) 
             latencies.append(row["ts"] - payload["inbound_ts"])
         elif kind == "inbound" and payload.get("greeting") is False:
             queries += 1
+        elif kind == "ai_reply":
+            ai_latencies.append(payload.get("latency_ms", 0) / 1000)
+            ai_tokens += payload.get("tokens") or 0
+            for tool in payload.get("tools", []):
+                ai_tools[tool] = ai_tools.get(tool, 0) + 1
 
     def config_value(name, default):
         if isinstance(config, Mapping):
@@ -78,6 +84,12 @@ def compute_metrics(conn: sqlite3.Connection, start: float, end: float, config) 
         "cost_per_query_clp": (fixed_monthly_clp + usage_m_clp) / queries if queries else None,
         "fixed_monthly_clp": fixed_monthly_clp,
         "usage_m_clp": usage_m_clp,
+        "ai_replies": counts["ai_reply"],
+        "ai_latency_median_s": median(ai_latencies) if ai_latencies else None,
+        "ai_bookings": counts["ai_booking"],
+        "ai_guardrail_hits": counts["ai_guardrail"],
+        "ai_tokens": ai_tokens,
+        "ai_tools": ai_tools,
         "counts": counts,
         "range": {"start": start, "end": end},
     }
