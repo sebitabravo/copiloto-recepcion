@@ -2,7 +2,7 @@
 COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
 
 .DEFAULT_GOAL := help
-.PHONY: help up down reset env ps logs test seed health e2e creds smoke backup ai-smoke demo model
+.PHONY: help up down reset env ps logs test seed health e2e creds smoke backup ai-smoke demo model piloto
 
 help: ## Muestra esta ayuda
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z0-9_-]+:.*## / {printf "  \033[1m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -70,3 +70,6 @@ demo: ## Chequeo previo a la presentación: verifica, levanta el modelo y precal
 
 model: ## Levanta el modelo local (llama.cpp) que usa el copiloto
 	./scripts/local-model.sh
+
+piloto: ## Informe del piloto: métricas contra las metas de la Unidad 2 (DAYS=14)
+	python3 scripts/pilot_report.py --days $${DAYS:-14}

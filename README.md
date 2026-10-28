@@ -94,7 +94,11 @@ make test   # pytest de copiloto y pms_mock
 make e2e    # 4 casos reales contra el stack levantado (FAQ, disponibilidad, fuera de turno, PMS caído)
 make smoke  # construye las imágenes y comprueba que arrancan (también corre en CI)
 make backup # respaldo en caliente de Chatwoot y las bases SQLite en backups/
+make piloto # métricas del piloto contra las metas de la Unidad 2 (DAYS=14)
 ```
+
+El guion de la sesión con recepción, las cinco tareas y los criterios de avance están en
+[piloto](docs/piloto.md).
 
 ## Documentación
 
