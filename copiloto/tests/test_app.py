@@ -142,8 +142,9 @@ def test_privacy_notice_discloses_the_third_party_model_only_when_ai_is_active(a
 
     from conftest import FakeLlm
     from copiloto.ai.agent import Agent
-    agent = Agent(FakeLlm([]), harness.hotel, harness.pms, ai_settings, lambda: 0.0)
-    on = TestClient(create_app(ai_settings, chatwoot=harness.chatwoot, pms=harness.pms, run_workers=False,
+    external = replace(ai_settings, llm_base_url="https://api.proveedor.example/v1")
+    agent = Agent(FakeLlm([]), harness.hotel, harness.pms, external, lambda: 0.0)
+    on = TestClient(create_app(external, chatwoot=harness.chatwoot, pms=harness.pms, run_workers=False,
                                db=harness.db, llm_agent=agent))
     assert "modelo de lenguaje de un tercero" in on.get("/privacidad").text
     off = make_client(replace(ai_settings, llm_api_key=""), harness)

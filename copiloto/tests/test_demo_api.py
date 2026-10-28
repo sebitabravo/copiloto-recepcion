@@ -27,7 +27,7 @@ def chat(client, message, session=SESSION, **kwargs):
 def test_status_reports_ai_configuration(ai_settings, harness):
     on = client_for(ai_settings, harness, FakeLlm([])).get("/api/demo/status").json()
     assert on["ai_enabled"] is True and on["mode"] == "full" and on["autonomous_booking"] is True
-    assert on["model"] == "deepseek-flash" and on["max_message_chars"] == 400
+    assert on["model"] == "qwen2.5-7b-instruct" and on["max_message_chars"] == 400
     off = client_for(replace(ai_settings, llm_api_key=""), harness).get("/api/demo/status").json()
     assert off["ai_enabled"] is False and off["mode"] == "off" and off["model"] is None
 

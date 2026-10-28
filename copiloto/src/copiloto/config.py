@@ -49,9 +49,11 @@ class Settings:
     signature_tolerance_s: int = 300
     # IA conversacional: off (flujo guiado), assisted (no reserva) o full (también reserva en el PMS simulado)
     ai_mode: str = "off"
-    llm_base_url: str = "https://api.deepseek.com"
+    # Por defecto, modelo local: nada de APIs de pago. Sin `LLM_API_KEY` no hay IA (flujo guiado);
+    # para el modelo local se pone cualquier valor, por ejemplo `local`.
+    llm_base_url: str = "http://host.docker.internal:11434/v1"
     llm_api_key: str = ""
-    llm_model: str = "deepseek-flash"
+    llm_model: str = "qwen2.5-7b-instruct"
     llm_timeout_s: float = 25.0
     llm_max_tokens: int = 500
     ai_max_history: int = 12

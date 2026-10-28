@@ -29,6 +29,9 @@ El PMS se integra por **contrato**, no por código nuevo: rutas, cabecera y toke
 hotel, y `PMS_ADAPTER=none` deja al copiloto operando sin PMS (orienta y deriva, nunca promete
 cupos). El contrato y el checklist de incorporación están en [conector de PMS](docs/conector-pms.md).
 
+Todo el stack es abierto y sin costo por consulta: el modelo corre local, las tipografías se sirven
+desde el propio sitio y no hay CDNs. Licencias y límites en [stack abierto](docs/stack-abierto.md).
+
 ```
 Huésped ─ widget web / Telegram / WhatsApp
             │
