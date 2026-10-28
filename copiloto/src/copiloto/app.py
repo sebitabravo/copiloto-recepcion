@@ -189,6 +189,13 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     async def panel():
         return (STATIC / "panel.html").read_text(encoding="utf-8")
 
+    @app.get("/api/panel/queue", dependencies=limited)
+    async def panel_queue(request: Request):
+        if not _token_ok(settings.panel_token, request.headers.get("x-panel-token", "")):
+            raise HTTPException(status_code=401, detail="Token del panel requerido")
+        return {"now": clock(), "amber_s": settings.sla_amber_s, "red_s": settings.sla_red_s,
+                "conversations": store.list_conversations(db, clock())}
+
     @app.get("/api/panel/{conversation_id}", dependencies=limited)
     async def panel_data(conversation_id: int, request: Request):
         if not _token_ok(settings.panel_token, request.headers.get("x-panel-token", "")):

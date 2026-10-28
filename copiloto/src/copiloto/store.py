@@ -133,6 +133,35 @@ SAFE_PAYLOAD_KEYS = ("greeting", "in_shift", "complete", "inbound_ts", "faq_id",
                      "reason")
 
 
+def list_conversations(db: sqlite3.Connection, now: float, limit: int = 40) -> list[dict]:
+    """Cola de recepción: primero lo que corre riesgo de vencerse, después lo reciente.
+
+    Sin esto, la persona de recepción solo puede mirar una conversación si ya sabe su id.
+    """
+    rows = db.execute(
+        """SELECT conversation_id, step, contact_name, sla_started_at, sla_stopped_at, updated_at
+           FROM conversation_state ORDER BY updated_at DESC LIMIT ?""", (limit,)
+    ).fetchall()
+    queue = []
+    for row in rows:
+        prebooking = active_prebooking(db, row["conversation_id"])
+        running = row["sla_started_at"] is not None and row["sla_stopped_at"] is None
+        waiting = int(now - row["sla_started_at"]) if running else None
+        queue.append({
+            "conversation_id": row["conversation_id"],
+            "step": row["step"],
+            "contact_name": row["contact_name"],
+            "running": running,
+            "waiting_s": waiting,
+            "needs_human": row["step"] == "handed_off" and running,
+            "prebooking": prebooking["status"] if prebooking is not None else None,
+            "prebooking_expires_at": prebooking["expires_at"] if prebooking is not None else None,
+            "updated_at": row["updated_at"],
+        })
+    queue.sort(key=lambda item: (not item["running"], -(item["waiting_s"] or 0), -item["updated_at"]))
+    return queue
+
+
 def anonymous_id(conversation_id: int, salt: str) -> int:
     """Seudónimo negativo con sal secreta: sigue sirviendo para contar conversaciones, pero no se puede
     enlazar con el id de Chatwoot sin conocer la sal."""

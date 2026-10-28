@@ -17,6 +17,12 @@ la confirma una persona en el PMS (en la demo, el modo `full` reserva en un PMS 
 | Chatwoot Community `v4.18.0-ce` | Bandeja de recepción (MIT, $0) | http://localhost:3000 |
 | `copiloto` (FastAPI) | Flujo del bot, SLA, panel, métricas, privacidad | http://localhost:8100 |
 | `pms_mock` (FastAPI) | PMS simulado con los 12 tipos de habitación reales | http://localhost:8200/admin |
+| Panel de recepción | Cola con tiempos de espera, riesgo de SLA y detalle por conversación | http://localhost:8100/panel |
+
+El panel abre en la **cola**: todas las conversaciones ordenadas por riesgo, con el tiempo de espera
+y el paso del flujo. Recién al elegir una muestra el cronómetro y la pre-información del huésped.
+Los límites de escala y la comparación con la competencia están en
+[escalabilidad](docs/escalabilidad.md).
 
 ```
 Huésped ─ widget web / Telegram / WhatsApp
