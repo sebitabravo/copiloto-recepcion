@@ -491,6 +491,18 @@
     });
   }
 
+  // Pausa de animaciones fuera de pantalla: el hero sostiene siete animaciones infinitas.
+  const animatedSections = document.querySelectorAll('.hero-shell, .how-visual');
+  if (animatedSections.length && 'IntersectionObserver' in window) {
+    const motionObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => entry.target.classList.toggle('is-offscreen', !entry.isIntersecting));
+    }, {rootMargin: '140px'});
+    animatedSections.forEach(element => motionObserver.observe(element));
+  }
+  document.addEventListener('visibilitychange', () => {
+    document.body.classList.toggle('is-hidden', document.hidden);
+  });
+
   if ('IntersectionObserver' in window && !reducedMotion.matches) {
     const observer = new IntersectionObserver(entries => {
       entries.forEach(entry => {

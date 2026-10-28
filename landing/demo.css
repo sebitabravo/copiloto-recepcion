@@ -94,20 +94,20 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Grano de papel: textura sutil sobre todo el documento. */
+/* Grano de papel: textura sutil sobre todo el documento.
+   Sin mix-blend-mode: mezclar el viewport completo en cada frame cuesta caro al hacer scroll. */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: 3;
   pointer-events: none;
-  opacity: .5;
-  mix-blend-mode: multiply;
+  opacity: .32;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.3'/%3E%3C/svg%3E");
 }
 
 @media (prefers-color-scheme: dark) {
-  body::before { mix-blend-mode: screen; opacity: .22; }
+  body::before { opacity: .14; }
 }
 
 h1, h2, h3, p { margin-top: 0; }
@@ -227,8 +227,8 @@ textarea:focus-visible,
   position: sticky;
   top: 0;
   z-index: 20;
-  background: color-mix(in oklab, var(--bg) 78%, transparent);
-  backdrop-filter: blur(16px) saturate(150%);
+  background: color-mix(in oklab, var(--bg) 86%, transparent);
+  backdrop-filter: blur(10px);
   border-bottom: 1px solid transparent;
   transition: border-color .3s, background .3s;
 }
@@ -436,9 +436,10 @@ nav .nav-cta:hover { background: var(--accent); color: var(--accent-ink); }
   width: 380px;
   height: 380px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 45%, var(--glow), transparent 65%);
-  filter: blur(38px);
-  opacity: .75;
+  /* El degradado ya difumina: un filter: blur() encima solo cuesta pintado. */
+  background: radial-gradient(circle at 50% 45%, var(--glow) 0%,
+              color-mix(in oklab, var(--glow) 45%, transparent) 38%, transparent 72%);
+  opacity: .6;
   transform: translateZ(-120px);
 }
 
@@ -1712,6 +1713,14 @@ footer p { max-width: 72ch; margin-bottom: 0; }
 footer .brand:hover { color: var(--ink); }
 
 /* ---------- Movimiento ---------- */
+
+/* Las animaciones infinitas se congelan fuera de pantalla y con la pestaña oculta:
+   siete animaciones corriendo sin parar gastan GPU aunque nadie las vea. */
+.is-offscreen,
+.is-offscreen *,
+body.is-hidden * {
+  animation-play-state: paused !important;
+}
 
 .reveal { transition: opacity .6s cubic-bezier(.2, .8, .3, 1), transform .6s cubic-bezier(.2, .8, .3, 1); }
 .reveal.waiting { opacity: 0; transform: translateY(22px); }

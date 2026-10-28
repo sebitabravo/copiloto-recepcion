@@ -15,6 +15,7 @@ from urllib.parse import urlencode
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.middleware.gzip import GZipMiddleware
 
 from copiloto import privacy, store
 from copiloto.ai import sessions as ai_sessions
@@ -120,6 +121,8 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     app = FastAPI(title="Copiloto de Recepción", lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=[settings.landing_origin], allow_methods=["GET", "POST"],
                        allow_headers=["Content-Type"], max_age=600)
+    # Las páginas del panel y las métricas viajan comprimidas.
+    app.add_middleware(GZipMiddleware, minimum_size=600)
     app.state.core, app.state.sla, app.state.db, app.state.settings = core, sla, db, settings
 
     limiter = SlidingWindowLimiter(settings.public_rate_per_min, clock=clock)
