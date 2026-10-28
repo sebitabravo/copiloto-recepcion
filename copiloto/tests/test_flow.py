@@ -2,6 +2,7 @@ import re
 import time
 
 from conftest import local_epoch
+
 from copiloto import store
 
 FORBIDDEN = re.compile(r"(confirmad|reservad|garantizad)[oa]s?", re.IGNORECASE)
@@ -181,7 +182,12 @@ async def test_retention_purge_keeps_recent_data(harness):
     harness.clock.advance(10 * 86400)
     result = store.purge_personal_data(harness.db, harness.clock(), 90)
     assert result["conversation_state"] == 0
-    assert "text" in harness.events("inbound")[0]["payload"]
+    assert store.get_state(harness.db, 1).step != "start", "el estado reciente se conserva"
+
+
+async def test_events_never_store_the_guest_message_text(harness):
+    await harness.say("mi nombre es Ana y quiero reservar")
+    assert all("text" not in row["payload"] for row in harness.events())
 
 
 async def test_date_formats_reach_guest_question(harness):

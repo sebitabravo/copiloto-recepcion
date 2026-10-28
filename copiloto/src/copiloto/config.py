@@ -20,7 +20,11 @@ class Settings:
     chatwoot_account_id: int = 1
     chatwoot_bot_token: str = ""
     chatwoot_team_id: int | None = None
+    env: str = "development"
     webhook_secret: str = ""
+    pseudonym_salt: str = ""
+    max_body_bytes: int = 262144
+    public_rate_per_min: int = 60
     pms_events_secret: str = ""
     panel_token: str = ""
     pms_url: str = "http://pms-mock:8200"
@@ -51,7 +55,9 @@ class Settings:
             chatwoot_account_id=int(env.get("CHATWOOT_ACCOUNT_ID", "1")),
             chatwoot_bot_token=env.get("CHATWOOT_BOT_TOKEN", ""),
             chatwoot_team_id=int(team) if team else None,
+            env=env.get("COPILOTO_ENV", "development"),
             webhook_secret=env.get("WEBHOOK_SECRET", ""),
+            pseudonym_salt=env.get("PSEUDONYM_SALT", ""),
             pms_events_secret=env.get("PMS_EVENTS_SECRET", ""),
             panel_token=env.get("PANEL_TOKEN", ""),
             pms_url=env.get("PMS_URL", cls.pms_url),
@@ -64,6 +70,15 @@ class Settings:
             usage_m_clp=int(env.get("USAGE_M_CLP", "0")),
             retention_days=int(env.get("RETENTION_DAYS", "90")),
         )
+
+    def validate_runtime(self) -> None:
+        """Falla al arrancar si falta un secreto: sin esto cada webhook respondería 401 sin explicación."""
+        secrets = {"WEBHOOK_SECRET": self.webhook_secret, "PMS_EVENTS_SECRET": self.pms_events_secret,
+                   "PANEL_TOKEN": self.panel_token, "PSEUDONYM_SALT": self.pseudonym_salt,
+                   "CHATWOOT_BOT_TOKEN": self.chatwoot_bot_token}
+        weak = sorted(name for name, value in secrets.items() if len(value) < 16)
+        if weak:
+            raise ValueError("Secretos ausentes o demasiado cortos (mínimo 16 caracteres): " + ", ".join(weak))
 
     @property
     def tz(self) -> ZoneInfo:

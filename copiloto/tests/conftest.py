@@ -4,7 +4,6 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
-
 from copiloto.config import Settings
 from copiloto.events import connect, init_db
 from copiloto.flow import Copiloto

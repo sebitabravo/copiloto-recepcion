@@ -130,7 +130,10 @@
     if (id && String(id) !== String(conversationId)) { conversationId = id; snapshot = null; refresh(); }
   }
 
-  window.addEventListener("message", (event) => onContext(event.data));
+  window.addEventListener("message", (event) => {
+    // Solo se acepta el contexto que manda la ventana que nos enmarca (Chatwoot)
+    if (event.source === window.parent) onContext(event.data);
+  });
   window.parent.postMessage("chatwoot-dashboard-app:fetch-info", "*");
   setInterval(render, 1000);
   setInterval(refresh, 5000);

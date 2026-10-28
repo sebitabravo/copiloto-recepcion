@@ -1,9 +1,23 @@
 """Persistencia del estado conversacional, las pre-reservas auxiliares y la retención de datos."""
 
 import hashlib
+import hmac
 import json
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+
+
+@contextmanager
+def transaction(db: sqlite3.Connection):
+    """Agrupa escrituras en una transacción: o quedan todas o ninguna si el proceso falla a mitad."""
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        yield
+    except BaseException:
+        db.execute("ROLLBACK")
+        raise
+    db.execute("COMMIT")
 
 
 @dataclass
@@ -122,7 +136,7 @@ SAFE_PAYLOAD_KEYS = ("greeting", "in_shift", "complete", "inbound_ts", "faq_id",
 def anonymous_id(conversation_id: int, salt: str) -> int:
     """Seudónimo negativo con sal secreta: sigue sirviendo para contar conversaciones, pero no se puede
     enlazar con el id de Chatwoot sin conocer la sal."""
-    digest = hashlib.sha256(f"{salt}:{conversation_id}".encode()).digest()
+    digest = hmac.new(salt.encode(), str(conversation_id).encode(), hashlib.sha256).digest()
     return -(int.from_bytes(digest[:7], "big") + 1)
 
 

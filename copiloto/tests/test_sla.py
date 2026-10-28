@@ -1,7 +1,8 @@
 import json
 
-from copiloto import store
 from copiloto.sla import SlaWorker
+
+from copiloto import store
 
 
 async def handed_off(h):
@@ -157,3 +158,24 @@ async def test_unexpected_failure_hands_off_with_note_and_events(harness):
     assert any("falla técnica" in n for n in harness.chatwoot.notes(1))
     assert json.loads(harness.events("handoff")[0]["payload"])["reason"] == "error"
     assert store.get_state(harness.db, 1).sla_started_at is not None
+
+
+async def test_handoff_is_atomic_when_a_write_fails_midway(harness, monkeypatch):
+    await harness.say("quiero reservar")
+    await harness.say("15/11 al 18/11")
+    await harness.say("2")
+    await harness.say("0")
+    original = store.start_sla
+
+    calls = []
+
+    def boom_once(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("falla a mitad del traspaso")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(store, "start_sla", boom_once)
+    await harness.say("1")
+    assert len(harness.events("handoff")) == 1, "solo el traspaso del fallback; el fallido hizo rollback"
+    assert json.loads(harness.events("handoff")[0]["payload"])["reason"] == "error"

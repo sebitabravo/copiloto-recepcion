@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlencode
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from copiloto import privacy, store
@@ -21,6 +21,7 @@ from copiloto.events import connect, init_db
 from copiloto.flow import Copiloto
 from copiloto.hotel import HotelData
 from copiloto.pms import MockPxsolAdapter, PmsAdapter
+from copiloto.ratelimit import SlidingWindowLimiter
 from copiloto.sla import SlaWorker
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ def verify_signature(settings: Settings, headers, raw_body: bytes, now: float) -
     if abs(now - int(timestamp)) > settings.signature_tolerance_s:
         return False
     expected = "sha256=" + hmac.new(secret.encode(), f"{timestamp}.".encode() + raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature)
+    return hmac.compare_digest(expected.encode(), signature.encode())
 
 
 def _token_ok(expected: str, given: str) -> bool:
@@ -46,10 +47,29 @@ def _token_ok(expected: str, given: str) -> bool:
     return bool(expected) and hmac.compare_digest(expected.encode(), given.encode())
 
 
+async def read_capped(request: Request, limit: int) -> bytes:
+    """Lee el cuerpo con tope, antes de autenticar: un cuerpo enorme sin firma no debe consumir memoria."""
+    declared = request.headers.get("content-length")
+    if declared is not None:
+        if not declared.isdigit():
+            raise HTTPException(status_code=400, detail="Content-Length inválido")
+        if int(declared) > limit:
+            raise HTTPException(status_code=413, detail="Cuerpo demasiado grande")
+    chunks, total = [], 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > limit:
+            raise HTTPException(status_code=413, detail="Cuerpo demasiado grande")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None = None,
                pms: PmsAdapter | None = None, clock=time.time, run_workers: bool = True,
                db: sqlite3.Connection | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
+    if settings.env == "production":
+        settings.validate_runtime()
     hotel = HotelData.load(settings.hotel_data_path)
     if db is None:
         db = connect(settings.db_path)
@@ -63,8 +83,7 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     async def purge_loop() -> None:
         while True:
             try:
-                result = store.purge_personal_data(db, clock(), settings.retention_days,
-                                                  settings.pms_events_secret or "copiloto")
+                result = store.purge_personal_data(db, clock(), settings.retention_days, settings.pseudonym_salt)
                 logger.info("Purga de retención: %s", result)
             except Exception:
                 logger.exception("Falla en la purga de retención")
@@ -80,17 +99,45 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     app = FastAPI(title="Copiloto de Recepción", lifespan=lifespan)
     app.state.core, app.state.sla, app.state.db, app.state.settings = core, sla, db, settings
 
+    limiter = SlidingWindowLimiter(settings.public_rate_per_min, clock=clock)
+    limited = [Depends(limiter.dependency())]
+    chatwoot_origin = settings.chatwoot_public_url.rstrip("/")
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        # El panel lo enmarca Chatwoot (Dashboard App); el resto de las páginas no se puede enmarcar
+        framing = chatwoot_origin if request.url.path == "/panel" else "'none'"
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("Content-Security-Policy", (
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; "
+            f"frame-ancestors {framing}"))
+        return response
+
     @app.get("/health")
-    async def health():
+    async def health(probe: str = Query(default="liveness", pattern="^(liveness|readiness)$")):
+        """liveness: el proceso responde. readiness: además la base SQLite responde."""
+        if probe == "readiness":
+            try:
+                db.execute("SELECT 1").fetchone()
+            except sqlite3.Error:
+                logger.exception("Readiness: la base no responde")
+                return JSONResponse({"status": "degraded"}, status_code=503)
         return {"status": "ok"}
 
     @app.post("/webhooks/chatwoot")
     async def chatwoot_webhook(request: Request, background: BackgroundTasks):
-        raw = await request.body()
+        raw = await read_capped(request, settings.max_body_bytes)
         if not verify_signature(settings, request.headers, raw, clock()):
             raise HTTPException(status_code=401, detail="Firma inválida")
         # Se responde 200 de inmediato: si Chatwoot no recibe respuesta a tiempo mueve la conversación a open
-        background.add_task(core.handle_webhook, json.loads(raw))
+        try:
+            event = json.loads(raw)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="JSON inválido") from None
+        background.add_task(core.handle_webhook, event)
         return {"status": "accepted"}
 
     @app.post("/webhooks/pms")
@@ -98,17 +145,24 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         # El secreto viaja en un header (no en la URL) para que no quede en los access logs
         if not _token_ok(settings.pms_events_secret, request.headers.get("x-events-token", "")):
             raise HTTPException(status_code=401, detail="Secreto inválido")
-        body = await request.json()
-        if body.get("kind") != "booking_confirmed" or "booking_id" not in body:
+        try:
+            body = json.loads(await read_capped(request, settings.max_body_bytes))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="JSON inválido") from None
+        if not isinstance(body, dict) or body.get("kind") != "booking_confirmed" or "booking_id" not in body:
             raise HTTPException(status_code=422, detail="Evento no soportado")
-        await core.on_booking_confirmed(body.get("conversation_id"), int(body["booking_id"]))
+        try:
+            booking_id = int(body["booking_id"])
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="booking_id inválido") from None
+        await core.on_booking_confirmed(body.get("conversation_id"), booking_id)
         return {"status": "recorded"}
 
-    @app.get("/panel", response_class=HTMLResponse)
+    @app.get("/panel", response_class=HTMLResponse, dependencies=limited)
     async def panel():
         return (STATIC / "panel.html").read_text(encoding="utf-8")
 
-    @app.get("/api/panel/{conversation_id}")
+    @app.get("/api/panel/{conversation_id}", dependencies=limited)
     async def panel_data(conversation_id: int, request: Request):
         if not _token_ok(settings.panel_token, request.headers.get("x-panel-token", "")):
             raise HTTPException(status_code=401, detail="Token del panel requerido")
@@ -133,18 +187,18 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
             "now": clock(), "pms_url": f"{settings.pms_staff_url.rstrip('/')}/admin?{urlencode(pms_params)}",
         }
 
-    @app.get("/metricas", response_class=HTMLResponse)
+    @app.get("/metricas", response_class=HTMLResponse, dependencies=limited)
     async def metrics_page():
         return (STATIC / "metricas.html").read_text(encoding="utf-8")
 
-    @app.get("/metricas/data.json")
+    @app.get("/metricas/data.json", dependencies=limited)
     async def metrics_data(days: int = Query(default=7, ge=1, le=366)):
         from copiloto.metrics import compute_metrics
 
         end = clock()
         return JSONResponse(compute_metrics(db, end - days * 86400, end + 1, settings))
 
-    @app.get("/privacidad", response_class=HTMLResponse)
+    @app.get("/privacidad", response_class=HTMLResponse, dependencies=limited)
     async def privacy_page():
         return privacy.render(hotel)
 

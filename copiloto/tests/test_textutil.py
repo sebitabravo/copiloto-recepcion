@@ -1,7 +1,6 @@
 from datetime import date
 
 import pytest
-
 from copiloto.textutil import parse_count, parse_guests, parse_stay
 
 TODAY = date(2026, 10, 28)

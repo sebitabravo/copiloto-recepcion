@@ -38,6 +38,12 @@ def compute_metrics(conn: sqlite3.Connection, start: float, end: float, config) 
         elif kind == "inbound" and payload.get("greeting") is False:
             queries += 1
 
+    def config_value(name, default):
+        if isinstance(config, Mapping):
+            return config.get(name, default)
+        return getattr(config, name, default)
+
+    sla_s = config_value("sla_red_s", 180)
     in_shift = 0
     compliant = 0
     converted = 0
@@ -47,17 +53,12 @@ def compute_metrics(conn: sqlite3.Connection, start: float, end: float, config) 
             in_shift += 1
             # Una respuesta anterior al inicio no satisface este compromiso comercial.
             first_reply = next((ts for ts in replies.get(conversation_id, []) if ts >= started_at), None)
-            if first_reply is not None and first_reply - started_at < 180:
+            if first_reply is not None and first_reply - started_at < sla_s:
                 compliant += 1
         elif shift is False:
             night_conversations.add(conversation_id)
         if any(0 <= ts - started_at <= 604800 for ts in bookings.get(conversation_id, [])):
             converted += 1
-
-    def config_value(name, default):
-        if isinstance(config, Mapping):
-            return config.get(name, default)
-        return getattr(config, name, default)
 
     def percentage(numerator, denominator):
         return 100 * numerator / denominator if denominator else None

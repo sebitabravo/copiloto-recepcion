@@ -1,15 +1,13 @@
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from pathlib import Path
-import sqlite3
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
-from fastapi.testclient import TestClient
 import httpx
 import pytest
 import yaml
-
+from fastapi.testclient import TestClient
 from pms_mock.main import DEFAULT_HOTEL_PATH, create_app
 
 TOKEN = {"X-Staff-Token": "test-staff-token"}
@@ -50,7 +48,7 @@ def test_health_and_seed(client):
     assert len(data["room_types"]) == 12
     assert sum(room["available_units"] for room in data["room_types"]) == 20
     source = yaml.safe_load(DEFAULT_HOTEL_PATH.read_text())["rooms"]
-    for actual, expected in zip(data["room_types"], source):
+    for actual, expected in zip(data["room_types"], source, strict=True):
         for field in ("code", "name", "max_adults", "max_children", "m2"):
             assert actual[field] == expected[field]
         assert actual["nightly_price_clp"] > 0

@@ -2,9 +2,9 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from copiloto.metrics import compute_metrics
 
 from copiloto import events
-from copiloto.metrics import compute_metrics
 
 START = 1_700_000_000.0
 END = START + 1_000_000

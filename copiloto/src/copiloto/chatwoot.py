@@ -1,6 +1,7 @@
 """Cliente mínimo de la API de Chatwoot. Todo sale con el token del AgentBot para que
 los mensajes del bot no se confundan con una respuesta humana (el SLA solo se detiene con un User)."""
 
+import asyncio
 import logging
 
 import httpx
@@ -15,6 +16,7 @@ class ChatwootClient:
         self.team_id = team_id
         self._headers = {"api_access_token": token}
         self._http = http or httpx.AsyncClient(timeout=10.0)
+        self._label_lock = asyncio.Lock()
 
     async def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
         response = await self._http.request(method, f"{self.account_path}{path}", headers=self._headers,
@@ -36,9 +38,10 @@ class ChatwootClient:
 
     async def add_labels(self, conversation_id: int, labels: list[str]) -> None:
         # POST /labels reemplaza el conjunto completo, por eso se une con las etiquetas actuales
-        current = (await self._request("GET", f"/conversations/{conversation_id}/labels")).json()
-        merged = sorted(set(current.get("payload", [])) | set(labels))
-        await self._request("POST", f"/conversations/{conversation_id}/labels", json={"labels": merged})
+        async with self._label_lock:
+            current = (await self._request("GET", f"/conversations/{conversation_id}/labels")).json()
+            merged = sorted(set(current.get("payload", [])) | set(labels))
+            await self._request("POST", f"/conversations/{conversation_id}/labels", json={"labels": merged})
 
     async def assign_team(self, conversation_id: int) -> None:
         if self.team_id is None:

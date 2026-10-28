@@ -3,9 +3,8 @@ import hmac
 import json
 import time
 
-from fastapi.testclient import TestClient
-
 from copiloto.app import create_app
+from fastapi.testclient import TestClient
 
 
 def signed(secret, body, ts=None):
@@ -81,3 +80,58 @@ def test_panel_and_pms_webhook_reject_everything_without_configured_secrets(sett
     assert client.get("/api/panel/5", headers={"X-Panel-Token": ""}).status_code == 401
     assert client.post("/webhooks/pms", json={"kind": "booking_confirmed", "booking_id": 1},
                        headers={"X-Events-Token": ""}).status_code == 401
+
+
+def test_webhook_rejects_oversized_bodies_before_authenticating(settings, harness):
+    client = make_client(settings, harness)
+    assert client.post("/webhooks/chatwoot", content=b"x" * 300_000).status_code == 413
+    assert client.post("/webhooks/pms", content=b"x" * 300_000,
+                       headers={"X-Events-Token": settings.pms_events_secret}).status_code == 413
+
+
+def test_non_ascii_signature_is_a_401_not_a_500(settings, harness):
+    client = make_client(settings, harness)
+    body = json.dumps(message()).encode()
+    headers = {"X-Chatwoot-Timestamp": str(int(time.time())), "X-Chatwoot-Signature": "sha256=ñandú".encode("latin-1")}
+    assert client.post("/webhooks/chatwoot", content=body, headers=headers).status_code == 401
+
+
+def test_readiness_probe_checks_the_database(settings, harness):
+    client = make_client(settings, harness)
+    assert client.get("/health").json() == {"status": "ok"}
+    assert client.get("/health?probe=readiness").json() == {"status": "ok"}
+    harness.db.close()
+    assert client.get("/health?probe=readiness").status_code == 503
+    assert client.get("/health?probe=otra").status_code == 422
+
+
+def test_security_headers_allow_only_chatwoot_to_frame_the_panel(settings, harness):
+    client = make_client(settings, harness)
+    panel = client.get("/panel")
+    assert panel.headers["x-content-type-options"] == "nosniff"
+    assert panel.headers["referrer-policy"] == "no-referrer"
+    assert f"frame-ancestors {settings.chatwoot_public_url}" in panel.headers["content-security-policy"]
+    assert "frame-ancestors 'none'" in client.get("/privacidad").headers["content-security-policy"]
+
+
+def test_public_reads_are_rate_limited_but_webhooks_are_not(settings, harness):
+    from dataclasses import replace
+    client = make_client(replace(settings, public_rate_per_min=3), harness)
+    codes = [client.get("/privacidad").status_code for _ in range(5)]
+    assert codes == [200, 200, 200, 429, 429]
+    assert client.get("/privacidad").headers["retry-after"].isdigit()
+    body = json.dumps(message()).encode()
+    for index in range(6):
+        response = client.post("/webhooks/chatwoot", content=body, headers=signed(settings.webhook_secret, body))
+        assert response.status_code == 200, index
+
+
+def test_signed_but_malformed_json_is_a_400(settings, harness):
+    client = make_client(settings, harness)
+    body = b"{no es json"
+    assert client.post("/webhooks/chatwoot", content=body,
+                       headers=signed(settings.webhook_secret, body)).status_code == 400
+    ok = {"X-Events-Token": settings.pms_events_secret}
+    assert client.post("/webhooks/pms", content=b"[", headers=ok).status_code == 422
+    assert client.post("/webhooks/pms", json={"kind": "booking_confirmed", "booking_id": "abc"},
+                       headers=ok).status_code == 422

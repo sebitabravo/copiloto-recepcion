@@ -10,6 +10,7 @@ import logging
 import re
 import sqlite3
 import time
+import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
@@ -71,7 +72,7 @@ class Copiloto:
         self.chatwoot = chatwoot
         self.pms = pms
         self.clock = clock
-        self._locks: dict[int, asyncio.Lock] = {}
+        self._locks: weakref.WeakValueDictionary[int, asyncio.Lock] = weakref.WeakValueDictionary()
 
     # ---------- entrada de webhooks ----------
 
@@ -113,7 +114,10 @@ class Copiloto:
                 self.on_human_reply(conversation_id, (event.get("sender") or {}).get("id"), now)
 
     def _lock(self, conversation_id: int) -> asyncio.Lock:
-        return self._locks.setdefault(conversation_id, asyncio.Lock())
+        lock = self._locks.get(conversation_id)
+        if lock is None:
+            lock = self._locks[conversation_id] = asyncio.Lock()
+        return lock
 
     # ---------- mensajes del huésped ----------
 
@@ -125,7 +129,7 @@ class Copiloto:
         ctx = Context(conversation_id, text, normalize(text), channel, now, state)
         if state.step == "handed_off":
             returning_greeting = ctx.plain.strip("!¡., ") in GREETING_WORDS
-            record_event(self.db, conversation_id, "inbound", now, {"text": text, "greeting": returning_greeting})
+            record_event(self.db, conversation_id, "inbound", now, {"greeting": returning_greeting})
             if now <= state.data.get("handoff_at", 0):
                 # El mensaje llegó antes del traspaso y esperó el lock: ya lo ve recepción
                 return
@@ -135,7 +139,7 @@ class Copiloto:
             store.save_state(self.db, state, now)
             return await self._restart_session(ctx)
         greeting = state.step == "start" and ctx.plain.strip("!¡., ") in GREETING_WORDS
-        record_event(self.db, conversation_id, "inbound", now, {"text": text, "greeting": greeting})
+        record_event(self.db, conversation_id, "inbound", now, {"greeting": greeting})
         try:
             await self._route(ctx, greeting)
         except Exception:
@@ -426,9 +430,11 @@ class Copiloto:
                                  "para esas fechas y esa cantidad de huéspedes. Recepción revisará alternativas.")
             await self._handoff(ctx, "commercial")
             return
-        prebooking_id = store.create_prebooking(self.db, ctx.conversation_id, data, ctx.now,
-                                                self.settings.prebooking_minutes)
-        record_event(self.db, ctx.conversation_id, "prebooking_created", ctx.now, {"prebooking_id": prebooking_id})
+        with store.transaction(self.db):
+            prebooking_id = store.create_prebooking(self.db, ctx.conversation_id, data, ctx.now,
+                                                    self.settings.prebooking_minutes)
+            record_event(self.db, ctx.conversation_id, "prebooking_created", ctx.now,
+                         {"prebooking_id": prebooking_id})
         await self._say(ctx, self._availability_text(reading, offers))
         ctx.state.step = "pick_room"
         options = [(self._short_name(offer), offer.code) for offer in offers] + [("Que decida recepción", "any")]
@@ -563,15 +569,23 @@ class Copiloto:
         """La frontera del traspaso (estado, eventos y reloj) se persiste antes de abrir la conversación a
         recepción: así una respuesta humana inmediata nunca llega antes que el inicio del cronómetro."""
         state = ctx.state
+        previous_step = state.step
         state.step = "handed_off"
         state.data["handoff_at"] = now
-        store.save_state(self.db, state, now)
-        record_event(self.db, ctx.conversation_id, "handoff", now, {"reason": reason})
-        record_event(self.db, ctx.conversation_id, "commercial_started", now, {"in_shift": in_shift})
-        if in_shift:
-            store.start_sla(self.db, ctx.conversation_id, now)
-        else:
-            record_event(self.db, ctx.conversation_id, "night_capture", now, {"complete": complete})
+        try:
+            with store.transaction(self.db):
+                store.save_state(self.db, state, now)
+                record_event(self.db, ctx.conversation_id, "handoff", now, {"reason": reason})
+                record_event(self.db, ctx.conversation_id, "commercial_started", now, {"in_shift": in_shift})
+                if in_shift:
+                    store.start_sla(self.db, ctx.conversation_id, now)
+                else:
+                    record_event(self.db, ctx.conversation_id, "night_capture", now, {"complete": complete})
+        except BaseException:
+            # Hubo rollback: el estado en memoria no puede quedar como si el traspaso ya existiera
+            state.step = previous_step
+            state.data.pop("handoff_at", None)
+            raise
 
     # ---------- eventos externos ----------
 
