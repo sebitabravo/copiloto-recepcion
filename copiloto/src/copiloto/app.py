@@ -1,6 +1,7 @@
 """Aplicación FastAPI del copiloto: webhooks, panel, métricas y aviso de privacidad."""
 
 import asyncio
+import base64
 import hashlib
 import hmac
 import json
@@ -55,6 +56,10 @@ def verify_signature(settings: Settings, headers, raw_body: bytes, now: float) -
 def _token_ok(expected: str, given: str) -> bool:
     """Comparación en tiempo constante; sin token configurado se rechaza todo."""
     return bool(expected) and hmac.compare_digest(expected.encode(), given.encode())
+
+
+PANEL_COOKIE = "panel_session"
+PANEL_SESSION_HOURS = 12
 
 
 async def read_capped(request: Request, limit: int) -> bytes:
@@ -185,21 +190,79 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         await core.on_booking_confirmed(body.get("conversation_id"), booking_id, source)
         return {"status": "recorded"}
 
+    def panel_session(name: str, expires: int) -> str:
+        payload = base64.urlsafe_b64encode(json.dumps({"n": name, "e": expires}).encode()).decode()
+        sig = hmac.new(settings.panel_token.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        return f"{payload}.{sig}"
+
+    def panel_identity(request: Request) -> str | None:
+        """Quién mira el panel: sesión firmada por cookie, o el token del panel (app de Chatwoot)."""
+        if _token_ok(settings.panel_token, request.headers.get("x-panel-token", "")):
+            return "chatwoot"
+        payload, _, signature = request.cookies.get(PANEL_COOKIE, "").partition(".")
+        if not payload or not signature:
+            return None
+        expected = hmac.new(settings.panel_token.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            return None
+        try:
+            data = json.loads(base64.urlsafe_b64decode(payload.encode()))
+            expires = int(data.get("e", 0))
+        except (ValueError, TypeError):
+            return None
+        if expires < clock():
+            return None
+        return str(data.get("n") or "recepción")
+
     @app.get("/panel", response_class=HTMLResponse, dependencies=limited)
     async def panel():
         return (STATIC / "panel.html").read_text(encoding="utf-8")
 
+    @app.post("/api/panel/login", dependencies=limited)
+    async def panel_login(request: Request):
+        try:
+            body = json.loads(await read_capped(request, 4096))
+        except ValueError:
+            return JSONResponse({"detail": "JSON inválido"}, status_code=400)
+        if not _token_ok(settings.panel_token, str(body.get("password") or "")):
+            return JSONResponse({"detail": "Contraseña incorrecta"}, status_code=401)
+        name = " ".join(str(body.get("name") or "recepción").split())[:40] or "recepción"
+        response = JSONResponse({"name": name})
+        response.set_cookie(PANEL_COOKIE, panel_session(name, int(clock()) + PANEL_SESSION_HOURS * 3600),
+                            max_age=PANEL_SESSION_HOURS * 3600, httponly=True, samesite="lax")
+        return response
+
+    @app.post("/api/panel/logout", dependencies=limited)
+    async def panel_logout():
+        response = JSONResponse({"status": "ok"})
+        response.delete_cookie(PANEL_COOKIE)
+        return response
+
+    @app.get("/api/panel/session", dependencies=limited)
+    async def panel_session_info(request: Request):
+        who = panel_identity(request)
+        if who is None:
+            return JSONResponse({"detail": "Sesión requerida"}, status_code=401)
+        return {"name": who}
+
     @app.get("/api/panel/queue", dependencies=limited)
     async def panel_queue(request: Request):
-        if not _token_ok(settings.panel_token, request.headers.get("x-panel-token", "")):
-            raise HTTPException(status_code=401, detail="Token del panel requerido")
+        if panel_identity(request) is None:
+            raise HTTPException(status_code=401, detail="Sesión del panel requerida")
         return {"now": clock(), "amber_s": settings.sla_amber_s, "red_s": settings.sla_red_s,
                 "conversations": store.list_conversations(db, clock())}
 
+    @app.get("/api/panel/shift", dependencies=limited)
+    async def panel_shift(request: Request, hours: int = Query(default=12, ge=1, le=72)):
+        if panel_identity(request) is None:
+            raise HTTPException(status_code=401, detail="Sesión del panel requerida")
+        now = clock()
+        return {"hours": hours, **store.shift_summary(db, now - hours * 3600, now)}
+
     @app.get("/api/panel/{conversation_id}", dependencies=limited)
     async def panel_data(conversation_id: int, request: Request):
-        if not _token_ok(settings.panel_token, request.headers.get("x-panel-token", "")):
-            raise HTTPException(status_code=401, detail="Token del panel requerido")
+        if panel_identity(request) is None:
+            raise HTTPException(status_code=401, detail="Sesión del panel requerida")
         state = store.get_state(db, conversation_id)
         data = dict(state.data)
         room = hotel.room(data["room_code"]) if data.get("room_code") else None
@@ -219,7 +282,22 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
             "sla": {"started_at": state.sla_started_at, "stopped_at": state.sla_stopped_at,
                     "amber_s": settings.sla_amber_s, "red_s": settings.sla_red_s},
             "now": clock(), "pms_url": f"{settings.pms_staff_url.rstrip('/')}/admin?{urlencode(pms_params)}",
+            "notes": store.list_notes(db, conversation_id),
         }
+
+    @app.post("/api/panel/{conversation_id}/note", dependencies=limited)
+    async def panel_add_note(conversation_id: int, request: Request):
+        author = panel_identity(request)
+        if author is None:
+            raise HTTPException(status_code=401, detail="Sesión del panel requerida")
+        try:
+            body = json.loads(await read_capped(request, 4096))
+        except ValueError:
+            return JSONResponse({"detail": "JSON inválido"}, status_code=400)
+        try:
+            return store.add_note(db, conversation_id, author, body.get("body", ""), clock())
+        except ValueError:
+            return JSONResponse({"detail": "La nota está vacía"}, status_code=400)
 
     @app.get("/metricas", response_class=HTMLResponse, dependencies=limited)
     async def metrics_page():

@@ -82,6 +82,16 @@ CREATE TABLE IF NOT EXISTS prebookings (
     expires_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS prebookings_conv ON prebookings(conversation_id);
+
+-- Notas del personal: lo que la persona de recepción deja para el siguiente turno.
+CREATE TABLE IF NOT EXISTS staff_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    author TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS staff_notes_conv ON staff_notes(conversation_id, created_at);
 """
 
 

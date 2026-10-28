@@ -59,12 +59,18 @@ cosas: una cola visible, tareas con dueño y hora, y un handover de turno que no
 de quien se va.
 
 De eso, el prototipo no tenía nada: el panel solo mostraba una conversación si ya sabías su
-identificador. Lo agregado en esta iteración:
+identificador. Lo agregado:
 
 - **Cola de recepción** en `/panel` sin `conversation_id`: todas las conversaciones, ordenadas por
   riesgo, con el tiempo de espera, el paso del flujo y el estado de la pre-reserva.
+- **Resumen del turno**: conversaciones recibidas, preguntas resueltas, derivaciones, capturas
+  nocturnas, pre-reservas activas y cuántas esperan respuesta ahora.
+- **Notas del turno** por conversación, con autor y hora, para el handover.
+- **Login del personal** por cookie firmada: una nota o una confirmación tienen dueño.
 - Umbrales de color por los mismos 3 minutos del SLA, con el tiempo en horas cuando pasa de una hora.
-- Navegación entre cola y detalle, sin perder el token de la sesión.
+
+La evidencia de mercado que respalda estas decisiones, con las cifras reportadas por hoteleros, está
+en [mercado](mercado.md).
 
 ## Roadmap en tres fases
 

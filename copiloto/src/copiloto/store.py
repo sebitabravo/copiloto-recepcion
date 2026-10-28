@@ -129,6 +129,61 @@ def convert_prebooking(db: sqlite3.Connection, conversation_id: int) -> None:
                "('active', 'expired')", (conversation_id,))
 
 
+MAX_NOTE = 500
+
+
+def add_note(db: sqlite3.Connection, conversation_id: int, author: str, body: str, now: float) -> dict:
+    """Nota del turno: queda pegada a la conversación y la lee quien llegue después."""
+    text = " ".join(str(body or "").split())[:MAX_NOTE]
+    if not text:
+        raise ValueError("La nota está vacía")
+    who = " ".join(str(author or "recepción").split())[:40] or "recepción"
+    cursor = db.execute(
+        "INSERT INTO staff_notes(conversation_id, author, body, created_at) VALUES (?, ?, ?, ?)",
+        (conversation_id, who, text, now))
+    return {"id": cursor.lastrowid, "author": who, "body": text, "created_at": now}
+
+
+def list_notes(db: sqlite3.Connection, conversation_id: int, limit: int = 20) -> list[dict]:
+    rows = db.execute(
+        "SELECT id, author, body, created_at FROM staff_notes WHERE conversation_id = ? "
+        "ORDER BY created_at DESC LIMIT ?", (conversation_id, limit)).fetchall()
+    return [{"id": row["id"], "author": row["author"], "body": row["body"], "created_at": row["created_at"]}
+            for row in rows]
+
+
+def shift_summary(db: sqlite3.Connection, since: float, now: float) -> dict:
+    """Lo que pasó en el turno: es el handover que la recepción hoy escribe a mano en un cuaderno."""
+
+    def events(kind: str) -> int:
+        row = db.execute("SELECT COUNT(*) AS n FROM events WHERE kind = ? AND ts >= ? AND ts < ?",
+                         (kind, since, now)).fetchone()
+        return row["n"]
+
+    received = db.execute(
+        "SELECT COUNT(DISTINCT conversation_id) AS n FROM events WHERE kind = 'inbound' AND ts >= ? AND ts < ?",
+        (since, now)).fetchone()["n"]
+    pending = db.execute(
+        "SELECT COUNT(*) AS n FROM conversation_state "
+        "WHERE sla_started_at IS NOT NULL AND sla_stopped_at IS NULL").fetchone()["n"]
+    active = db.execute(
+        "SELECT COUNT(*) AS n FROM prebookings WHERE status = 'active' AND expires_at > ?", (now,)).fetchone()["n"]
+    booked = db.execute(
+        "SELECT COUNT(*) AS n FROM events WHERE kind = 'booking_confirmed' AND ts >= ? AND ts < ?",
+        (since, now)).fetchone()["n"]
+    return {
+        "since": since, "until": now,
+        "received": received,
+        "faq_answered": events("faq_answered"),
+        "night_capture": events("night_capture"),
+        "handoffs": events("handoff"),
+        "prebookings_active": active,
+        "prebookings_expired": events("prebooking_expired"),
+        "bookings_confirmed": booked,
+        "pending_human": pending,
+    }
+
+
 SAFE_PAYLOAD_KEYS = ("greeting", "in_shift", "complete", "inbound_ts", "faq_id", "status", "ok", "latency_ms",
                      "reason")
 
@@ -177,6 +232,7 @@ def purge_personal_data(db: sqlite3.Connection, now: float, retention_days: int,
     cursor_pre = db.execute("DELETE FROM prebookings WHERE created_at < ?", (cutoff,))
     cursor_msgs = db.execute("DELETE FROM processed_messages WHERE ts < ?", (cutoff,))
     cursor_ai = db.execute("DELETE FROM ai_sessions WHERE updated_at < ?", (cutoff,))
+    cursor_notes = db.execute("DELETE FROM staff_notes WHERE created_at < ?", (cutoff,))
     anonymized = 0
     for row in db.execute("SELECT id, payload FROM events WHERE ts < ? AND conversation_id > 0",
                           (cutoff,)).fetchall():
@@ -190,4 +246,4 @@ def purge_personal_data(db: sqlite3.Connection, now: float, retention_days: int,
                    (anonymous_id(row["conversation_id"], salt), row["conversation_id"], cutoff))
     return {"conversation_state": cursor_state.rowcount, "prebookings": cursor_pre.rowcount,
             "events_anonymized": anonymized, "processed_messages": cursor_msgs.rowcount,
-            "ai_sessions": cursor_ai.rowcount}
+            "ai_sessions": cursor_ai.rowcount, "staff_notes": cursor_notes.rowcount}

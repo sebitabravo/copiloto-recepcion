@@ -20,9 +20,10 @@ la confirma una persona en el PMS (en la demo, el modo `full` reserva en un PMS 
 | Panel de recepción | Cola con tiempos de espera, riesgo de SLA y detalle por conversación | http://localhost:8100/panel |
 
 El panel abre en la **cola**: todas las conversaciones ordenadas por riesgo, con el tiempo de espera
-y el paso del flujo. Recién al elegir una muestra el cronómetro y la pre-información del huésped.
+y el paso del flujo. Arriba muestra el **resumen del turno** —recibidas, resueltas, derivadas, capturas
+nocturnas, pre-reservas— y pide nombre y contraseña, para que cada **nota del turno** quede con autor.
 Los límites de escala y la comparación con la competencia están en
-[escalabilidad](docs/escalabilidad.md).
+[escalabilidad](docs/escalabilidad.md); la evidencia de mercado, en [mercado](docs/mercado.md).
 
 ```
 Huésped ─ widget web / Telegram / WhatsApp
