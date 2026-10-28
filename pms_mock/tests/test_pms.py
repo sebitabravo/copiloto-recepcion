@@ -134,7 +134,8 @@ def test_event_emitted_after_commit(client, monkeypatch):
         result = book(client, conversation_id=42)
     assert result.status_code == 201
     assert seen == [("http://events.test/event", {"kind": "booking_confirmed", "conversation_id": 42,
-                                               "booking_id": result.json()["booking_id"]})]
+                                               "booking_id": result.json()["booking_id"],
+                                               "source": "personal"})]
     response.raise_for_status.assert_called_once()
 
 
@@ -242,3 +243,32 @@ def test_admin_is_self_contained_html(client):
     assert "innerHTML" not in response.text
     assert "localStorage" not in response.text
     assert "sessionStorage" in response.text
+
+
+def test_booking_source_defaults_to_personal_and_accepts_ia(client):
+    first = book(client)
+    assert first.status_code == 201 and first.json()["source"] == "personal"
+    payload = {"guest_name": "Demo IA", "checkin": "2027-06-01", "checkout": "2027-06-03",
+               "room_code": "doble_con_jacuzzi", "adults": 2, "children": 0, "source": "ia"}
+    created = client.post("/api/v1/bookings", json=payload, headers=TOKEN)
+    assert created.status_code == 201 and created.json()["source"] == "ia"
+    stored = {row["booking_id"]: row["source"] for row in client.get("/api/v1/bookings", headers=TOKEN).json()}
+    assert stored[created.json()["booking_id"]] == "ia"
+    bad = client.post("/api/v1/bookings", json={**payload, "source": "otro"}, headers=TOKEN)
+    assert bad.status_code == 422
+
+
+def test_existing_database_without_source_column_is_migrated(tmp_path, monkeypatch):
+    import sqlite3
+    from pms_mock.main import initialize, load_rooms
+
+    path = tmp_path / "old.sqlite"
+    with sqlite3.connect(path) as old:
+        old.execute("CREATE TABLE bookings (booking_id INTEGER PRIMARY KEY AUTOINCREMENT, guest_name TEXT NOT NULL,"
+                    " checkin TEXT NOT NULL, checkout TEXT NOT NULL, room_code TEXT NOT NULL, adults INTEGER NOT NULL,"
+                    " children INTEGER NOT NULL, conversation_id INTEGER, simulated INTEGER NOT NULL DEFAULT 1)")
+        old.execute("INSERT INTO bookings(guest_name, checkin, checkout, room_code, adults, children)"
+                    " VALUES ('Antigua', '2027-01-01', '2027-01-02', 'doble_sin_vista', 1, 0)")
+    initialize(str(path), load_rooms(DEFAULT_HOTEL_PATH))
+    with sqlite3.connect(path) as migrated:
+        assert migrated.execute("SELECT source FROM bookings").fetchone() == ("personal",)

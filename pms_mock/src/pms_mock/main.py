@@ -6,7 +6,7 @@ import time
 from contextlib import asynccontextmanager, closing
 from datetime import date, datetime
 from pathlib import Path
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -68,11 +68,15 @@ def initialize(path: str, rooms: list[RoomType]) -> None:
                 adults INTEGER NOT NULL CHECK (adults > 0),
                 children INTEGER NOT NULL CHECK (children >= 0),
                 conversation_id INTEGER,
-                simulated INTEGER NOT NULL DEFAULT 1
+                simulated INTEGER NOT NULL DEFAULT 1,
+                source TEXT NOT NULL DEFAULT 'personal'
             );
             CREATE INDEX IF NOT EXISTS booking_dates
                 ON bookings(room_code, checkin, checkout);
         """)
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(bookings)")}
+        if "source" not in columns:
+            connection.execute("ALTER TABLE bookings ADD COLUMN source TEXT NOT NULL DEFAULT 'personal'")
         # Distribución simulada: dos unidades para los primeros ocho tipos del YAML.
         expected = [room.code for index, room in enumerate(rooms)
                     for _ in range(2 if index < 8 else 1)]
@@ -130,6 +134,8 @@ class BookingRequest(Stay):
     guest_name: str = Field(min_length=1, max_length=200)
     room_code: str = Field(min_length=1)
     conversation_id: int | None = None
+    # Quién crea la reserva: una persona de recepción o el asistente con IA (modo demo autónomo)
+    source: Literal["personal", "ia"] = "personal"
 
     @field_validator("guest_name")
     @classmethod
@@ -224,9 +230,10 @@ def create_app() -> FastAPI:
                     raise HTTPException(status_code=409, detail="No available units for these dates")
                 cursor = connection.execute(
                     """INSERT INTO bookings(guest_name, checkin, checkout, room_code,
-                       adults, children, conversation_id) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                       adults, children, conversation_id, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                     (payload.guest_name, payload.checkin.isoformat(), payload.checkout.isoformat(),
-                     payload.room_code, payload.adults, payload.children, payload.conversation_id),
+                     payload.room_code, payload.adults, payload.children, payload.conversation_id,
+                     payload.source),
                 )
                 booking_id = cursor.lastrowid
                 connection.commit()
@@ -237,7 +244,7 @@ def create_app() -> FastAPI:
         if event_url:
             background_tasks.add_task(emit_event, event_url, {
                 "kind": "booking_confirmed", "conversation_id": payload.conversation_id,
-                "booking_id": booking_id,
+                "booking_id": booking_id, "source": payload.source,
             })
         return {"booking_id": booking_id, **payload.model_dump(), "simulated": True}
 
