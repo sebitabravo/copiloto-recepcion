@@ -9,7 +9,8 @@
     * { box-sizing: border-box; }
     body { margin: 0; }
     main { max-width: 1120px; margin: auto; padding: 2rem 1rem; }
-    h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); margin-bottom: .5rem; }
+    h1 { font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif; font-weight: 400;
+         letter-spacing: -.02em; font-size: clamp(1.8rem, 4vw, 2.6rem); margin-bottom: .5rem; }
     h2 { font-size: 1.1rem; margin-top: 0; }
     .subtitle, #refresh-status, footer { color: #634d38; }
     .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .8rem; margin: 1.6rem 0; }
@@ -18,13 +19,18 @@
     .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 1rem; }
     .tile, .events { background: #fffaf2; border: 1px solid #c8b394; border-radius: .7rem; padding: 1.3rem; }
     .tile { border-top: 4px solid #8C6A3F; }
-    .value { font-size: 1.7rem; font-weight: 700; margin: .6rem 0; overflow-wrap: anywhere; }
+    .value { font-size: 1.7rem; font-weight: 700; margin: .6rem 0; overflow-wrap: anywhere;
+             font-variant-numeric: tabular-nums; }
     .detail { font-size: .9rem; margin: 0; }
     .events { margin-top: 1.5rem; overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
     caption { text-align: left; padding-bottom: .8rem; }
     th, td { text-align: left; padding: .7rem .3rem; border-bottom: 1px solid #d5c5ae; }
-    td:last-child, th:last-child { text-align: right; }
+    td:last-child, th:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+    /* La barra da proporción sin sumar una librería de gráficos. */
+    td.bar { position: relative; }
+    td.bar span { position: absolute; right: 0; bottom: 2px; height: 2px; border-radius: 2px;
+                  background: #8c6a3f; opacity: .45; }
     footer { margin-top: 1.5rem; font-size: .85rem; }
   </style>
 </head>
@@ -123,13 +129,21 @@
         setValue("ai-bookings", data.ai_bookings, "");
         const tbody = document.getElementById("event-counts");
         tbody.replaceChildren();
-        for (const [kind, count] of Object.entries(data.counts).sort()) {
+        const counts = Object.entries(data.counts).sort();
+        const max = Math.max(1, ...counts.map(([, count]) => count ?? 0));
+        for (const [kind, count] of counts) {
           const row = document.createElement("tr");
           const label = document.createElement("th");
           label.scope = "row";
           label.textContent = kind;
           const value = document.createElement("td");
           value.textContent = count == null ? "—" : numberFormat.format(count);
+          if (count != null) {
+            value.classList.add("bar");
+            const bar = document.createElement("span");
+            bar.style.width = `${Math.round((count / max) * 100)}%`;
+            value.append(bar);
+          }
           row.append(label, value);
           tbody.append(row);
         }
