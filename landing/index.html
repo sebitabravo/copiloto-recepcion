@@ -4,228 +4,51 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Copiloto de Recepción · demo Hotel Bordeluz</title>
-<meta name="description" content="Prueba en un minuto el copiloto de recepción de Hotel Bordeluz: ubicación, respuestas aprobadas y disponibilidad simulada, siempre con confirmación humana.">
-<style>
-  :root {
-    color-scheme:light; --bg:#f6f0e6; --card:#fffaf2; --ink:#2f2418; --muted:#6b5b46;
-    --line:#e3d6c0; --accent:#8c6a3f; --accent-text:#795a34; --accent-ink:#fff; --soft:#eee2cf;
-    --banner:#2f2418; --banner-ink:#fffaf2; --success:#2d633c; --shadow:0 16px 48px #49341c0a;
-  }
-  @media (prefers-color-scheme:dark) {
-    :root {
-      color-scheme:dark; --bg:#1d1812; --card:#272017; --ink:#efe5d3; --muted:#b5a58c;
-      --line:#3b3226; --accent:#d1a971; --accent-text:#d1a971; --accent-ink:#1d1812; --soft:#352b1e;
-      --banner:#efe5d3; --banner-ink:#1d1812; --success:#9bd2a3; --shadow:0 16px 48px #0002;
-    }
-  }
-  * { box-sizing:border-box; }
-  html { scroll-behavior:smooth; scroll-padding-top:24px; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 system-ui,-apple-system,sans-serif; }
-  h1,h2,h3,p { margin-top:0; }
-  h1 { font-size:clamp(2.4rem,6vw,4.5rem); line-height:1.08; letter-spacing:-.055em; margin-bottom:14px; }
-  h2 { font-size:clamp(1.55rem,3vw,2.15rem); line-height:1.2; letter-spacing:-.035em; margin-bottom:12px; }
-  h3 { font-size:1.08rem; line-height:1.35; margin-bottom:10px; }
-  a { color:var(--accent-text); text-underline-offset:4px; }
-  button,a,summary { -webkit-tap-highlight-color:transparent; }
-  button { font:inherit; cursor:pointer; }
-  :focus-visible { outline:3px solid var(--accent); outline-offset:4px; }
-  .wrap { width:100%; max-width:1152px; margin:0 auto; padding-left:16px; padding-right:16px; }
-  .skip { position:fixed; top:8px; left:16px; transform:translateY(-180%); z-index:100;
-          padding:12px 18px; background:var(--card); color:var(--ink); border-radius:8px; }
-  .skip:focus { transform:translateY(0); }
-  .banner { background:var(--banner); color:var(--banner-ink); text-align:center; padding:10px 16px;
-            font-size:.78rem; letter-spacing:.015em; }
-  .topbar { display:flex; justify-content:space-between; align-items:center; gap:16px; padding-top:20px;
-            padding-bottom:20px; border-bottom:1px solid var(--line); }
-  .brand { color:var(--ink); font-size:.85rem; font-weight:750; letter-spacing:.1em; text-transform:uppercase;
-           display:flex; align-items:center; gap:10px; }
-  .brand svg { width:26px; height:26px; color:var(--accent); }
-  nav { display:flex; gap:18px; flex-wrap:wrap; }
-  nav a { min-height:44px; display:inline-flex; align-items:center; font-size:.85rem; color:var(--muted); }
-  .hero { padding:64px 0 58px; display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);
-          gap:64px; align-items:center; }
-  .eyebrow { color:var(--accent-text); text-transform:uppercase; letter-spacing:.16em; font-size:.73rem;
-             font-weight:750; margin-bottom:18px; }
-  .subtitle { color:var(--accent-text); font-size:1.35rem; margin-bottom:20px; }
-  .lead { max-width:550px; color:var(--muted); font-size:1.05rem; }
-  .actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:28px; }
-  .button { display:inline-flex; justify-content:center; align-items:center; gap:10px; min-height:48px;
-            padding:12px 20px; border:1px solid var(--line); border-radius:10px; background:var(--card);
-            color:var(--ink); text-decoration:none; font-weight:650; }
-  .button.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent-text); }
-  .button:hover,.copy:hover { filter:brightness(.95); }
-  .button svg { width:20px; height:20px; }
-  .small { font-size:.82rem; color:var(--muted); }
-  .hero .small { margin:18px 0 0; }
-  .status { min-height:1.6em; margin:12px 0 0; color:var(--muted); font-size:.88rem; }
-  .retreat { min-height:350px; border-radius:160px 160px 20px 20px; padding:36px 28px 24px;
-             display:flex; flex-direction:column; justify-content:flex-end; position:relative;
-             background:radial-gradient(circle at 70% 24%,#fffaf2 0 9%,transparent 9.3%),
-               linear-gradient(155deg,transparent 52%,#8c6a3f33 52.3% 68%,transparent 68.3%),
-               linear-gradient(25deg,#8c6a3f44 0 35%,transparent 35.3%),
-               linear-gradient(180deg,var(--soft),var(--card)); border:1px solid var(--line); }
-  .retreat-card { background:var(--card); border:1px solid var(--line); padding:20px; border-radius:14px;
-                  box-shadow:var(--shadow); }
-  .retreat-card p { margin-bottom:8px; }
-  .retreat-card strong { font-size:1.1rem; display:block; margin-bottom:6px; }
-  .pill { display:inline-flex; align-items:center; gap:6px; color:var(--accent-text); font-size:.75rem;
-          font-weight:650; border:1px solid var(--line); border-radius:99px; padding:5px 10px; }
-  section { padding:48px 0; border-top:1px solid var(--line); }
-  .section-intro { max-width:660px; color:var(--muted); margin-bottom:26px; }
-  .steps { list-style:none; padding:0; margin:0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
-  .card { min-width:0; background:var(--card); border:1px solid var(--line); border-radius:16px;
-          padding:26px; box-shadow:var(--shadow); }
-  .step-number { width:34px; height:34px; border-radius:50%; background:var(--soft); color:var(--accent-text);
-                 display:grid; place-items:center; font-size:.9rem; font-weight:750; margin-bottom:20px; }
-  .card p { color:var(--muted); font-size:.9rem; }
-  .example { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;
-             padding:8px 8px 8px 12px; margin-top:10px; border-radius:10px; background:var(--bg);
-             border:1px solid var(--line); }
-  .example span { min-width:0; overflow-wrap:anywhere; font-size:.85rem; flex:1 1 110px; }
-  .copy { min-height:44px; padding:8px 12px; color:var(--accent-text); background:var(--card);
-          border:1px solid var(--line); border-radius:7px; font-size:.8rem; font-weight:650; }
-  .human-note { margin:20px 0 0; color:var(--muted); font-size:.9rem; }
-  .features { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:18px; }
-  .icon { width:44px; height:44px; padding:10px; background:var(--soft); color:var(--accent);
-          border-radius:12px; margin-bottom:18px; }
-  .features p { margin-bottom:0; }
-  .location { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:30px; align-items:center; }
-  .location p { margin-bottom:12px; }
-  address { font-style:normal; font-weight:650; font-size:1.05rem; }
-  .location .button { margin-top:8px; }
-  .views { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
-  .view { text-decoration:none; display:flex; flex-direction:column; color:var(--ink); }
-  .view:hover { border-color:var(--accent-text); }
-  .view h3 { display:flex; justify-content:space-between; gap:12px; }
-  .view p { margin-bottom:16px; }
-  .view .small { margin-top:auto; color:var(--accent-text); }
-  .questions { max-width:820px; }
-  details { border-bottom:1px solid var(--line); }
-  summary { cursor:pointer; padding:20px 8px; min-height:56px; font-weight:650; }
-  details p { padding:0 8px 20px; margin-bottom:0; color:var(--muted); }
-  details p a { display:inline-flex; align-items:center; min-height:44px; }
-  footer { border-top:1px solid var(--line); padding:28px 0 110px; color:var(--muted); font-size:.8rem; }
-  footer p { max-width:830px; }
-  .copy-fallback { position:fixed; left:0; top:0; width:1px; height:1px; opacity:0; }
-  @media (max-width:900px) {
-    .hero { gap:28px; }
-    .features { grid-template-columns:repeat(2,minmax(0,1fr)); }
-    .steps { grid-template-columns:minmax(0,1fr); }
-  }
-  @media (max-width:600px) {
-    .topbar { align-items:flex-start; flex-direction:column; gap:4px; }
-    nav { gap:20px; }
-    .hero { grid-template-columns:minmax(0,1fr); gap:30px; padding:36px 0; }
-    .retreat { min-height:260px; border-radius:110px 110px 18px 18px; padding:24px 18px 18px; }
-    .features,.location,.views { grid-template-columns:minmax(0,1fr); }
-    section { padding:32px 0; }
-    .card { padding:22px; }
-    .actions .button { flex:1 1 auto; }
-    .location { gap:18px; }
-  }
-  @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
-</style>
+<meta name="description" content="Conversa con el asistente de Hotel Bordeluz y descubre cómo consulta herramientas y crea reservas ficticias en un PMS simulado.">
+<link rel="stylesheet" href="demo.css">
 </head>
 <body>
 <a class="skip" href="#main">Saltar al contenido</a>
 <div class="banner" role="note">Prototipo académico INNOVA3 · INACAP, no es el sitio oficial de Hotel Bordeluz.</div>
-<header class="wrap">
-  <div class="topbar">
-    <div class="brand">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-        <path d="M3 19h18M5 19V9l7-5 7 5v10M9 19v-6h6v6M12 2v2"/>
-      </svg>
-      Bordeluz · Prototipo
-    </div>
-    <nav aria-label="Navegación principal">
-      <a href="#probar">Cómo probarlo</a><a href="#vistas">Vistas del prototipo</a>
-    </nav>
+<header class="hero-shell">
+  <div class="wrap topbar"><a class="brand" href="#">BORDELUZ <span>· laboratorio de recepción</span></a>
+    <nav aria-label="Navegación principal"><a href="#demo">Demo en vivo</a><a href="#como-funciona">Cómo funciona</a><a href="#vistas">El prototipo</a></nav>
   </div>
-  <div class="hero">
-    <div>
-      <p class="eyebrow">Cerca del huésped. Junto a recepción.</p>
-      <h1>Copiloto de Recepción</h1>
-      <p class="subtitle">demo Hotel Bordeluz</p>
-      <p class="lead">Resuelve dudas y consulta disponibilidad simulada en un chat sencillo, con una persona de recepción a cargo de confirmar cada reserva.</p>
-      <div class="actions">
-        <button class="button primary" id="open-chat" type="button">
-          Abrir el chat
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
-            <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2V11.5a9.5 9.5 0 0 1 19 0ZM7 10h10M7 14h6"/>
-          </svg>
-        </button>
-        <a class="button" href="#probar">Cómo probarlo <span aria-hidden="true">↓</span></a>
-      </div>
-      <p id="chat-status" class="status" role="status" aria-live="polite"></p>
-      <p class="small">Sin inteligencia artificial · Respuestas aprobadas · Confirmación humana</p>
-    </div>
-    <aside class="retreat" aria-label="La recepción, siempre en el centro">
-      <div class="retreat-card">
-        <p class="eyebrow">Una bienvenida más clara</p>
-        <strong>Primero, orientarte.<br>Después, acompañarte.</strong>
-        <p class="small">Ubicación, servicios y pre-información para que recepción continúe la conversación.</p>
-        <span class="pill">Disponibilidad ≠ reserva confirmada</span>
-      </div>
-    </aside>
-  </div>
+  <div class="wrap hero"><div><p class="eyebrow">Hospitalidad, con nuevas herramientas</p>
+    <h1>Una conversación.<br>Una mejor bienvenida.</h1>
+    <p class="subtitle">Copiloto de Recepción · demo Hotel Bordeluz</p>
+    <p class="lead">Pregunta, explora una estadía y mira cómo el asistente consulta al hotel y al PMS simulado, paso a paso.</p>
+    <div class="actions"><a class="button primary" href="#demo">Probar la demo <span aria-hidden="true">↗</span></a><a class="button" href="#como-funciona">Cómo funciona ↓</a></div>
+  </div><aside class="hero-note"><span class="orb" aria-hidden="true">✦</span><p class="eyebrow">No es magia. Son herramientas.</p><strong>La conversación a la izquierda.<br>Las acciones, a la vista.</strong><p>Un pequeño laboratorio para entender qué ocurre detrás de cada respuesta.</p><span class="pill">Todo es ficticio · Sin reservas reales</span></aside></div>
 </header>
 <main id="main" class="wrap" tabindex="-1">
-  <section id="probar" aria-labelledby="try-title">
-    <p class="eyebrow">Tu primera conversación</p>
-    <h2 id="try-title">Pruébalo en 1 minuto</h2>
-    <p class="section-intro">Abre el chat, copia un mensaje y pégalo allí. Sigue las preguntas del copiloto: tú marcas el ritmo.</p>
-    <ol class="steps">
-      <li class="card">
-        <span class="step-number" aria-hidden="true">1</span>
-        <h3>Saluda y ubícate</h3>
-        <p>La bienvenida incluye el aviso de privacidad y la ubicación del hotel, antes de pedir datos.</p>
-        <div class="example"><span>hola</span><button class="copy" type="button" aria-label="Copiar mensaje hola">Copiar</button></div>
-      </li>
-      <li class="card">
-        <span class="step-number" aria-hidden="true">2</span>
-        <h3>Haz una pregunta</h3>
-        <p>Prueba una consulta sobre los servicios. Recibirás información aprobada con su fuente.</p>
-        <div class="example"><span>¿tienen piscina?</span><button class="copy" type="button" aria-label="Copiar pregunta sobre la piscina">Copiar</button></div>
-      </li>
-      <li class="card">
-        <span class="step-number" aria-hidden="true">3</span>
-        <h3>Consulta una estadía</h3>
-        <p>Empieza por reservar; luego envía las fechas y responde cuántos adultos y niños viajarán cuando el chat lo pregunte.</p>
-        <div class="example"><span>quiero reservar</span><button class="copy" type="button" aria-label="Copiar mensaje quiero reservar">Copiar</button></div>
-        <div class="example"><span id="example-dates">Preparando fechas futuras…</span><button class="copy" type="button" id="copy-dates" disabled aria-label="Copiar fechas de ejemplo">Copiar</button></div>
-        <div class="example"><span>2 adultos y 1 niño</span><button class="copy" type="button" aria-label="Copiar ejemplo de huéspedes">Copiar</button></div>
-        <p class="small">Las fechas de ejemplo se calculan a 120 días desde hoy, por 3 noches.</p>
-      </li>
-    </ol>
-    <p class="human-note">¿Prefieres hablar con alguien? Escribe <strong>«recepción»</strong> en cualquier momento.</p>
-    <p id="copy-status" class="status" role="status" aria-live="polite" aria-atomic="true"></p>
-    <noscript><p>Activa JavaScript para cargar el chat, copiar mensajes y generar fechas de ejemplo.</p></noscript>
-  </section>
-
-  <section aria-labelledby="features-title">
-    <p class="eyebrow">Orientar, no reemplazar</p>
-    <h2 id="features-title">Qué hace</h2>
-    <p class="section-intro">Un flujo determinista, sin IA: el copiloto prepara la consulta y recepción toma las decisiones.</p>
-    <div class="features">
-      <article class="card">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
-        <h3>Ubicación primero</h3><p>Te sitúa en Molco, entre Villarrica y Pucón, antes de pedir datos de tu estadía.</p>
-      </article>
-      <article class="card">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 3h14v18H5zM8 7h8M8 11h8m-8 5 2 2 5-5"/></svg>
-        <h3>Respuestas aprobadas con fuente</h3><p>Resuelve preguntas frecuentes con contenido del hotel y señala de dónde proviene.</p>
-      </article>
-      <article class="card">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 5h16v16H4zM4 9h16M8 2v6M16 2v6m-9 6h3m3 0h4m-10 4h3"/></svg>
-        <h3>Lectura fechada del PMS</h3><p>Muestra cupos y precios simulados con fecha y hora: pendiente de confirmación por recepción.</p>
-      </article>
-      <article class="card">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M9 2h6M12 5V2m0 6v5l3 2M18 6l2-2"/></svg>
-        <h3>Traspaso con cronómetro de 3 minutos</h3><p>Entrega el contexto a una persona. Dentro del turno, activa una meta de 3 minutos para la primera respuesta humana.</p>
-      </article>
+  <section id="demo" aria-labelledby="demo-title">
+    <div class="section-heading"><div><p class="eyebrow">Prueba, pregunta, descubre</p><h2 id="demo-title">Tu próxima estadía empieza aquí</h2></div><span class="pill" id="model-label">Conectando con el asistente…</span></div>
+    <p class="disclaimer">Demo con IA de un tercero (DeepSeek). Todo es ficticio: no escribas datos personales reales. Las reservas se crean en un PMS simulado.</p>
+    <p id="capability" class="small">Consultando las capacidades de este servidor…</p>
+    <div id="guided-banner" class="notice" hidden>La IA no está configurada en este servidor: el asistente responde con el flujo guiado (sin IA)</div>
+    <div id="status-error" class="notice error" hidden><span></span><button type="button">Reintentar</button></div>
+    <div class="demo-grid">
+      <div class="phone-column">
+        <div class="phone">
+          <div class="device-top" aria-hidden="true"><span></span></div>
+          <div class="phone-header"><div class="avatar" aria-hidden="true">B</div><div><strong>Copiloto de Recepción</strong><p><span id="status-dot" class="status-dot"></span><span id="connection-label">Preparando la demo</span></p></div></div>
+          <div id="messages" class="messages" tabindex="0" aria-label="Historial de la conversación"></div>
+          <div id="typing" class="typing" hidden aria-hidden="true"><i></i><i></i><i></i><span>Preparando una respuesta</span></div>
+          <div id="chat-error" class="chat-error" hidden><span role="alert"></span><button type="button">Reintentar</button></div>
+          <div id="rate-status" class="rate-status" role="status" aria-live="polite" hidden></div>
+          <form id="chat-form" class="composer"><label class="sr-only" for="message-input">Tu mensaje al asistente</label><textarea id="message-input" rows="2" maxlength="400" placeholder="Escribe tu mensaje…" aria-describedby="input-help char-count"></textarea><div class="composer-bottom"><span id="char-count">0/400</span><button id="send" class="button primary" type="submit" disabled>Enviar <span aria-hidden="true">↑</span></button></div><p id="input-help">Enter para enviar · Shift + Enter para otra línea</p></form>
+        </div>
+        <button id="reset" class="text-button" type="button">↻ Reiniciar conversación</button>
+      </div>
+      <aside class="thinking card" aria-labelledby="thinking-title"><div class="thinking-heading"><span class="pill">TRAZA EN VIVO</span><h2 id="thinking-title">Así piensa la IA</h2><p>No mostramos pensamientos internos: aquí ves las herramientas y acciones que devuelve el servidor.</p></div><div class="usage"><span id="response-time">Respuesta en — s</span><span id="messages-left">Mensajes restantes: —</span></div><div id="timeline-empty" class="timeline-empty"><span aria-hidden="true">✧</span><h3>Cada respuesta tiene un recorrido</h3><p>Envía un mensaje y aparecerán las consultas al hotel, lecturas del PMS y reservas de demostración.</p></div><div id="timeline" class="timeline"></div></aside>
     </div>
+    <div class="guided card"><div><p class="eyebrow">¿No sabes por dónde empezar?</p><h3>Ver una demo guiada</h3><p>Los mensajes se envían uno a uno al asistente real de esta demo. Puedes detenerla cuando quieras.</p></div><div class="scenario-buttons"><button type="button" data-scenario="info">Consultar la ubicación y servicios</button><button type="button" data-scenario="booking">Reservar de punta a punta</button><button type="button" data-scenario="human">Hablar con una persona</button><button type="button" id="cancel-scenario" hidden>Detener demo guiada</button></div><p id="scenario-status" role="status" aria-live="polite"></p></div>
+    <div class="secondary-chat"><p>¿Quieres ver la atención desde el canal del hotel?</p><button id="open-chat" class="text-button" type="button">Probar en la bandeja real de recepción ↗</button><p id="chat-status" class="small" role="status" aria-live="polite"></p></div>
+    <div id="assistant-announcement" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+    <noscript><p>Activa JavaScript para conversar con el asistente y ver sus herramientas.</p></noscript>
   </section>
-
+  <section id="como-funciona" class="reveal" aria-labelledby="how-title"><p class="eyebrow">Del mensaje a la acción</p><h2 id="how-title">Cómo funciona</h2><p class="section-intro">La IA conversa; las herramientas consultan los datos y actúan sobre el entorno simulado.</p><ol class="flow"><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H9l-5 4Z"/></svg><span>01</span><h3>Huésped escribe</h3><p>Una pregunta o una solicitud de estadía.</p></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 3 6 6 3-6 3-3 6-3-6-6-3 6-3Z"/></svg><span>02</span><h3>La IA entiende y decide</h3><p>Elige qué herramienta usar según la consulta.</p></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h7v7H3zM14 4h7v7h-7zM8 15h8v6H8z"/></svg><span>03</span><h3>Hotel, PMS, reserva</h3><p>Datos del hotel y acciones de demostración.</p></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h8M8 12h8m-8 4h5"/></svg><span>04</span><h3>Respuesta y registro</h3><p>La respuesta y sus acciones quedan a la vista.</p></li></ol></section>
   <section aria-labelledby="location-title">
     <div class="card location">
       <div><p class="eyebrow">Un lugar para hacer una pausa</p><h2 id="location-title">Dónde estamos</h2>
@@ -244,7 +67,7 @@
     <p class="section-intro">Para explorar el trabajo del equipo. Estos accesos funcionan con el stack local levantado.</p>
     <div class="views">
       <a class="card view" href="http://localhost:3000" target="_blank" rel="noopener"><h3>Bandeja de recepción <span aria-hidden="true">↗</span></h3><p>Para recepción: responder conversaciones, revisar el contexto y continuar la atención.</p><span class="small">Se abre en otra pestaña</span></a>
-      <a class="card view" href="http://localhost:8200/admin" target="_blank" rel="noopener"><h3>PMS simulado <span aria-hidden="true">↗</span></h3><p>Para recepción: revisar los cupos y confirmar personalmente una reserva de demostración.</p><span class="small">Se abre en otra pestaña</span></a>
+      <a class="card view" href="http://localhost:8200/admin" target="_blank" rel="noopener"><h3>PMS simulado <span aria-hidden="true">↗</span></h3><p>Para recepción: revisar las reservas de demostración creadas en el PMS simulado.</p><span class="small">Se abre en otra pestaña</span></a>
       <a class="card view" href="http://localhost:8100/metricas" target="_blank" rel="noopener"><h3>Métricas <span aria-hidden="true">↗</span></h3><p>Para gerencia y evaluación: consultar tiempos, traspasos y resultados del prototipo.</p><span class="small">Se abre en otra pestaña</span></a>
       <a class="card view" href="http://localhost:8100/privacidad" target="_blank" rel="noopener"><h3>Aviso de privacidad <span aria-hidden="true">↗</span></h3><p>Para todas las personas: conocer qué datos se usan, con qué finalidad y durante cuánto tiempo.</p><span class="small">Se abre en otra pestaña</span></a>
     </div>
@@ -253,100 +76,15 @@
   <section aria-labelledby="faq-title">
     <p class="eyebrow">Antes de empezar</p><h2 id="faq-title">Preguntas frecuentes</h2>
     <div class="questions">
-      <details><summary>¿Esto confirma mi reserva?</summary><p>No. La confirma una persona de recepción. El chat solo recoge pre-información y muestra una lectura fechada del PMS simulado; no garantiza cupos ni bloquea habitaciones.</p></details>
-      <details><summary>¿Usa inteligencia artificial?</summary><p>No. Es un flujo determinista con respuestas aprobadas, sin un modelo de inteligencia artificial.</p></details>
+      <details><summary>¿Esto confirma mi reserva?</summary><p>En modo demo la IA crea una reserva de demostración en el PMS simulado si el servidor lo permite. En un hotel real la confirma una persona de recepción.</p></details>
+      <details><summary>¿Qué IA usa?</summary><p>Un modelo de lenguaje de DeepSeek con herramientas: cada dato sale del hotel o del PMS, no de la memoria del modelo. Si no está configurado, responde el flujo guiado sin IA.</p></details>
       <details><summary>¿Qué datos guarda?</summary><p>Solo lo mínimo para orientar y derivar la consulta, como el nombre del canal, mensajes, fechas y cantidad de huéspedes. Usa datos ficticios en esta demo. <a href="http://localhost:8100/privacidad" target="_blank" rel="noopener">Ver aviso de privacidad (otra pestaña)</a>.</p></details>
       <details><summary>¿Por qué dice que estamos ausentes?</summary><p>Porque nadie de recepción está conectado en la bandeja. Es el estado del equipo humano, no una confirmación de reserva; puedes probar el flujo del copiloto igualmente.</p></details>
     </div>
   </section>
 </main>
-<footer>
-  <div class="wrap">
-    <p><strong>Prototipo académico INNOVA3 · INACAP.</strong> Todos los datos de huéspedes son ficticios. Precios y disponibilidad del PMS son simulados. No es el sitio oficial del hotel ni un canal de reserva real.</p>
-    <p>Datos del hotel tomados de su sitio público; los marcados «pendiente de validar» requieren confirmación del hotel.</p>
-  </div>
-</footer>
+<footer><div class="wrap"><p><strong>Prototipo académico INNOVA3 · INACAP.</strong> Todos los datos de huéspedes son ficticios. Precios y disponibilidad del PMS son simulados. No es el sitio oficial del hotel ni un canal de reserva real.</p><p>Datos del hotel tomados de su sitio público; los marcados «pendiente de validar» requieren confirmación del hotel.</p></div></footer>
 <script src="config.js"></script>
-<script>
-  (() => {
-    const chatStatus = document.getElementById('chat-status');
-    const copyStatus = document.getElementById('copy-status');
-    const unavailable = 'El chat no está disponible: ¿levantaste el stack con make up?';
-    let copyVersion = 0;
-    window.addEventListener('chatwoot:ready', () => { chatStatus.textContent = 'El chat está listo. Puedes comenzar.'; });
-    document.getElementById('open-chat').addEventListener('click', () => {
-      if (window.$chatwoot && typeof window.$chatwoot.toggle === 'function') {
-        try {
-          window.$chatwoot.toggle('open');
-          chatStatus.textContent = 'Chat abierto. Escribe tu primer mensaje abajo a la derecha.';
-        } catch (_) { chatStatus.textContent = unavailable; }
-      } else { chatStatus.textContent = unavailable; }
-    });
-
-    function formatDate(value) {
-      return [String(value.getDate()).padStart(2, '0'), String(value.getMonth() + 1).padStart(2, '0'),
-        value.getFullYear()].join('/');
-    }
-    // Sumar días de calendario a mediodía evita desfases al cambiar el horario de verano.
-    const checkin = new Date();
-    checkin.setHours(12, 0, 0, 0);
-    checkin.setDate(checkin.getDate() + 120);
-    const checkout = new Date(checkin);
-    checkout.setDate(checkout.getDate() + 3);
-    document.getElementById('example-dates').textContent = `${formatDate(checkin)} al ${formatDate(checkout)}`;
-    document.getElementById('copy-dates').disabled = false;
-
-    function fallbackCopy(text) {
-      const previousFocus = document.activeElement;
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.className = 'copy-fallback';
-      textarea.setAttribute('readonly', '');
-      textarea.setAttribute('aria-label', 'Mensaje para copiar');
-      document.body.appendChild(textarea);
-      textarea.select();
-      let copied = false;
-      try { copied = document.execCommand('copy'); }
-      finally { textarea.remove(); if (previousFocus) previousFocus.focus({preventScroll:true}); }
-      return copied;
-    }
-    document.querySelectorAll('.copy').forEach(button => {
-      button.addEventListener('click', async () => {
-        const text = button.parentElement.querySelector('span').textContent;
-        const version = ++copyVersion;
-        let copied = false;
-        button.disabled = true;
-        copyStatus.textContent = '';
-        try {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            try { await navigator.clipboard.writeText(text); copied = true; }
-            catch (_) { copied = fallbackCopy(text); }
-          } else { copied = fallbackCopy(text); }
-        } catch (_) { copied = false; }
-        button.disabled = false;
-        if (version !== copyVersion) return;
-        copyStatus.textContent = copied ? '¡Copiado! Pega el mensaje en el chat.' :
-          'No se pudo copiar automáticamente. Selecciona el mensaje y cópialo manualmente.';
-        if (copied) {
-          button.textContent = '¡Copiado!';
-          window.setTimeout(() => { button.textContent = 'Copiar'; }, 1800);
-        }
-      });
-    });
-  })();
-  (function () {
-    var cfg = window.COPILOTO_CONFIG;
-    if (!cfg || !cfg.websiteToken) { return; }
-    window.chatwootSettings = { locale: "es", position: "right", type: "expanded_bubble",
-                                launcherTitle: "Habla con recepción" };
-    var script = document.createElement("script");
-    script.src = cfg.chatwootUrl + "/packs/js/sdk.js";
-    script.async = true;
-    script.onload = function () {
-      window.chatwootSDK.run({ websiteToken: cfg.websiteToken, baseUrl: cfg.chatwootUrl });
-    };
-    document.body.appendChild(script);
-  })();
-</script>
+<script src="demo.js"></script>
 </body>
 </html>

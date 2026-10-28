@@ -76,6 +76,10 @@ El primer arranque puede tardar varios minutos. Para detener: `make down`. Para 
 |---|---|---|
 | ![SLA](docs/img/05-sla-vencido.png) | ![PMS](docs/img/06-pms-admin.png) | ![Métricas](docs/img/07-metricas.png) |
 
+| La IA en acción: traza de herramientas |
+|---|
+| ![Demo con IA](docs/img/08-demo-ia.png) |
+
 ## Pruebas y operación
 
 ```bash
