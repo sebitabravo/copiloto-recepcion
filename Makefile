@@ -34,9 +34,13 @@ logs: ## Sigue los logs del copiloto y el PMS
 health: ## Espera y comprueba los healthchecks
 	./scripts/wait-healthy.sh
 
-test: ## Tests de copiloto y pms_mock
+test: ## Tests de copiloto, pms_mock y el puente de PMS
 	cd copiloto && uv run pytest -q
 	cd pms_mock && uv run pytest -q
+	cd pms_bridge && uv run pytest -q
+
+bridge: ## Levanta el puente Beds24 en 8300 (requiere BEDS24_* configurado)
+	cd pms_bridge && uv run uvicorn pms_bridge.main:app --port 8300
 
 e2e: ## 4 casos reales contra el stack levantado
 	uv run --with httpx python scripts/e2e.py

@@ -104,6 +104,23 @@ cd copiloto && ./.venv/bin/python -m pytest tests/test_pms_contract.py -q
 7. Revisar en el panel que la lectura muestre fecha y hora, y que la etiqueta `simulada`
    desaparezca.
 
+## Puente de referencia: Beds24
+
+El repositorio incluye un puente funcionando para **Beds24**, el PMS más frecuente entre alojamientos
+independientes de 10 a 40 habitaciones en Latinoamérica y el único de esa gama con API pública sin
+acuerdo de partner.
+
+```bash
+docker compose -f infra/docker-compose.yml --project-directory . --profile beds24 up -d beds24-bridge
+```
+
+El servicio escucha en `:8300` y expone el mismo contrato. Con `PMS_URL=http://beds24-bridge:8300` el
+copiloto lee el inventario real del hotel sin cambiar una línea.
+
+Cómo obtener las credenciales, cómo mapear las habitaciones y qué decisiones de traducción toma el
+puente (mínimo de cupos, promedio de precio, conversión de moneda) está en
+[pms_bridge/README.md](../pms_bridge/README.md).
+
 ## Si el API del proveedor no coincide
 
 Se escribe un puente, no un adaptador nuevo. El puente es un servicio pequeño que traduce:

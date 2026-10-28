@@ -111,6 +111,28 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # Puente Beds24 → contrato del copiloto. Solo se levanta con `--profile beds24`: el stack de la
+  # demo no lo necesita. Ver docs/conector-pms.md.
+  beds24-bridge:
+    profiles: ["beds24"]
+    build: ./pms_bridge
+    environment:
+      BEDS24_ACCESS_TOKEN: ${BEDS24_ACCESS_TOKEN:-}
+      BEDS24_REFRESH_TOKEN: ${BEDS24_REFRESH_TOKEN:-}
+      BEDS24_ROOMS: ${BEDS24_ROOMS:-[]}
+      BEDS24_CLP_RATE: ${BEDS24_CLP_RATE:-1}
+      BEDS24_TZ: ${TIMEZONE:-America/Santiago}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:8300:8300"
+    restart: unless-stopped
+
   copiloto:
     build: ./copiloto
     env_file:
