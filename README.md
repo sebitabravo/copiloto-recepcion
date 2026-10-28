@@ -75,11 +75,14 @@ El primer arranque puede tardar varios minutos. Para detener: `make down`. Para 
 |---|---|---|
 | ![SLA](docs/img/05-sla-vencido.png) | ![PMS](docs/img/06-pms-admin.png) | ![Métricas](docs/img/07-metricas.png) |
 
-## Pruebas
+## Pruebas y operación
 
 ```bash
+make help   # lista todos los comandos
 make test   # pytest de copiloto y pms_mock
 make e2e    # 4 casos reales contra el stack levantado (FAQ, disponibilidad, fuera de turno, PMS caído)
+make smoke  # construye las imágenes y comprueba que arrancan (también corre en CI)
+make backup # respaldo en caliente de Chatwoot y las bases SQLite en backups/
 ```
 
 ## Documentación
