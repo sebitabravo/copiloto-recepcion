@@ -14,6 +14,8 @@
   const messageList = get('messages');
   const sessionKey = 'bordeluz-demo-session';
   const money = new Intl.NumberFormat('es-CL', {style:'currency', currency:'CLP', maximumFractionDigits:0});
+  const timeFormat = new Intl.DateTimeFormat('es-CL', {hour:'2-digit', minute:'2-digit', hourCycle:'h23'});
+  const clockLabel = () => timeFormat.format(new Date());
   let sessionId = readSession();
   let busy = false;
   let scenarioRunning = false;
@@ -23,6 +25,12 @@
   let lastAssistant = null;
   let pinned = true;
   let turns = 0;
+
+  function setConnectionLabel(text) {
+    const label = get('connection-label');
+    label.dataset.base = text;
+    if (!busy) label.textContent = text;
+  }
 
   function create(tag, className, text) {
     const element = document.createElement(tag);
@@ -59,8 +67,16 @@
     });
     messageList.querySelectorAll('.quick-replies button').forEach(button => { button.disabled = blocked; });
     get('char-count').textContent = `${input.value.length}/400`;
-    get('typing').hidden = !busy;
+    // El indicador de escritura vive dentro del historial para caer al final de la conversación.
+    const typing = get('typing');
+    typing.hidden = !busy;
+    if (busy && typing.parentElement !== messageList) {
+      messageList.append(typing);
+      scrollToLatest();
+    }
     get('cancel-scenario').hidden = !scenarioRunning;
+    const connection = get('connection-label');
+    connection.textContent = busy ? 'escribiendo…' : (connection.dataset.base || connection.textContent);
   }
   function scrollToLatest() {
     if (pinned) messageList.scrollTop = messageList.scrollHeight;
@@ -87,10 +103,14 @@
     scrollToLatest();
   }
   function addMessage(role, text, replies = []) {
+    if (role === 'assistant') get('typing').hidden = true;
     const message = create('article', `message ${role}`);
     message.append(create('span', 'message-label', role === 'user' ? 'TÚ · DEMOSTRACIÓN' : 'COPILOTO'));
     const bubble = create('div', 'bubble');
     bubble.append(create('p', '', text));
+    const time = create('span', 'message-time', clockLabel());
+    if (role === 'user') time.append(create('span', 'ticks', '✓✓'));
+    bubble.append(time);
     message.append(bubble);
     messageList.append(message);
     if (role === 'assistant') {
@@ -124,7 +144,7 @@
 
   async function request(path, body) {
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 40000);
+    const timeout = window.setTimeout(() => controller.abort(), 90000);
     try {
       const options = {method:body === undefined ? 'GET' : 'POST', credentials:'omit',
         cache:'no-store', signal:controller.signal};
@@ -179,7 +199,7 @@
         'La IA puede crear la reserva de demostración por sí sola.' :
         'La IA no crea reservas: deja la solicitud lista para recepción.';
       document.querySelector('[data-scenario="booking"]').hidden = !aiEnabled;
-      get('connection-label').textContent = aiEnabled ? 'Demo con IA · lista para conversar' : 'Flujo guiado disponible';
+      setConnectionLabel(aiEnabled ? 'en línea' : 'flujo guiado');
       get('status-dot').classList.add('ready');
       if (!turns) get('messages-left').textContent = `Mensajes restantes: ${data.messages_per_session ?? '—'}`;
       updateInitialGreeting();
@@ -188,7 +208,7 @@
       get('status-error').hidden = false;
       get('status-error').querySelector('span').textContent = error.message;
       get('model-label').textContent = 'Conexión pendiente';
-      get('connection-label').textContent = 'No se pudo comprobar la conexión';
+      setConnectionLabel('sin conexión');
       get('status-dot').classList.remove('ready');
       // Sin una lectura nueva conservamos el último modo conocido, sin inventar capacidades.
       updateControls();
@@ -212,6 +232,12 @@
     svg.append(path);
     return svg;
   }
+  const toolSources = {
+    check_availability: 'PMS simulado',
+    get_hotel_info: 'catálogo del hotel',
+    create_booking: 'PMS simulado',
+    handoff_to_human: 'bandeja de recepción'
+  };
   function eventCard(event) {
     const card = create('article', 'event-card');
     if (event.type === 'tool_call') {
@@ -230,6 +256,8 @@
         });
       }
       card.append(argumentsList, create('p', '', event.summary || ''), create('p', '', `${event.ms ?? '—'} ms`));
+      // De dónde salió el dato: la traza nunca muestra un valor sin origen.
+      card.append(create('span', 'event-source', `fuente: ${toolSources[event.name] || 'servidor de la demo'}`));
     } else if (event.type === 'booking_created') {
       card.classList.add('booking-ticket');
       card.append(create('h3', '', `Reserva #${event.booking_id} creada en el PMS simulado`),
@@ -292,6 +320,7 @@
   }
   function clearConversation() {
     messageList.replaceChildren();
+    messageList.append(create('div', 'chat-date', 'Hoy'));
     get('timeline').replaceChildren();
     get('timeline-empty').hidden = false;
     get('response-time').textContent = 'Respuesta en — s';
@@ -420,6 +449,48 @@
     };
     document.body.appendChild(script);
   })();
+  // Barra fija: borde y progreso de lectura cuando la página ya se desplazó.
+  const topbar = get('topbar');
+  const progress = get('scroll-progress');
+  if (topbar && progress) {
+    let frame = 0;
+    const syncTopbar = () => {
+      frame = 0;
+      topbar.classList.toggle('scrolled', window.scrollY > 8);
+      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+      const ratio = scrollable > 0 ? Math.min(1, Math.max(0, window.scrollY / scrollable)) : 0;
+      progress.style.setProperty('--progress', ratio.toFixed(4));
+    };
+    const requestSync = () => { if (!frame) frame = window.requestAnimationFrame(syncTopbar); };
+    syncTopbar();
+    window.addEventListener('scroll', requestSync, {passive:true});
+    window.addEventListener('resize', requestSync);
+  }
+
+  // Paralaje de la escena del hero: solo con puntero fino y sin movimiento reducido.
+  const heroStage = get('hero-stage');
+  if (heroStage && !reducedMotion.matches && window.matchMedia('(hover:hover) and (pointer:fine)').matches) {
+    let frame = 0;
+    let pointerX = 0;
+    let pointerY = 0;
+    const applyParallax = () => {
+      frame = 0;
+      heroStage.style.setProperty('--ry', `${(pointerX * 10).toFixed(2)}deg`);
+      heroStage.style.setProperty('--rx', `${(-pointerY * 8).toFixed(2)}deg`);
+    };
+    heroStage.addEventListener('pointermove', event => {
+      const bounds = heroStage.getBoundingClientRect();
+      pointerX = (event.clientX - bounds.left) / bounds.width - 0.5;
+      pointerY = (event.clientY - bounds.top) / bounds.height - 0.5;
+      if (!frame) frame = window.requestAnimationFrame(applyParallax);
+    });
+    heroStage.addEventListener('pointerleave', () => {
+      pointerX = 0;
+      pointerY = 0;
+      if (!frame) frame = window.requestAnimationFrame(applyParallax);
+    });
+  }
+
   if ('IntersectionObserver' in window && !reducedMotion.matches) {
     const observer = new IntersectionObserver(entries => {
       entries.forEach(entry => {
@@ -431,6 +502,58 @@
       observer.observe(section);
     });
   }
+  // Conexiones en vivo: consultan endpoints reales y, si fallan, muestran el fallo.
+  const liveEndpoints = {
+    health: {
+      path: '/health?probe=readiness',
+      describe: (data, ms) => `Servicio ${data.status || 'sin estado'} · ${ms} ms de respuesta`
+    },
+    status: {
+      path: '/api/demo/status',
+      describe: data => data.ai_enabled ?
+        `Modelo ${data.model || 'sin nombre'} · ${data.messages_per_session} mensajes por sesión · ` +
+        (data.autonomous_booking ? 'reserva autónoma' : 'reserva asistida') :
+        'Sin IA configurada: responde el flujo guiado.'
+    },
+    metrics: {
+      path: '/metricas/data.json?days=7',
+      describe: data => {
+        // ai_tools llega como {herramienta: veces}; se muestra el total y la más usada.
+        const tools = Object.entries(data.ai_tools || {}).sort((a, b) => b[1] - a[1]);
+        const total = tools.reduce((sum, [, veces]) => sum + veces, 0);
+        const top = tools.length ? ` · más usada: ${tools[0][0]}` : '';
+        return `${data.ai_replies ?? 0} respuestas de IA · ${data.ai_bookings ?? 0} reservas · ` +
+          `${total} herramientas${top}`;
+      }
+    }
+  };
+  document.querySelectorAll('[data-live]').forEach(card => {
+    const spec = liveEndpoints[card.dataset.live];
+    const button = card.querySelector('.live-button');
+    const result = card.querySelector('.live-result');
+    if (!spec || !button || !result) return;
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      card.classList.remove('is-ok', 'is-error');
+      result.textContent = 'Consultando…';
+      const started = performance.now();
+      try {
+        const data = await request(spec.path);
+        result.textContent = spec.describe(data, Math.round(performance.now() - started));
+        card.classList.add('is-ok');
+      } catch (error) {
+        result.textContent = error.status === 0 ?
+          'Sin respuesta del servidor: levanta el stack y vuelve a intentar.' :
+          (error.message || 'No se pudo consultar este endpoint.');
+        card.classList.add('is-error');
+      } finally {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+      }
+    });
+  });
+
   clearConversation();
   loadStatus();
 })();

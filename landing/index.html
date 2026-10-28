@@ -5,58 +5,273 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Copiloto de Recepción · demo Hotel Bordeluz</title>
 <meta name="description" content="Conversa con el asistente de Hotel Bordeluz y descubre cómo consulta herramientas y crea reservas ficticias en un PMS simulado.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="demo.css">
 </head>
 <body>
 <a class="skip" href="#main">Saltar al contenido</a>
-<header class="hero-shell">
-  <div class="wrap topbar"><a class="brand" href="#">Bordeluz</a>
-    <nav aria-label="Navegación principal"><a href="#demo">Demo</a><a href="#como-funciona">Cómo funciona</a></nav>
+
+<div class="topbar-shell" id="topbar">
+  <div class="wrap topbar">
+    <a class="brand" href="#"><span class="brand-mark" aria-hidden="true">B</span>Bordeluz<span class="brand-tag">Copiloto de recepción</span></a>
+    <nav aria-label="Navegación principal">
+      <a href="#demo">Demo</a>
+      <a href="#en-vivo">En vivo</a>
+      <a href="#capacidades">Qué hace</a>
+      <a href="#como-funciona">Cómo funciona</a>
+      <a class="nav-cta" href="#demo">Probar</a>
+    </nav>
   </div>
+  <div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
+</div>
+
+<header class="hero-shell">
   <div class="wrap hero">
-    <div>
-      <h1>Asistente de recepción con IA</h1>
-      <p class="subtitle">Demo para el Hotel Boutique Bordeluz: conversa, mira qué herramientas usa y reserva en un PMS simulado.</p>
-      <div class="actions"><a class="button primary" href="#demo">Probar la demo</a><a class="button" href="#como-funciona">Cómo funciona</a></div>
+    <div class="hero-copy">
+      <p class="eyebrow">Demo · Hotel Boutique Bordeluz</p>
+      <h1>La recepción que <em>conversa, consulta y reserva.</em></h1>
+      <p class="subtitle">El huésped escribe por WhatsApp. El copiloto responde la ubicación y los servicios, verifica disponibilidad con el PMS y deja la reserva registrada, siempre marcada como demostración. Aquí puedes conversar con él y ver cada herramienta que usa.</p>
+      <div class="actions">
+        <a class="button primary" href="#demo">Probar la demo</a>
+        <a class="button ghost" href="#como-funciona">Ver cómo funciona <span aria-hidden="true">↗</span></a>
+      </div>
+      <dl class="metrics">
+        <div><dt>4 herramientas</dt><dd>consultadas en vivo</dd></div>
+        <div><dt>1 reserva</dt><dd>de punta a punta</dd></div>
+        <div><dt>100% ficticio</dt><dd>datos de demostración</dd></div>
+      </dl>
     </div>
-    <aside class="hero-overview" aria-labelledby="overview-title">
-      <h2 id="overview-title">Qué vas a ver</h2>
-      <ul>
-        <li>Un asistente que entiende lenguaje natural</li>
-        <li>Las herramientas que usa en cada respuesta</li>
-        <li>Una reserva de demostración creada en un PMS simulado</li>
-      </ul>
-    </aside>
+
+    <div class="stage" id="hero-stage" aria-hidden="true">
+      <div class="stage-glow"></div>
+      <div class="stage-orbit"></div>
+      <div class="tilt">
+        <div class="hero-phone">
+          <div class="hero-phone-status" aria-hidden="true"><span>9:41</span><i class="hero-camera"></i><span>▮▮ ⌁</span></div>
+          <div class="hero-chat">
+            <p class="hc hc-user">¿Tienen habitación para el finde?</p>
+            <p class="hc hc-bot">Sí, queda la Doble con Jacuzzi. ¿Para cuántas personas?</p>
+            <p class="hc hc-user">2 adultos y 1 niño</p>
+            <p class="hc hc-tool"><b aria-hidden="true">✓</b> check_availability · 148 ms</p>
+          </div>
+          <div class="hero-composer"><span>Escribe tu mensaje…</span><b>↑</b></div>
+        </div>
+        <div class="chip chip-a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 21V9l8-6 8 6v12M9 21v-7h6v7M3 21h18"/></svg>get_hotel_info<em>✓</em></div>
+        <div class="ticket-float"><strong>Reserva #8213</strong><span>Doble con Jacuzzi · 3 noches</span><em>$186.000</em></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker-track">
+      <span>get_hotel_info</span><i>·</i><span>check_availability</span><i>·</i><span>create_booking</span><i>·</i><span>handoff_to_human</span><i>·</i><span>PMS simulado</span><i>·</i><span>Chatwoot</span><i>·</i>
+      <span>get_hotel_info</span><i>·</i><span>check_availability</span><i>·</i><span>create_booking</span><i>·</i><span>handoff_to_human</span><i>·</i><span>PMS simulado</span><i>·</i><span>Chatwoot</span><i>·</i>
+    </div>
   </div>
 </header>
+
 <main id="main" class="wrap" tabindex="-1">
   <section id="demo" aria-labelledby="demo-title">
-    <div class="section-heading"><h2 id="demo-title">Pruébalo</h2><span class="pill" id="model-label">Conectando con el asistente…</span></div>
-    <p id="ai-disclaimer" class="disclaimer" hidden>Demo con IA de un tercero (DeepSeek). Todo es ficticio: no escribas datos personales reales. Las reservas se crean en un PMS simulado.</p>
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Demo en vivo</p>
+        <h2 id="demo-title">Conversa con el copiloto</h2>
+      </div>
+      <span class="pill" id="model-label">Conectando con el asistente…</span>
+    </div>
+    <p class="section-intro">Este es el canal de WhatsApp del hotel. Escribe como un huésped: el copiloto responde y, en la traza, ves las herramientas que invoca y lo que devuelven.</p>
+    <p id="ai-disclaimer" class="disclaimer" hidden>Demo con IA. Todo es ficticio: no escribas datos personales reales. Las reservas se crean en un PMS simulado.</p>
     <p id="capability" class="small" hidden></p>
     <div id="guided-banner" class="notice" hidden>La IA no está configurada en este servidor: el asistente responde con el flujo guiado (sin IA).</div>
     <div id="status-error" class="notice error" hidden><span></span><button type="button">Reintentar</button></div>
-    <div class="demo-grid">
-      <div class="phone-column">
-        <div class="phone">
-          <div class="device-top" aria-hidden="true"><span></span></div>
-          <div class="phone-header"><div class="avatar" aria-hidden="true">B</div><div><strong>Copiloto de Recepción</strong><p><span id="status-dot" class="status-dot"></span><span id="connection-label">Preparando la demo</span></p></div></div>
-          <div id="messages" class="messages" tabindex="0" aria-label="Historial de la conversación"></div>
-          <div id="typing" class="typing" hidden aria-hidden="true"><i></i><i></i><i></i><span>Preparando una respuesta</span></div>
-          <div id="chat-error" class="chat-error" hidden><span role="alert"></span><button type="button">Reintentar</button></div>
-          <div id="rate-status" class="rate-status" role="status" aria-live="polite" hidden></div>
-          <form id="chat-form" class="composer"><label class="sr-only" for="message-input">Tu mensaje al asistente</label><textarea id="message-input" rows="2" maxlength="400" placeholder="Escribe tu mensaje…" aria-describedby="input-help char-count"></textarea><div class="composer-bottom"><span id="char-count">0/400</span><button id="send" class="button primary" type="submit" disabled>Enviar <span aria-hidden="true">↑</span></button></div><p id="input-help">Enter para enviar · Shift + Enter para otra línea</p></form>
+
+    <div class="demo-stage">
+      <div class="demo-grid">
+        <div class="phone-column">
+          <div class="device">
+            <span class="device-side device-side-a" aria-hidden="true"></span>
+            <span class="device-side device-side-b" aria-hidden="true"></span>
+            <span class="device-camera" aria-hidden="true"></span>
+            <div class="phone">
+              <div class="device-status" aria-hidden="true"><span>9:41</span><span>▮▮ ⌁</span></div>
+              <div class="phone-header">
+                <span class="phone-back" aria-hidden="true">‹</span>
+                <div class="avatar" aria-hidden="true">B</div>
+                <div class="phone-contact">
+                  <strong>Hotel Borde Luz</strong>
+                  <p><span id="status-dot" class="status-dot"></span><span id="connection-label">Preparando la demo</span></p>
+                </div>
+                <span class="phone-call" aria-hidden="true">⋮</span>
+              </div>
+              <div id="messages" class="messages" tabindex="0" aria-label="Historial de la conversación"></div>
+              <div id="typing" class="typing" hidden aria-hidden="true"><i></i><i></i><i></i><span>Preparando una respuesta</span></div>
+              <div id="chat-error" class="chat-error" hidden><span role="alert"></span><button type="button">Reintentar</button></div>
+              <div id="rate-status" class="rate-status" role="status" aria-live="polite" hidden></div>
+              <form id="chat-form" class="composer">
+                <label class="sr-only" for="message-input">Tu mensaje al asistente</label>
+                <textarea id="message-input" rows="2" maxlength="400" placeholder="Escribe tu mensaje…" aria-describedby="input-help char-count"></textarea>
+                <div class="composer-bottom"><span id="char-count">0/400</span><button id="send" class="button primary send-button" type="submit" aria-label="Enviar mensaje" disabled><span aria-hidden="true">↑</span></button></div>
+                <p id="input-help">Enter envía · Shift + Enter agrega una línea</p>
+              </form>
+            </div>
+          </div>
+          <p class="device-caption">Vista simulada · la conversación sí corre contra el servidor de la demo.</p>
+          <button id="reset" class="text-button" type="button">↻ Reiniciar conversación</button>
         </div>
-        <button id="reset" class="text-button" type="button">↻ Reiniciar conversación</button>
-        <div class="secondary-chat"><button id="open-chat" class="text-button" type="button">Probar en la bandeja real de recepción</button><p>Es el canal real del hotel: la conversación llega a la bandeja de recepción.</p><p id="chat-status" class="small" role="status" aria-live="polite"></p></div>
+
+        <aside class="thinking card" aria-labelledby="thinking-title">
+          <div class="thinking-heading">
+            <p class="eyebrow">Traza</p>
+            <h2 id="thinking-title">Así piensa la IA</h2>
+            <p>No mostramos pensamientos internos: aquí ves las herramientas y acciones que devuelve el servidor.</p>
+          </div>
+          <div class="usage"><span id="response-time">Respuesta en — s</span><span id="messages-left">Mensajes restantes: —</span></div>
+          <div id="timeline-empty" class="timeline-empty">
+            <p>Envía un mensaje para ver las herramientas y acciones del asistente.</p>
+            <ul class="ghost-trace" aria-hidden="true">
+              <li><b>get_hotel_info</b><em>ubicación y servicios</em></li>
+              <li><b>check_availability</b><em>fechas y tarifa</em></li>
+              <li><b>create_booking</b><em>reserva en el PMS</em></li>
+              <li><b>handoff_to_human</b><em>derivación a recepción</em></li>
+            </ul>
+            <p class="ghost-note">Cada turno agrega una tarjeta por herramienta; una reserva creada agrega su comprobante.</p>
+          </div>
+          <div id="timeline" class="timeline"></div>
+        </aside>
       </div>
-      <aside class="thinking card" aria-labelledby="thinking-title"><div class="thinking-heading"><h2 id="thinking-title">Así piensa la IA</h2><p>No mostramos pensamientos internos: aquí ves las herramientas y acciones que devuelve el servidor.</p></div><div class="usage"><span id="response-time">Respuesta en — s</span><span id="messages-left">Mensajes restantes: —</span></div><p id="timeline-empty" class="timeline-empty">Envía un mensaje para ver las herramientas y acciones del asistente.</p><div id="timeline" class="timeline"></div></aside>
+      <div class="secondary-chat">
+        <button id="open-chat" class="text-button" type="button">Probar en la bandeja real de recepción</button>
+        <p>Es el canal real del hotel: la conversación llega a la bandeja de recepción.</p>
+        <p id="chat-status" class="small" role="status" aria-live="polite"></p>
+      </div>
     </div>
-    <div class="guided card"><div><h3>Ver una demo guiada</h3><p>Los mensajes se envían uno a uno al asistente real de esta demo. Puedes detenerla cuando quieras.</p></div><div class="scenario-buttons"><button type="button" data-scenario="info">Consultar la ubicación y servicios</button><button type="button" data-scenario="booking" hidden>Reservar de punta a punta</button><button type="button" data-scenario="human">Hablar con una persona</button><button type="button" id="cancel-scenario" hidden>Detener demo guiada</button></div><p id="scenario-status" role="status" aria-live="polite"></p></div>
+
+    <div class="guided card">
+      <div>
+        <p class="eyebrow">Guion</p>
+        <h3>Ver una demo guiada</h3>
+        <p>Los mensajes se envían uno a uno al asistente real de esta demo. Puedes detenerla cuando quieras.</p>
+      </div>
+      <div class="scenario-buttons">
+        <button type="button" data-scenario="info"><span aria-hidden="true">01</span>Consultar la ubicación y servicios</button>
+        <button type="button" data-scenario="booking" hidden><span aria-hidden="true">02</span>Reservar de punta a punta</button>
+        <button type="button" data-scenario="human"><span aria-hidden="true">03</span>Hablar con una persona</button>
+        <button type="button" id="cancel-scenario" hidden>Detener demo guiada</button>
+      </div>
+      <p id="scenario-status" role="status" aria-live="polite"></p>
+    </div>
     <div id="assistant-announcement" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     <noscript><p>Activa JavaScript para conversar con el asistente y ver sus herramientas.</p></noscript>
   </section>
-  <section id="como-funciona" class="reveal" aria-labelledby="how-title"><h2 id="how-title">Cómo funciona</h2><p class="section-intro">La IA conversa; las herramientas consultan los datos y actúan sobre el entorno simulado.</p><ol class="flow"><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H9l-5 4Z"/></svg><span>01</span><h3>Huésped escribe</h3><p>Una pregunta o una solicitud de estadía.</p></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 3 6 6 3-6 3-3 6-3-6-6-3 6-3Z"/></svg><span>02</span><h3>La IA entiende y decide</h3><p>Elige qué herramienta usar según la consulta.</p></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h7v7H3zM14 4h7v7h-7zM8 15h8v6H8z"/></svg><span>03</span><h3>Hotel, PMS, reserva</h3><p>Datos del hotel y acciones de demostración.</p></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h8M8 12h8m-8 4h5"/></svg><span>04</span><h3>Respuesta y registro</h3><p>La respuesta y sus acciones quedan a la vista.</p></li></ol>
+
+  <section id="en-vivo" class="reveal" aria-labelledby="live-title">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Conexiones en vivo</p>
+        <h2 id="live-title">No es solo una maqueta</h2>
+      </div>
+    </div>
+    <p class="section-intro">Estas tarjetas consultan el servidor de la demo cuando las usas. Si el entorno no está levantado, lo dicen: no inventan un resultado.</p>
+    <div class="live-grid">
+      <article class="live-card" data-live="health">
+        <div class="live-card-top"><span class="live-card-num">01</span><span class="live-dot" aria-hidden="true"></span></div>
+        <h3>Estado del copiloto</h3>
+        <p>Comprueba que el servicio y su base de datos respondan antes de atender.</p>
+        <button type="button" class="live-button">Consultar estado <span aria-hidden="true">→</span></button>
+        <p class="live-result" role="status" aria-live="polite">Aún no consultado.</p>
+      </article>
+      <article class="live-card" data-live="status">
+        <div class="live-card-top"><span class="live-card-num">02</span><span class="live-dot" aria-hidden="true"></span></div>
+        <h3>Modelo y límites</h3>
+        <p>Qué modelo responde, si puede reservar solo y cuántos mensajes permite por sesión.</p>
+        <button type="button" class="live-button">Ver configuración <span aria-hidden="true">→</span></button>
+        <p class="live-result" role="status" aria-live="polite">Aún no consultado.</p>
+      </article>
+      <article class="live-card" data-live="metrics">
+        <div class="live-card-top"><span class="live-card-num">03</span><span class="live-dot" aria-hidden="true"></span></div>
+        <h3>Actividad simulada</h3>
+        <p>Respuestas de IA, reservas creadas y herramientas ejecutadas en los últimos días.</p>
+        <button type="button" class="live-button">Leer métricas <span aria-hidden="true">→</span></button>
+        <p class="live-result" role="status" aria-live="polite">Aún no consultado.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="capacidades" class="reveal" aria-labelledby="cap-title">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Herramientas</p>
+        <h2 id="cap-title">Cuatro acciones, ninguna improvisada</h2>
+      </div>
+    </div>
+    <p class="section-intro">La IA no inventa datos: pide información a herramientas concretas y actúa solo con lo que devuelven.</p>
+    <ul class="capabilities">
+      <li class="capability">
+        <span class="cap-index" aria-hidden="true">01</span>
+        <span class="capability-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 21V9l8-6 8 6v12M9 21v-7h6v7M3 21h18"/></svg></span>
+        <h3>Lee el hotel</h3>
+        <p>Ubicación, servicios y políticas desde una fuente única.</p>
+        <code>get_hotel_info</code>
+      </li>
+      <li class="capability">
+        <span class="cap-index" aria-hidden="true">02</span>
+        <span class="capability-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5h16v16H4zM4 10h16M8 2v6M16 2v6m-8 6h3m2 0h3"/></svg></span>
+        <h3>Verifica disponibilidad</h3>
+        <p>Consulta el calendario y devuelve tarifa por fecha.</p>
+        <code>check_availability</code>
+      </li>
+      <li class="capability">
+        <span class="cap-index" aria-hidden="true">03</span>
+        <span class="capability-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 3h14v18H5zM8 8h8m-8 5 3 3 5-6"/></svg></span>
+        <h3>Crea la reserva</h3>
+        <p>Escribe la reserva en el PMS simulado y devuelve el número.</p>
+        <code>create_booking</code>
+      </li>
+      <li class="capability">
+        <span class="cap-index" aria-hidden="true">04</span>
+        <span class="capability-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 20v-2a6 6 0 0 1 12 0v2M10 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8 0 3 3-3 3m-2-3h5"/></svg></span>
+        <h3>Deriva a recepción</h3>
+        <p>Cierra el caso con una persona cuando hace falta criterio humano.</p>
+        <code>handoff_to_human</code>
+      </li>
+    </ul>
+  </section>
+
+  <section id="como-funciona" class="reveal" aria-labelledby="how-title">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Arquitectura</p>
+        <h2 id="how-title">Cómo funciona</h2>
+      </div>
+    </div>
+    <p class="section-intro">La IA conversa; las herramientas consultan los datos y actúan sobre el entorno simulado. Cada capa conoce solo la de abajo.</p>
+
+    <div class="how-grid">
+      <div class="how-visual">
+        <div class="stack3d" aria-hidden="true">
+          <div class="plate plate-1"></div>
+          <div class="plate plate-2"></div>
+          <div class="plate plate-3"></div>
+          <div class="plate plate-4"></div>
+        </div>
+        <ol class="layer-legend">
+          <li><i class="layer-dot layer-dot-1"></i>Huésped</li>
+          <li><i class="layer-dot layer-dot-2"></i>Copiloto IA</li>
+          <li><i class="layer-dot layer-dot-3"></i>Herramientas</li>
+          <li><i class="layer-dot layer-dot-4"></i>PMS simulado</li>
+        </ol>
+      </div>
+
+      <ol class="steps">
+        <li class="step"><span class="num" aria-hidden="true">01</span><div><h3>El huésped escribe</h3><p>Una pregunta, una solicitud de estadía o un caso que necesita a una persona.</p></div></li>
+        <li class="step"><span class="num" aria-hidden="true">02</span><div><h3>La IA entiende y decide</h3><p>El modelo elige qué herramienta usar y con qué argumentos.</p></div></li>
+        <li class="step"><span class="num" aria-hidden="true">03</span><div><h3>Hotel, PMS, reserva</h3><p>La herramienta consulta o escribe en el sistema simulado y devuelve el resultado.</p></div></li>
+        <li class="step"><span class="num" aria-hidden="true">04</span><div><h3>Respuesta y registro</h3><p>La respuesta vuelve al huésped y cada acción queda visible en la traza.</p></div></li>
+      </ol>
+    </div>
+
     <p class="prototype-links">El otro lado de la conversación:
       <a href="http://localhost:3000" target="_blank" rel="noopener">Bandeja de recepción</a>
       <span aria-hidden="true">·</span>
@@ -66,7 +281,27 @@
     </p>
   </section>
 </main>
-<footer><div class="wrap"><p><strong>Proyecto de portafolio · INNOVA3, INACAP.</strong> Todos los datos de huéspedes son ficticios. Precios y disponibilidad del PMS son simulados. No es el sitio oficial del hotel ni un canal de reserva real.</p><p><a href="http://localhost:8100/privacidad" target="_blank" rel="noopener">Aviso de privacidad</a></p></div></footer>
+
+<footer>
+  <div class="wrap footer-grid">
+    <div class="footer-brand">
+      <a class="brand" href="#"><span class="brand-mark" aria-hidden="true">B</span>Bordeluz</a>
+      <p>Copiloto de recepción con IA · demo de portafolio</p>
+    </div>
+    <nav class="footer-nav" aria-label="Enlaces del prototipo">
+      <a href="#demo">Demo</a>
+      <a href="#en-vivo">En vivo</a>
+      <a href="#capacidades">Qué hace</a>
+      <a href="#como-funciona">Cómo funciona</a>
+      <a href="http://localhost:3000" target="_blank" rel="noopener">Bandeja de recepción</a>
+      <a href="http://localhost:8200/admin" target="_blank" rel="noopener">PMS simulado</a>
+      <a href="http://localhost:8100/metricas" target="_blank" rel="noopener">Métricas</a>
+      <a href="http://localhost:8100/privacidad" target="_blank" rel="noopener">Aviso de privacidad</a>
+    </nav>
+    <div class="footer-legal"><p><strong>Proyecto de portafolio · INNOVA3, INACAP.</strong> Todos los datos de huéspedes son ficticios. Precios y disponibilidad del PMS son simulados. No es el sitio oficial del hotel ni un canal de reserva real.</p></div>
+  </div>
+</footer>
+
 <script src="config.js"></script>
 <script src="demo.js"></script>
 </body>
