@@ -32,10 +32,12 @@ El modelo propone; el código valida y ejecuta. Nada que diga el modelo se toma 
 ## Salvaguardas
 
 - **Datos del hotel**: salen de las herramientas, no de la memoria del modelo; lo `pendiente_validar` se dice como
-  tal.
-- **Reserva**: `create_booking` exige un «sí» explícito (`guest_confirmed`), una lectura del PMS de menos de
-  15 minutos con las mismas fechas y personas, que el tipo de habitación esté en esa lectura, un nombre válido
-  (sin dígitos, correos ni teléfonos) y como máximo 2 reservas por sesión. Es idempotente.
+  tal. Si la pregunta es sobre el hotel, el agente consulta `get_hotel_info` **antes** de responder, y una
+  respuesta que afirme datos sin ninguna herramienta se reemplaza por un texto seguro (`data_without_tool`).
+- **Reserva**: `create_booking` exige una lectura del PMS de menos de 15 minutos con las mismas fechas y personas,
+  que el tipo de habitación esté en esa lectura, un nombre válido (sin dígitos, correos ni teléfonos), como
+  máximo 2 reservas por sesión y, además del argumento `guest_confirmed` que propone el modelo, que el **último
+  mensaje del huésped** contenga una afirmación explícita: una pregunta o un «no» no cuentan. Es idempotente.
 - **Salida**: si el modelo afirma que algo quedó «confirmado» o «reservado» sin que `create_booking` haya
   respondido ok, el texto se reemplaza y se registra `ai_guardrail`. El resumen de una reserva real lo agrega el
   servidor, no el modelo.
@@ -46,7 +48,8 @@ El modelo propone; el código valida y ejecuta. Nada que diga el modelo se toma 
   la demo web 20 mensajes por minuto por IP, 30 por sesión y 300 por hora en total.
 - **Si el LLM falla**: el asistente avisa y continúa con el menú guiado; nunca queda mudo.
 - **Privacidad**: los eventos no guardan texto; el historial vive en `ai_sessions` y se borra con la retención
-  (las sesiones de la demo, a las 24 h). El aviso de privacidad informa que un tercero procesa los mensajes.
+  (las sesiones de la demo, a las 24 h). Con un proveedor externo, el aviso de privacidad informa que un tercero
+  procesa los mensajes; con el modelo local de [IA local](ia-local.md), los mensajes no salen del equipo.
 
 ## Relación con los informes
 

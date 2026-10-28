@@ -18,6 +18,18 @@ from copiloto.pms import PmsAdapter, PmsConflict, PmsUnavailable
 MAX_NIGHTS = 30
 MAX_BOOKINGS_PER_SESSION = 2
 GUEST_NAME = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ'.\- ]{2,79}$")
+# El «sí» no lo declara el modelo: se comprueba sobre el texto que escribió el huésped.
+CONFIRMATION = re.compile(
+    r"\b(sí|confirmo|confirmado|confirmada|dale|ok|okay|okey|perfecto|listo|reserva)\b", re.IGNORECASE)
+REFUSAL = re.compile(r"^\W*(no|nunca|cancel|mejor no)\b", re.IGNORECASE)
+
+
+def guest_said_yes(text: object) -> bool:
+    """Acepta la confirmación solo si el último mensaje del huésped la contiene sin ser una pregunta ni una negación."""
+    clean = str(text or "").strip()
+    if not clean or "?" in clean or REFUSAL.match(clean):
+        return False
+    return bool(CONFIRMATION.search(clean))
 TOPICS = ["ubicacion", "habitaciones", "servicios", "politicas", "promociones", "contacto", "faq"]
 
 LABELS = {
@@ -237,6 +249,20 @@ class ToolRunner:
                                       "instruccion": "Esa habitación no está entre las opciones disponibles para "
                                                      "esas fechas. Ofrece una de las opciones vigentes."},
                               "Esa habitación no está disponible para esas fechas")
+        # El nombre tiene que haberlo escrito el huésped: el modelo no puede inventarlo.
+        dicho = " ".join(str(m.get("content", "")) for m in self.session.history if m.get("role") == "user")
+        dicho = f"{dicho} {self.session.state.get('last_user_text', '')}".lower()
+        if name.split()[0].lower() not in dicho:
+            return ToolResult(False, {"error": "nombre_no_aportado",
+                                      "instruccion": "Todavía no tienes el nombre del huésped: pídelo antes de "
+                                                     "reservar."},
+                              "El nombre no lo dio el huésped")
+        # Último filtro antes de escribir: la confirmación debe estar en palabras del huésped.
+        if not guest_said_yes(self.session.state.get("last_user_text")):
+            return ToolResult(False, {"error": "confirmacion_no_verificada",
+                                      "instruccion": "El huésped no confirmó en su último mensaje: repite el "
+                                                     "resumen y pide un sí explícito."},
+                              "El huésped no confirmó explícitamente")
         for made in self.session.state.get("bookings", []):
             if (made["guest_name"], made["room_code"], made["checkin"], made["checkout"]) == (
                     name, room_code, checkin.isoformat(), checkout.isoformat()):

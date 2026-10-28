@@ -70,9 +70,27 @@ AI_ON = ("El asistente usa un modelo de lenguaje de un tercero ({provider}) para
          "retención.")
 
 
-def render(hotel: HotelData, ai_provider: str | None = None) -> str:
+AI_LOCAL = ("El asistente usa un modelo de lenguaje que se ejecuta en la misma infraestructura del hotel "
+            "({provider}): por este tratamiento, tus mensajes no se envían a proveedores externos. Aun así, esta "
+            "demostración usa datos ficticios: no escribas datos personales reales. Guardamos un historial acotado "
+            "de la conversación solo para que el asistente mantenga el hilo, y se borra con la retención.")
+
+LOCAL_HOSTS = ("localhost", "127.0.0.1", "host.docker.internal", "0.0.0.0")
+
+
+def _is_local(base_url: str) -> bool:
+    return any(host in (base_url or "") for host in LOCAL_HOSTS)
+
+
+def render(hotel: HotelData, ai_provider: str | None = None, ai_base_url: str = "") -> str:
+    if not ai_provider:
+        paragraph = AI_OFF
+    elif _is_local(ai_base_url):
+        paragraph = AI_LOCAL.format(provider=ai_provider)
+    else:
+        paragraph = AI_ON.format(provider=ai_provider)
     return PAGE.format(
-        ai_paragraph=escape(AI_ON.format(provider=ai_provider)) if ai_provider else AI_OFF,
+        ai_paragraph=escape(paragraph),
         hotel=escape(hotel.hotel["name"]),
         contact=escape(hotel.privacy["responsible_contact"]),
         retention=int(hotel.privacy["retention_days"]),

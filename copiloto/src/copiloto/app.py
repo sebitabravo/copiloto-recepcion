@@ -224,7 +224,7 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
 
     @app.get("/privacidad", response_class=HTMLResponse, dependencies=limited)
     async def privacy_page():
-        return privacy.render(hotel, settings.llm_model if agent is not None else None)
+        return privacy.render(hotel, settings.llm_model if agent is not None else None, settings.llm_base_url)
 
     demo_ip_limiter = SlidingWindowLimiter(settings.demo_ip_per_min, clock=clock)
     demo_global_limiter = SlidingWindowLimiter(settings.demo_global_per_hour, 3600, clock=clock)
@@ -260,7 +260,7 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
                 "model": settings.llm_model if agent is not None else None,
                 "autonomous_booking": settings.autonomous_booking and agent is not None,
                 "max_message_chars": DEMO_MAX_MESSAGE, "messages_per_session": settings.demo_messages_per_session,
-                "disclaimer": "Demo con IA de un tercero: no escribas datos personales reales."}
+                "disclaimer": "Demo con IA: no escribas datos personales reales."}
 
     @app.post("/api/demo/chat")
     async def demo_chat(request: Request):

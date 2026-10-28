@@ -33,6 +33,9 @@ class LlmReply:
 
 
 class LlmClient:
+    # El cliente declara si puede forzar una herramienta; los dobles de prueba no lo hacen.
+    supports_tool_choice = True
+
     def __init__(self, base_url: str, api_key: str, model: str, timeout_s: float = 25.0,
                  http: httpx.AsyncClient | None = None, retries: int = 1):
         self._url = f"{base_url.rstrip('/')}/chat/completions"
@@ -45,12 +48,12 @@ class LlmClient:
         self._extra = {"thinking": {"type": "disabled"}} if "deepseek" in base_url else {}
 
     async def chat(self, messages: list[dict], tools: list[dict] | None = None, max_tokens: int = 500,
-                   temperature: float = 0.3) -> LlmReply:
+                   temperature: float = 0.3, tool_choice: str = "auto") -> LlmReply:
         body = {"model": self._model, "messages": messages, "max_tokens": max_tokens,
                 "temperature": temperature, "stream": False, **self._extra}
         if tools:
             body["tools"] = tools
-            body["tool_choice"] = "auto"
+            body["tool_choice"] = tool_choice
         last_error = "sin intentos"
         for attempt in range(self._retries + 1):
             try:
