@@ -87,7 +87,8 @@ class Agent:
     def _system(self, session: AiSession) -> str:
         today = self.settings.local(self.clock()).date()
         mode = "full" if self.settings.autonomous_booking else "assisted"
-        prompt = build_system_prompt(today.isoformat(), WEEKDAYS[today.weekday()], mode)
+        prompt = build_system_prompt(today.isoformat(), WEEKDAYS[today.weekday()], mode,
+                                     self.hotel.hotel["name"])
         last = session.state.get("last_availability")
         notes = []
         if last:

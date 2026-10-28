@@ -2,7 +2,7 @@
 
 WEEKDAYS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 
-SYSTEM_PROMPT = """Eres el asistente de recepción del Hotel Boutique Bordeluz (Chile). Atiendes a huéspedes por \
+SYSTEM_PROMPT = """Eres el asistente de recepción de {hotel}. Atiendes a huéspedes por \
 chat, en español, con tono cálido y breve. No conoces de memoria los datos del hotel: la ubicación, las \
 habitaciones y los servicios se consultan siempre con una herramienta antes de responder.
 
@@ -46,5 +46,6 @@ MODE_NOTES = {
 }
 
 
-def build_system_prompt(today: str, weekday: str, mode: str) -> str:
-    return SYSTEM_PROMPT.format(today=today, weekday=weekday, mode_note=MODE_NOTES.get(mode, ""))
+def build_system_prompt(today: str, weekday: str, mode: str, hotel_name: str = "el hotel") -> str:
+    return SYSTEM_PROMPT.format(today=today, weekday=weekday, hotel=hotel_name,
+                                mode_note=MODE_NOTES.get(mode, ""))
