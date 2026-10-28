@@ -11,7 +11,7 @@ up: env
 	$(COMPOSE) build
 	$(COMPOSE) up -d postgres redis
 	$(COMPOSE) run --rm chatwoot bundle exec rails db:chatwoot_prepare
-	$(COMPOSE) up -d
+	$(COMPOSE) up -d chatwoot sidekiq pms-mock landing
 	./scripts/wait-healthy.sh
 	./scripts/seed-chatwoot.sh
 	$(COMPOSE) up -d --force-recreate copiloto

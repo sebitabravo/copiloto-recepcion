@@ -94,7 +94,14 @@ services:
       SIMULATE_DOWN: ${SIMULATE_DOWN:-0}
     volumes:
       - ./data:/app/data:ro
-      - pms_data:/var/lib/pms
+      - pms_state:/var/lib/pms
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "${BIND_ADDR:-127.0.0.1}:8200:8200"
     healthcheck:
@@ -110,6 +117,7 @@ services:
       - path: ./.env.runtime
         required: false
     environment:
+      COPILOTO_ENV: production
       HOTEL_DATA_PATH: /app/data/hotel.yaml
       COPILOTO_DB_PATH: /var/lib/copiloto/copiloto.sqlite
       CHATWOOT_URL: http://chatwoot:3000
@@ -118,13 +126,21 @@ services:
       PMS_STAFF_URL: http://localhost:8200
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
       PMS_EVENTS_SECRET: ${PMS_EVENTS_SECRET}
+      PSEUDONYM_SALT: ${PSEUDONYM_SALT}
       PANEL_TOKEN: ${PANEL_TOKEN}
       SHIFT_START: ${SHIFT_START:-08:00}
       SHIFT_END: ${SHIFT_END:-22:00}
       FIXED_MONTHLY_CLP: ${FIXED_MONTHLY_CLP:-90000}
     volumes:
       - ./data:/app/data:ro
-      - copiloto_data:/var/lib/copiloto
+      - copiloto_state:/var/lib/copiloto
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "${BIND_ADDR:-127.0.0.1}:8100:8100"
     depends_on:
@@ -148,5 +164,5 @@ volumes:
   pg_data:
   redis_data:
   chatwoot_storage:
-  pms_data:
-  copiloto_data:
+  pms_state:
+  copiloto_state:

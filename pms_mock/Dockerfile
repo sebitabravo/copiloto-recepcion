@@ -5,5 +5,8 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PATH="/app/.venv/bin:$PATH"
 COPY pyproject.toml uv.lock ./
 COPY src ./src
 RUN uv sync --frozen --no-dev
+RUN useradd --system --uid 10001 --no-create-home pms \
+    && mkdir -p /var/lib/pms && chown pms /var/lib/pms
+USER pms
 EXPOSE 8200
 CMD ["uvicorn", "pms_mock.main:app", "--host", "0.0.0.0", "--port", "8200"]

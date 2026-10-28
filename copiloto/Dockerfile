@@ -5,5 +5,8 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PATH="/app/.venv/bin:$PATH"
 COPY pyproject.toml uv.lock ./
 COPY src ./src
 RUN uv sync --frozen --no-dev
+RUN useradd --system --uid 10001 --no-create-home copiloto \
+    && mkdir -p /var/lib/copiloto && chown copiloto /var/lib/copiloto
+USER copiloto
 EXPOSE 8100
 CMD ["uvicorn", "copiloto.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8100", "--no-access-log"]

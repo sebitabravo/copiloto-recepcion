@@ -89,6 +89,7 @@ make e2e    # 4 casos reales contra el stack levantado (FAQ, disponibilidad, fue
 - [Canales: Telegram y WhatsApp](docs/canales.md)
 - [Costos](docs/costos.md)
 - [Privacidad (Ley 21.719)](docs/privacidad.md)
+- [Revisión de AgroVoz y Wenuke](docs/revision-agrovoz-wenuke.md)
 
 ## Datos del hotel y qué falta validar
 
