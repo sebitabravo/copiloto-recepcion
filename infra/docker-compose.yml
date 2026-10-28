@@ -17,7 +17,7 @@ x-chatwoot-env: &chatwoot-env
   LOG_LEVEL: info
   RAILS_MAX_THREADS: "3"
   WEB_CONCURRENCY: "1"
-  SIDEKIQ_CONCURRENCY: "5"
+  SIDEKIQ_CONCURRENCY: "${SIDEKIQ_CONCURRENCY:-2}"
   MAILER_SENDER_EMAIL: Copiloto <no-reply@localhost>
   DEFAULT_LOCALE: es
   SAFE_FETCH_ALLOW_PRIVATE_NETWORK: "true"
@@ -132,6 +132,7 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
       LLM_MODEL: ${LLM_MODEL:-deepseek-flash}
+      LLM_TIMEOUT_S: ${LLM_TIMEOUT_S:-25}
       PMS_STAFF_TOKEN: ${STAFF_TOKEN}
       DEMO_ENABLED: ${DEMO_ENABLED:-1}
       LANDING_ORIGIN: ${LANDING_ORIGIN:-http://localhost:8080}

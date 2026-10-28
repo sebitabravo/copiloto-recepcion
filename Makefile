@@ -2,7 +2,7 @@
 COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
 
 .DEFAULT_GOAL := help
-.PHONY: help up down reset env ps logs test seed health e2e creds smoke backup ai-smoke
+.PHONY: help up down reset env ps logs test seed health e2e creds smoke backup ai-smoke demo model
 
 help: ## Muestra esta ayuda
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z0-9_-]+:.*## / {printf "  \033[1m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -64,3 +64,9 @@ backup: ## Respaldo en caliente en backups/
 # Prueba en vivo de la IA (necesita LLM_API_KEY en .env; consume unos pocos centavos de la API)
 ai-smoke: ## Prueba en vivo del asistente con IA
 	uv run --with httpx python scripts/ai-smoke.py
+
+demo: ## Chequeo previo a la presentación: verifica, levanta el modelo y precalienta
+	./scripts/preflight.sh
+
+model: ## Levanta el modelo local (llama.cpp) que usa el copiloto
+	./scripts/local-model.sh

@@ -78,6 +78,8 @@ class Settings:
             llm_base_url=env.get("LLM_BASE_URL", cls.llm_base_url).rstrip("/"),
             llm_api_key=env.get("LLM_API_KEY", ""),
             llm_model=env.get("LLM_MODEL", cls.llm_model),
+            # Un modelo local en CPU puede necesitar más de 25 s por turno.
+            llm_timeout_s=float(env.get("LLM_TIMEOUT_S", cls.llm_timeout_s)),
             pms_staff_token=env.get("PMS_STAFF_TOKEN", ""),
             demo_enabled=env.get("DEMO_ENABLED", "1") not in ("0", "false", "no"),
             landing_origin=env.get("LANDING_ORIGIN", cls.landing_origin).rstrip("/"),
