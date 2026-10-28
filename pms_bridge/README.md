@@ -55,6 +55,15 @@ docker compose -f infra/docker-compose.yml --project-directory . --profile beds2
 make bridge
 ```
 
+**5.1 Verificar antes de conectar el copiloto**
+
+```bash
+make beds24-check
+```
+
+Comprueba el canje del token, los permisos, la lectura del calendario para los próximos días y que la
+respuesta del puente cumpla el contrato. No escribe nada en Beds24.
+
 **6. Apuntar el copiloto**
 
 ```bash

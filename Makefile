@@ -2,7 +2,7 @@
 COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
 
 .DEFAULT_GOAL := help
-.PHONY: help up down reset env ps logs test seed health e2e creds smoke backup ai-smoke demo model piloto
+.PHONY: help up down reset env ps logs test seed health e2e creds smoke backup ai-smoke demo model piloto beds24-check
 
 help: ## Muestra esta ayuda
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z0-9_-]+:.*## / {printf "  \033[1m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -77,3 +77,6 @@ model: ## Levanta el modelo local (llama.cpp) que usa el copiloto
 
 piloto: ## Informe del piloto: métricas contra las metas de la Unidad 2 (DAYS=14)
 	python3 scripts/pilot_report.py --days $${DAYS:-14}
+
+beds24-check: ## Verifica credenciales y lectura de Beds24 antes de conectar el copiloto
+	python3 scripts/beds24_check.py
