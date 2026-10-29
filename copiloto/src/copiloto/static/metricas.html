@@ -5,43 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Métricas · Copiloto de Recepción</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%238d5a2b'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%23fff8ef' text-anchor='middle'%3EB%3C/text%3E%3C/svg%3E">
-<style>
-    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #362719; background: #f3eadc; }
-    * { box-sizing: border-box; }
-    body { margin: 0; }
-    main { max-width: 1120px; margin: auto; padding: 2rem 1rem; }
-    h1 { font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif; font-weight: 400;
-         letter-spacing: -.02em; font-size: clamp(1.8rem, 4vw, 2.6rem); margin-bottom: .5rem; }
-    h2 { font-size: 1.1rem; margin-top: 0; }
-    .subtitle, #refresh-status, footer { color: #634d38; }
-    .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .8rem; margin: 1.6rem 0; }
-    select { font: inherit; color: #362719; background: #fffaf2; border: 1px solid #8C6A3F; padding: .6rem; }
-    :focus-visible { outline: 3px solid #67451f; outline-offset: 3px; }
+    <link rel="stylesheet" href="/static/theme.css">
+  <style>
+    main { max-width: 1120px; margin: auto; padding: 2.4rem 1rem 3rem; }
+    h1 { font-size: clamp(1.9rem, 4vw, 2.8rem); margin: 0 0 .4rem; }
+    h2 { font-size: 1.05rem; margin-top: 0; font-family: var(--font-body); font-weight: 600; letter-spacing: 0; }
+    .subtitle, #refresh-status, footer { color: var(--muted); }
+    .subtitle { margin: 0; }
+    .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .8rem; margin: 1.8rem 0; }
+    select { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line);
+             border-radius: 10px; padding: .6rem .8rem;
+             transition: border-color .18s var(--ease), box-shadow .18s var(--ease); }
+    select:hover { border-color: var(--accent); }
+    :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
     .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 1rem; }
-    .tile, .events { background: #fffaf2; border: 1px solid #c8b394; border-radius: .7rem; padding: 1.3rem; }
-    .tile { border-top: 4px solid #8C6A3F; }
-    .value { font-size: 1.7rem; font-weight: 700; margin: .6rem 0; overflow-wrap: anywhere;
-             font-variant-numeric: tabular-nums; }
-    .detail { font-size: .9rem; margin: 0; }
+    .tile, .events { background: var(--card); border: 1px solid var(--line); border-radius: .9rem;
+                     padding: 1.3rem; box-shadow: var(--shadow); }
+    .tile { border-top: 3px solid var(--accent); transition: transform .2s var(--ease), box-shadow .2s var(--ease); }
+    .tile:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -22px var(--accent); }
+    .value { font-size: 1.8rem; font-weight: 700; margin: .6rem 0; overflow-wrap: anywhere;
+             font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+    .detail { font-size: .9rem; margin: 0; color: var(--muted); }
     .events { margin-top: 1.5rem; overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
-    caption { text-align: left; padding-bottom: .8rem; }
-    th, td { text-align: left; padding: .7rem .3rem; border-bottom: 1px solid #d5c5ae; }
+    caption { text-align: left; padding-bottom: .8rem; color: var(--muted); }
+    th, td { text-align: left; padding: .7rem .3rem; border-bottom: 1px solid var(--line); }
     td:last-child, th:last-child { text-align: right; font-variant-numeric: tabular-nums; }
     /* La barra da proporción sin sumar una librería de gráficos. */
     td.bar { position: relative; }
     td.bar span { position: absolute; right: 0; bottom: 2px; height: 2px; border-radius: 2px;
-                  background: #8c6a3f; opacity: .45; }
+                  background: var(--accent); opacity: .5;
+                  transition: width .6s var(--ease); }
     footer { margin-top: 1.5rem; font-size: .85rem; }
   </style>
 </head>
 <body>
   <main>
-    <header>
+    <header class="rise">
       <h1>Métricas · Copiloto de Recepción</h1>
       <p class="subtitle">Hotel Boutique Bordeluz · Seguimiento de consultas y atención</p>
     </header>
-    <div class="toolbar">
+    <div class="toolbar rise" style="--i:1">
       <label for="days">Período</label>
       <select id="days">
         <option value="1">Último día</option>
@@ -51,38 +55,38 @@
       <p id="refresh-status" role="status" aria-live="polite">Cargando métricas…</p>
     </div>
     <section class="tiles" aria-label="Indicadores de atención">
-      <article class="tile">
+      <article class="tile rise" style="--i:2">
         <h2>Latencia de respuestas FAQ</h2>
         <p class="value" id="faq-median">—</p>
         <p class="detail">Mediana · p95: <span id="faq-p95">—</span></p>
       </article>
-      <article class="tile">
+      <article class="tile rise" style="--i:3">
         <h2>Cumplimiento comercial &lt;180 s</h2>
         <p class="value" id="compliance">—</p>
         <p class="detail">Primera respuesta humana durante el turno</p>
       </article>
-      <article class="tile">
+      <article class="tile rise" style="--i:4">
         <h2>Captura nocturna</h2>
         <p class="value" id="night-capture">—</p>
         <p class="detail">Consultas nocturnas con datos completos</p>
       </article>
-      <article class="tile">
+      <article class="tile rise" style="--i:5">
         <h2>Conversión directa</h2>
         <p class="value" id="conversion">—</p>
         <p class="detail">Reservas confirmadas dentro de 7 días</p>
       </article>
-      <article class="tile">
+      <article class="tile rise" style="--i:6">
         <h2>Costo por consulta</h2>
         <p class="value" id="cost">—</p>
         <p class="detail">Pesos chilenos (CLP), sin contar saludos</p>
       </article>
-      <article class="tile">
+      <article class="tile rise" style="--i:7">
         <h2>Respuestas con IA</h2>
         <p class="value" id="ai-replies">—</p>
         <p class="detail">Mediana <span id="ai-latency">—</span> · reservas hechas por la IA: <span id="ai-bookings">—</span></p>
       </article>
     </section>
-    <section class="events" aria-labelledby="events-title">
+    <section class="events rise" style="--i:8" aria-labelledby="events-title">
       <h2 id="events-title">Eventos del período</h2>
       <table>
         <caption>Conteo por tipo de evento registrado</caption>
@@ -99,11 +103,34 @@
     const moneyFormat = new Intl.NumberFormat("es-CL", {
       style: "currency", currency: "CLP", maximumFractionDigits: 0
     });
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
     let activeRequest;
+    const shown = new Map();
+
+    // Los números suben hasta el valor nuevo en vez de saltar: se lee el cambio.
+    function animateValue(element, target, format) {
+      const from = shown.get(element.id) ?? 0;
+      shown.set(element.id, target);
+      if (reducedMotion.matches || from === target) {
+        element.textContent = format(target);
+        return;
+      }
+      const start = performance.now();
+      const span = 520;
+      function step(now) {
+        const progress = Math.min(1, (now - start) / span);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        element.textContent = format(from + (target - from) * eased);
+        if (progress < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
 
     function setValue(id, value, suffix = "", currency = false) {
-      const text = value == null ? "—" : (currency ? moneyFormat.format(value) : numberFormat.format(value));
-      document.getElementById(id).textContent = value == null ? text : text + suffix;
+      const element = document.getElementById(id);
+      if (value == null) { element.textContent = "—"; return; }
+      const format = (n) => (currency ? moneyFormat.format(n) : numberFormat.format(n)) + suffix;
+      animateValue(element, value, format);
     }
 
     async function refreshMetrics() {
@@ -142,8 +169,11 @@
           if (count != null) {
             value.classList.add("bar");
             const bar = document.createElement("span");
-            bar.style.width = `${Math.round((count / max) * 100)}%`;
+            bar.style.width = "0%";
             value.append(bar);
+            requestAnimationFrame(() => {
+              bar.style.width = `${Math.round((count / max) * 100)}%`;
+            });
           }
           row.append(label, value);
           tbody.append(row);
