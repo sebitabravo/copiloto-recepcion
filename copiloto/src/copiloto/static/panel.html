@@ -5,57 +5,86 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Panel · Copiloto de Recepción</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%238d5a2b'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%23fff8ef' text-anchor='middle'%3EB%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/theme.css">
 <style>
-  :root {
-    --bg:#f6f0e6; --card:#fffaf2; --ink:#2f2418; --muted:#7a6a55; --line:#e3d6c0; --accent:#8c6a3f;
-    --ok:#2e7d32; --warn:#b26a00; --bad:#c62828; --btn-ink:#fff;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#1d1812; --card:#272017; --ink:#efe5d3; --muted:#b5a58c; --line:#3b3226; --accent:#d1a971;
-            --ok:#66bb6a; --warn:#ffb74d; --bad:#ef5350; --btn-ink:#1d1812; }
-  }
-  * { box-sizing:border-box; }
-  body { margin:0; padding:12px; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui, sans-serif; }
-  h1 { font-size:13px; margin:0 0 8px; color:var(--muted); font-weight:600; letter-spacing:.04em; text-transform:uppercase; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; }
-  .timer { display:flex; align-items:baseline; justify-content:space-between; }
-  .clock { font-size:34px; font-weight:700; font-variant-numeric:tabular-nums; }
-  .goal { color:var(--muted); font-size:13px; }
-  .bar { height:8px; border-radius:4px; background:var(--line); overflow:hidden; margin-top:8px; }
-  .bar > span { display:block; height:100%; width:0; background:var(--ok); transition:width .4s, background .4s; }
-  .state-ok { color:var(--ok); } .state-warn { color:var(--warn); } .state-bad { color:var(--bad); }
-  .state-idle { color:var(--muted); }
-  dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:4px 12px; }
-  dt { color:var(--muted); } dd { margin:0; }
-  .tag { display:inline-block; font-size:12px; padding:1px 8px; border-radius:999px; border:1px solid var(--line); }
-  .btn { display:block; text-align:center; text-decoration:none; background:var(--accent); color:var(--btn-ink);
-         padding:10px 12px; border-radius:8px; font-weight:600; margin-top:10px; }
-  .btn[aria-disabled="true"] { opacity:.45; pointer-events:none; }
-  .note { color:var(--muted); font-size:12px; margin-top:8px; }
-  .empty { color:var(--muted); text-align:center; padding:24px 8px; }
-  .queue { display:grid; gap:8px; }
-  .queue-head { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
-  .queue-item { display:grid; grid-template-columns:1fr auto; gap:2px 10px; width:100%; text-align:left;
-                background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px;
-                font:inherit; color:inherit; cursor:pointer; }
-  .queue-item:hover { border-color:var(--accent); }
-  .queue-name { font-weight:600; }
-  .queue-state { font-variant-numeric:tabular-nums; font-weight:700; }
-  .queue-meta { grid-column:1 / -1; color:var(--muted); font-size:12px; }
-  .back { background:none; border:0; color:var(--accent); font:inherit; cursor:pointer; padding:0 0 8px; }
-  .login, .note-form { display:grid; gap:8px; }
-  .login label { color:var(--muted); font-size:12px; }
-  .login input, .note-form textarea { width:100%; font:inherit; color:var(--ink); background:var(--bg);
-    border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
-  .note-form button { justify-self:start; }
-  .notes { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:6px; }
-  .notes li { border-left:2px solid var(--accent); padding:4px 0 4px 10px; font-size:13px; }
-  .notes small { display:block; color:var(--muted); font-size:11px; }
+  body { padding: 14px; }
+  .shell { max-width: 680px; margin: 0 auto; display: grid; gap: 10px; }
+  h1 { font-family: var(--font-body); font-size: 11px; margin: 0 0 10px; color: var(--muted);
+       font-weight: 600; letter-spacing: .09em; text-transform: uppercase; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+          box-shadow: var(--shadow); }
+  .topbar { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .brand { font-family: var(--font-display); font-size: 19px; margin: 0; color: var(--ink); }
+  .who { color: var(--muted); font-size: 12px; margin: 0; }
+  .timer { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .clock { font-size: 44px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1;
+           letter-spacing: -.03em; }
+  .goal { color: var(--muted); font-size: 12px; }
+  .bar { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 12px; }
+  .bar > span { display: block; height: 100%; width: 0; border-radius: inherit;
+                transition: width .5s var(--ease), background .4s var(--ease); }
+  .is-late { animation: pulse-red 2.2s ease-in-out infinite; }
+  .state-ok { color: var(--ok); } .state-warn { color: var(--warn); } .state-bad { color: var(--bad); }
+  .state-idle { color: var(--muted); }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; }
+  dt { color: var(--muted); } dd { margin: 0; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px;
+         border: 1px solid var(--line); color: var(--muted); }
+  .btn { display: block; text-align: center; text-decoration: none; background: var(--accent);
+         color: var(--accent-ink); padding: 12px 14px; border: 0; border-radius: 10px; font: inherit;
+         font-weight: 600; margin-top: 12px; cursor: pointer;
+         transition: transform .18s var(--ease), box-shadow .18s var(--ease), filter .18s var(--ease); }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 18px -12px var(--accent); filter: brightness(1.05); }
+  .btn:active { transform: scale(.98); }
+  .btn[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .empty { color: var(--muted); text-align: center; padding: 28px 8px; }
+  .queue { display: grid; gap: 8px; }
+  .queue-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .queue-item { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; width: 100%;
+                text-align: left; background: var(--card); border: 1px solid var(--line);
+                border-radius: 12px; padding: 11px 12px; font: inherit; color: inherit; cursor: pointer;
+                box-shadow: var(--shadow);
+                transition: transform .18s var(--ease), border-color .18s var(--ease), box-shadow .18s var(--ease); }
+  .queue-item:hover { border-color: var(--accent); transform: translateY(-1px);
+                      box-shadow: 0 10px 22px -16px var(--accent); }
+  .queue-item:active { transform: scale(.99); }
+  .queue-name { font-weight: 600; }
+  .queue-state { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .queue-meta { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+  .back { background: none; border: 0; color: var(--accent); font: inherit; cursor: pointer;
+          padding: 0 0 10px; transition: transform .18s var(--ease); }
+  .back:hover { transform: translateX(-2px); }
+  .login, .note-form { display: grid; gap: 8px; }
+  .login label { color: var(--muted); font-size: 12px; }
+  .login input, .note-form textarea { width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    transition: border-color .18s var(--ease), box-shadow .18s var(--ease); }
+  .login input:focus, .note-form textarea:focus { outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent); }
+  .note-form button { justify-self: start; }
+  .notes { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+  .notes li { border-left: 2px solid var(--accent); padding: 4px 0 4px 10px; font-size: 13px;
+              animation: rise .35s var(--ease) both; }
+  .notes small { display: block; color: var(--muted); font-size: 11px; }
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; margin-top: 10px; }
+  .stat { display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+          border-bottom: 1px dashed var(--line); padding-bottom: 5px; }
+  .stat dt { font-size: 12px; } .stat dd { font-weight: 700; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
-<main id="app" aria-live="polite">
-  <p class="empty">Selecciona una conversación para ver el cronómetro y la pre-información.</p>
+<main id="app" class="shell" aria-live="polite">
+  <div class="card rise" aria-hidden="true">
+    <div class="skeleton" style="height:14px;width:40%;margin-bottom:12px"></div>
+    <div class="skeleton" style="height:44px;width:60%;margin-bottom:12px"></div>
+    <div class="skeleton" style="height:8px;width:100%"></div>
+  </div>
+  <div class="card rise" style="--i:1" aria-hidden="true">
+    <div class="skeleton" style="height:14px;width:55%;margin-bottom:12px"></div>
+    <div class="skeleton" style="height:10px;width:100%;margin-bottom:8px"></div>
+    <div class="skeleton" style="height:10px;width:80%"></div>
+  </div>
 </main>
 <script>
 (() => {
@@ -110,31 +139,31 @@
       ({expired: "Vencida (no tocó el PMS)", converted: "Cerrada en el PMS", superseded: "Reemplazada"}[pre.status] || pre.status);
     app.innerHTML = `
       <button class="back" type="button">← Cola de recepción</button>
-      <section class="card" aria-label="Cronómetro">
+      <section id="timer-card" class="card rise ${t.css === "state-bad" && !s.sla.stopped_at ? "is-late" : ""}" aria-label="Cronómetro">
         <h1>Respuesta a tiempo</h1>
         <div class="timer">
-          <span class="clock ${t.css}">${t.text}</span>
+          <span id="timer-clock" class="clock ${t.css}">${t.text}</span>
           <span class="goal">meta ${fmt(s.sla.red_s)}</span>
         </div>
-        <div class="${t.css}">${esc(t.label)}</div>
-        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(t.pct)}">
-          <span style="width:${t.pct}%; background:${color}"></span></div>
+        <div id="timer-label" class="${t.css}">${esc(t.label)}</div>
+        <div id="timer-bar-wrap" class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(t.pct)}">
+          <span id="timer-bar" style="width:${t.pct}%; background:${color}"></span></div>
       </section>
-      <section class="card" aria-label="Pre-información">
+      <section class="card rise" style="--i:1" aria-label="Pre-información">
         <h1>Pre-información lista</h1>
         <dl>
-          <dt>Contacto</dt><dd>${esc(s.contact_name)}</dd>
-          <dt>Fechas</dt><dd>${esc(stay)}</dd>
-          <dt>Huéspedes</dt><dd>${esc(guests)}</dd>
-          <dt>Habitación</dt><dd>${esc(s.room_name || (d.checkin ? "A definir por recepción" : null))}</dd>
-          <dt>Lectura PMS</dt><dd>${esc(d.read_label || d.read_at)}${d.simulated ? ' <span class="tag">simulada</span>' : ""}</dd>
-          <dt>Pre-reserva</dt><dd>${esc(preText)}</dd>
+          <dt>Contacto</dt><dd id="f-contact">${esc(s.contact_name)}</dd>
+          <dt>Fechas</dt><dd id="f-stay">${esc(stay)}</dd>
+          <dt>Huéspedes</dt><dd id="f-guests">${esc(guests)}</dd>
+          <dt>Habitación</dt><dd id="f-room">${esc(s.room_name || (d.checkin ? "A definir por recepción" : null))}</dd>
+          <dt>Lectura PMS</dt><dd id="f-read">${esc(d.read_label || d.read_at)}${d.simulated ? ' <span class="tag">simulada</span>' : ""}</dd>
+          <dt>Pre-reserva</dt><dd id="f-pre">${esc(preText)}</dd>
         </dl>
         <a class="btn" href="${esc(s.pms_url)}" target="_blank" rel="noopener"
            ${d.checkin ? "" : 'aria-disabled="true"'}>Confirmar en el PMS</a>
         <p class="note">El copiloto nunca confirma. Revalida la lectura en el PMS y confirma una persona.</p>
       </section>
-      <section class="card" aria-label="Notas del turno">
+      <section class="card rise" style="--i:2" aria-label="Notas del turno">
         <h1>Notas del turno</h1>
         <form class="note-form" id="note-form">
           <textarea id="note-body" rows="2" maxlength="500" aria-label="Nueva nota para el siguiente turno"
@@ -150,17 +179,7 @@
       refresh();
     });
 
-    const notesList = app.querySelector("#notes");
-    for (const note of s.notes || []) {
-      const item = document.createElement("li");
-      const body = document.createElement("span");
-      body.textContent = note.body;
-      const meta = document.createElement("small");
-      meta.textContent = `${note.author} · ${new Date(note.created_at * 1000)
-        .toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" })}`;
-      item.append(body, meta);
-      notesList.append(item);
-    }
+    fillNotes();
     app.querySelector("#note-form")?.addEventListener("submit", async (event) => {
       event.preventDefault();
       const field = app.querySelector("#note-body");
@@ -178,6 +197,64 @@
         field.setAttribute("aria-invalid", "true");
       }
     });
+  }
+
+  // Las notas se rehacen sin tocar el formulario: reescribir todo el panel
+  // borraba lo que la persona estaba escribiendo.
+  function fillNotes() {
+    const notesList = app.querySelector("#notes");
+    if (!notesList) return;
+    notesList.replaceChildren();
+    for (const note of snapshot?.notes || []) {
+      const item = document.createElement("li");
+      const body = document.createElement("span");
+      body.textContent = note.body;
+      const meta = document.createElement("small");
+      meta.textContent = `${note.author} · ${new Date(note.created_at * 1000)
+        .toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" })}`;
+      item.append(body, meta);
+      notesList.append(item);
+    }
+  }
+
+  const TIMER_COLORS = {"state-ok": "var(--ok)", "state-warn": "var(--warn)", "state-bad": "var(--bad)"};
+
+  // El reloj corre cada segundo sin reescribir el panel: así no se pierde el foco ni el texto.
+  function tick() {
+    const clock = document.getElementById("timer-clock");
+    if (!snapshot || !clock) return;
+    const t = timerView(snapshot.sla, Date.now() / 1000 + skew);
+    clock.textContent = t.text;
+    clock.className = `clock ${t.css}`;
+    const label = document.getElementById("timer-label");
+    label.textContent = t.label;
+    label.className = t.css;
+    const bar = document.getElementById("timer-bar");
+    bar.style.width = `${t.pct}%`;
+    bar.style.background = TIMER_COLORS[t.css] || "var(--line)";
+    document.getElementById("timer-bar-wrap").setAttribute("aria-valuenow", String(Math.round(t.pct)));
+    document.getElementById("timer-card").classList.toggle("is-late", t.css === "state-bad" && !snapshot.sla.stopped_at);
+    const pre = snapshot.prebooking;
+    const preField = document.getElementById("f-pre");
+    if (preField) {
+      preField.textContent = !pre ? "Sin pre-reserva" :
+        pre.status === "active" ? `Activa · vence en ${fmt(pre.expires_at - Date.now() / 1000 - skew)}` :
+        ({expired: "Vencida (no tocó el PMS)", converted: "Cerrada en el PMS", superseded: "Reemplazada"}[pre.status] || pre.status);
+    }
+  }
+
+  function updateDetail() {
+    if (!snapshot) return;
+    const s = snapshot, d = s.data || {};
+    const guests = d.adults ? `${plural(d.adults, "adulto", "adultos")} · ${plural(d.children ?? 0, "niño", "niños")}` : null;
+    const stay = d.checkin ? `${fmtDate(d.checkin)} → ${fmtDate(d.checkout)}` : null;
+    document.getElementById("f-contact").textContent = s.contact_name ?? "—";
+    document.getElementById("f-stay").textContent = stay ?? "—";
+    document.getElementById("f-guests").textContent = guests ?? "—";
+    document.getElementById("f-room").textContent = s.room_name || (d.checkin ? "A definir por recepción" : "—");
+    document.getElementById("f-read").textContent = d.read_label || d.read_at || "—";
+    tick();
+    fillNotes();
   }
 
   const PREBOOKING_LABELS = { active: "activa", expired: "vencida", converted: "confirmada",
@@ -200,7 +277,7 @@
   function renderLogin() {
     currentUser = null;
     app.innerHTML = `
-      <section class="card" aria-label="Acceso al panel">
+      <section class="card rise" aria-label="Acceso al panel">
         <h1>Panel de recepción</h1>
         <form class="login" id="login-form">
           <label for="login-name">Tu nombre</label>
@@ -256,11 +333,12 @@
   // El resumen del turno es el handover que hoy se escribe a mano en un cuaderno.
   function shiftCard(shift) {
     const card = document.createElement("section");
-    card.className = "card";
+    card.className = "card rise";
     card.setAttribute("aria-label", "Resumen del turno");
     const title = document.createElement("h1");
     title.textContent = `Turno · últimas ${shift.hours} h`;
     const list = document.createElement("dl");
+    list.className = "stats";
     const rows = [
       ["Conversaciones", shift.received],
       ["Preguntas resueltas", shift.faq_answered],
@@ -271,11 +349,14 @@
       ["Sin respuesta ahora", shift.pending_human],
     ];
     for (const [label, value] of rows) {
+      const row = document.createElement("div");
+      row.className = "stat";
       const term = document.createElement("dt");
       term.textContent = label;
       const detail = document.createElement("dd");
       detail.textContent = String(value ?? 0);
-      list.append(term, detail);
+      row.append(term, detail);
+      list.append(row);
     }
     card.append(title, list);
     return card;
@@ -283,16 +364,36 @@
 
   function renderQueue(data, shift) {
     const items = data.conversations || [];
+    const header = document.createElement("div");
+    header.className = "queue-head rise";
+    const heading = document.createElement("p");
+    heading.className = "brand";
+    heading.textContent = "Cola de recepción";
+    const out = document.createElement("button");
+    out.type = "button";
+    out.className = "back";
+    out.textContent = currentUser ? `Salir · ${currentUser}` : "Salir";
+    out.addEventListener("click", async () => {
+      try { await fetchJson("/api/panel/logout", { method: "POST" }); } catch (_) { /* la sesión se descarta igual */ }
+      renderLogin();
+    });
+    header.append(heading, out);
     if (!items.length) {
-      app.innerHTML = '<p class="empty">Sin conversaciones todavía. Cuando un huésped escriba, aparece acá.</p>';
+      app.replaceChildren(header, shiftCard(shift));
+      const empty = document.createElement("p");
+      empty.className = "empty rise";
+      empty.style.setProperty("--i", 2);
+      empty.textContent = "Sin conversaciones todavía. Cuando un huésped escriba, aparece acá.";
+      app.append(empty);
       return;
     }
     const list = document.createElement("div");
     list.className = "queue";
-    for (const item of items) {
+    items.forEach((item, index) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "queue-item";
+      button.className = "queue-item pop";
+      button.style.setProperty("--i", index + 1);
       const name = document.createElement("span");
       name.className = "queue-name";
       name.textContent = item.contact_name || `Conversación ${item.conversation_id}`;
@@ -320,20 +421,7 @@
         refresh();
       });
       list.append(button);
-    }
-    const header = document.createElement("div");
-    header.className = "queue-head";
-    const heading = document.createElement("h1");
-    heading.textContent = "Cola de recepción";
-    const out = document.createElement("button");
-    out.type = "button";
-    out.className = "back";
-    out.textContent = currentUser ? `Salir · ${currentUser}` : "Salir";
-    out.addEventListener("click", async () => {
-      try { await fetchJson("/api/panel/logout", { method: "POST" }); } catch (_) { /* la sesión se descarta igual */ }
-      renderLogin();
     });
-    header.append(heading, out);
     app.replaceChildren(header, shiftCard(shift), list);
   }
 
@@ -345,7 +433,8 @@
       if (!response.ok) throw new Error(response.status);
       snapshot = await response.json();
       skew = snapshot.now - Date.now() / 1000;
-      render();
+      if (document.getElementById("timer-card")) updateDetail();
+      else render();
     } catch (error) {
       app.innerHTML = '<p class="empty">No pude leer el estado de esta conversación.</p>';
     }
@@ -364,7 +453,7 @@
     if (event.source === window.parent) onContext(event.data);
   });
   window.parent.postMessage("chatwoot-dashboard-app:fetch-info", "*");
-  setInterval(() => { if (currentUser) render(); }, 1000);
+  setInterval(() => { if (currentUser) tick(); }, 1000);
   setInterval(() => { if (currentUser) refresh(); }, 5000);
   boot();
 })();
