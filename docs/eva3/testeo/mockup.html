@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock-up anotado · Copiloto de Recepción (3.1.2.2)</title>
+<style>
+  :root {
+    --bg:#f3ebdf; --card:#fffaf2; --ink:#211a12; --muted:#7b6953; --line:#ded0b9; --accent:#8d5a2b;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:32px 20px 64px; background:var(--bg); color:var(--ink);
+    font:15px/1.55 system-ui, sans-serif; }
+  header, main { max-width:1080px; margin:0 auto; }
+  header { margin-bottom:28px; }
+  h1 { font-size:clamp(1.6rem,3vw,2.3rem); margin:0 0 6px; }
+  .sub { color:var(--muted); max-width:72ch; margin:0; }
+  .meta { color:var(--muted); font-size:13px; margin-top:10px; }
+  figure { margin:0 0 28px; background:var(--card); border:1px solid var(--line);
+    border-radius:14px; padding:16px; }
+  figure img { width:100%; height:auto; border-radius:10px; border:1px solid var(--line);
+    display:block; }
+  figcaption { margin-top:12px; display:grid; gap:8px; }
+  figcaption h2 { font-size:16px; margin:0; }
+  ol { margin:0; padding-left:22px; display:grid; gap:4px; font-size:14px; }
+  .note { color:var(--muted); font-size:13px; margin:0; }
+  .warn { max-width:1080px; margin:0 auto 24px; border-left:3px solid var(--accent);
+    background:var(--card); padding:10px 14px; font-size:13.5px; }
+  @media print { body { background:#fff; padding:0; } figure { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mock-up anotado del copiloto de recepción</h1>
+  <p class="sub">Capturas reales del prototipo funcional, anotadas con lo que cada pantalla aporta a la
+  propuesta de valor. No es una maqueta dibujada: es el sistema corriendo con datos ficticios.</p>
+  <p class="meta">Instrumento 3.1.2.2 · Innovación y Emprendimiento III · EVA 3 · versión 1</p>
+</header>
+
+<p class="warn">Todas las capturas usan datos ficticios del hotel de demostración. Ninguna persona real
+aparece en ellas.</p>
+
+<main>
+  <figure>
+    <img src="../../img/01-landing.webp" alt="Landing del hotel de demostración con el dispositivo de chat">
+    <figcaption>
+      <h2>1 · Entrada: qué es y qué hace</h2>
+      <ol>
+        <li>Titular que explica el servicio en una frase: «La recepción que conversa, consulta y reserva».</li>
+        <li>Dispositivo de chat a la derecha: muestra el producto antes de pedir un clic.</li>
+        <li>Botón «Probar la demo» como acción principal; el secundario explica el recorrido.</li>
+        <li>Tres tarjetas de estado en vivo: landing, copiloto y PMS. El visitante comprueba que el sistema existe.</li>
+      </ol>
+      <p class="note">Prueba: ¿entiende en menos de 10 segundos qué hace el servicio?</p>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="../../img/02-demo.webp" alt="Chat de demostración con traza de herramientas del copiloto">
+    <figcaption>
+      <h2>2 · Conversación del huésped</h2>
+      <ol>
+        <li>Interfaz familiar de mensajería: el huésped no aprende un canal nuevo.</li>
+        <li>La ubicación aparece antes que cualquier pregunta de fechas.</li>
+        <li>La traza de herramientas muestra qué consultó el copiloto en cada turno.</li>
+        <li>Cada respuesta con disponibilidad declara la hora de lectura del PMS.</li>
+      </ol>
+      <p class="note">Prueba: ¿distingue «disponible según lectura» de «reserva confirmada»?</p>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="../../img/03-en-vivo.webp" alt="Tarjetas de estado de los servicios en vivo">
+    <figcaption>
+      <h2>3 · Estado del sistema</h2>
+      <ol>
+        <li>Comprobación en vivo de los tres servicios, sin login.</li>
+        <li>Si un servicio cae, la landing lo muestra antes de la demo.</li>
+        <li>Refuerza la confianza de quien evalúa: no es una captura estática.</li>
+      </ol>
+      <p class="note">Prueba: ¿le da confianza ver el estado del sistema?</p>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="../../img/04-panel.webp" alt="Panel de recepción con cronómetro y pre-información">
+    <figcaption>
+      <h2>4 · Panel de recepción</h2>
+      <ol>
+        <li>Cronómetro con la meta de tres minutos, en verde, ámbar y rojo.</li>
+        <li>Pre-información: fechas, personas, habitación y lectura del PMS.</li>
+        <li>Botón «Confirmar en el PMS» con los datos prellenados.</li>
+        <li>Notas del turno con autor, para el cambio de turno.</li>
+      </ol>
+      <p class="note">Prueba: ¿entiende qué llegó y qué debe hacer, sin leer todo el chat?</p>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="../../img/05-metricas.webp" alt="Métricas del piloto">
+    <figcaption>
+      <h2>5 · Métricas</h2>
+      <ol>
+        <li>Conversión, cumplimiento bajo 180 s y captura nocturna, definidos en la Unidad 2.</li>
+        <li>Costo por consulta en cero: el modelo corre local.</li>
+        <li>Contadores sin datos personales; la retención se purga a los 90 días.</li>
+      </ol>
+      <p class="note">Prueba: ¿qué indicador miraría gerencia primero?</p>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="../../img/06-pms-admin.webp" alt="PMS simulado con las habitaciones y reservas">
+    <figcaption>
+      <h2>6 · PMS simulado</h2>
+      <ol>
+        <li>Veinte habitaciones y doce tipos, con cupos y precios por noche.</li>
+        <li>El copiloto lee de aquí; nunca inventa disponibilidad.</li>
+        <li>La confirmación ocurre acá, con una persona mirando el inventario.</li>
+      </ol>
+      <p class="note">Prueba: ¿le queda claro dónde se confirma de verdad?</p>
+    </figcaption>
+  </figure>
+</main>
+</body>
+</html>
