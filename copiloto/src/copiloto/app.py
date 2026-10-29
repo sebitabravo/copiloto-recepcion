@@ -15,7 +15,7 @@ from urllib.parse import urlencode
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.middleware.gzip import GZipMiddleware
 
 from copiloto import privacy, store
@@ -217,6 +217,19 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     @app.get("/panel", response_class=HTMLResponse, dependencies=limited)
     async def panel():
         return (STATIC / "panel.html").read_text(encoding="utf-8")
+
+    @app.get("/static/{asset:path}", dependencies=limited)
+    async def static_asset(asset: str):
+        # Solo la hoja compartida y las tipografías: nada fuera de static/ se sirve por esta ruta.
+        if asset == "theme.css":
+            target = STATIC / asset
+        elif asset.startswith("fonts/") and asset.endswith(".woff2") and "/" not in asset[6:]:
+            target = STATIC / asset
+        else:
+            raise HTTPException(status_code=404)
+        if not target.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(target, headers={"Cache-Control": "public, max-age=3600"})
 
     @app.post("/api/panel/login", dependencies=limited)
     async def panel_login(request: Request):

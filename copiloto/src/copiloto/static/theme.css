@@ -1,0 +1,130 @@
+/* Sistema visual compartido del copiloto: panel y métricas.
+   La landing vive en otro servicio; esta hoja replica sus tokens para que
+   recepción vea el mismo producto, no otro. */
+
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("/static/fonts/instrument-serif-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("/static/fonts/instrument-serif-italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/static/fonts/inter-normal.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+  --bg: #f3ebdf;
+  --bg-2: #eae0cf;
+  --card: #fcf8f1;
+  --card-2: #f6efe3;
+  --ink: #211a12;
+  --ink-2: #423325;
+  --muted: #7b6953;
+  --line: #ded0b9;
+  --accent: #8d5a2b;
+  --accent-2: #35513f;
+  --accent-ink: #fffaf2;
+  --glow: #dfae7f;
+  --ok: #2e7d32;
+  --warn: #b26a00;
+  --bad: #c62828;
+  --shadow: 0 1px 2px rgb(46 32 18 / 6%), 0 10px 24px -18px rgb(46 32 18 / 45%);
+  --font-display: "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #14100b;
+    --bg-2: #1a1410;
+    --card: #201a13;
+    --card-2: #261e16;
+    --ink: #f0e6d5;
+    --ink-2: #d6c7b1;
+    --muted: #a4947d;
+    --line: #3f3427;
+    --accent: #d1a971;
+    --accent-2: #8fb59c;
+    --accent-ink: #1d1812;
+    --glow: #8d5a2b;
+    --ok: #66bb6a;
+    --warn: #ffb74d;
+    --bad: #ef5350;
+    --shadow: 0 1px 2px rgb(0 0 0 / 35%), 0 14px 30px -22px rgb(0 0 0 / 80%);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, color-mix(in oklab, var(--glow) 18%, transparent), transparent 65%),
+    var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2 { font-family: var(--font-display); font-weight: 400; letter-spacing: -.01em; }
+
+/* Entradas suaves. La clase se aplica al pintar; el retraso escalona tarjetas. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px) scale(.99); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pop {
+  0% { opacity: 0; transform: scale(.9); }
+  70% { transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--bad) 45%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--bad) 0%, transparent); }
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+.rise { animation: rise .42s var(--ease) both; animation-delay: calc(var(--i, 0) * 60ms); }
+.pop { animation: pop .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 60ms); }
+
+/* Esqueleto de carga, sin spinners. */
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--card-2) 25%, var(--card) 37%, var(--card-2) 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
