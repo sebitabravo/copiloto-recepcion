@@ -2,9 +2,10 @@
 
 import time
 
-from copiloto import store
 from copiloto.app import create_app
 from fastapi.testclient import TestClient
+
+from copiloto import store
 
 
 def make_client(settings, harness):

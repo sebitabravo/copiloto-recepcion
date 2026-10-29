@@ -9,10 +9,8 @@ from datetime import date
 
 import httpx
 import pytest
-
 from copiloto.config import Settings
-from copiloto.pms import (HttpPmsAdapter, PmsConflict, PmsUnavailable, UnavailablePmsAdapter,
-                          build_pms_adapter)
+from copiloto.pms import HttpPmsAdapter, PmsConflict, PmsUnavailable, UnavailablePmsAdapter, build_pms_adapter
 
 CHECKIN, CHECKOUT = date(2027, 3, 15), date(2027, 3, 18)
 OFFER = {"code": "doble_con_jacuzzi", "name": "Habitación Doble con Jacuzzi", "max_adults": 2,

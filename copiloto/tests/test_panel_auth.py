@@ -5,9 +5,10 @@ La sesión es una cookie firmada; el token del panel se mantiene para la app inc
 
 import time
 
-from copiloto import store
 from copiloto.app import create_app
 from fastapi.testclient import TestClient
+
+from copiloto import store
 
 
 def make_client(settings, harness):

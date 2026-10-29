@@ -211,4 +211,5 @@ flujo guiado por reglas sí la cumple, y es el que se usa cuando el modelo no es
 | B | Batería de evaluación reproducible: `scripts/model_eval.py` |
 | C | Prueba del flujo completo: `scripts/e2e.py` |
 | D | Verificación previa a la presentación: `make demo` |
-| E | Pruebas automáticas del sistema: 136 casos |
+| E | Pruebas automáticas del sistema: 194 casos (157 del copiloto, 25 del PMS simulado, 12 del puente Beds24) |
+| F | Instrumentos de testeo con usuarios: `docs/eva3/testeo/` (guion, storyboard, mock-up anotado, matriz CDM) |

@@ -29,12 +29,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "copiloto" / "src"))
 sys.path.insert(0, str(ROOT / "copiloto" / "tests"))
 
+from conftest import FakeChatwoot, FakeClock, FakePms, Harness, local_epoch  # noqa: E402
 from copiloto.ai.agent import Agent  # noqa: E402
 from copiloto.ai.llm import LlmClient  # noqa: E402
 from copiloto.config import Settings  # noqa: E402
 from copiloto.events import connect, init_db  # noqa: E402
 from copiloto.hotel import HotelData  # noqa: E402
-from conftest import FakeChatwoot, FakeClock, FakePms, Harness, local_epoch  # noqa: E402
 
 PROMPT_MARKERS = ("REGLAS", "Eres el asistente de recepción", "MODO DEMO AUTÓNOMO")
 STAY_A = ("del 12 al 14 de noviembre", "2026-11-12", "2026-11-14")
@@ -77,7 +77,8 @@ def case_availability_args(h):
     reading = last_reading(h)
     ok = bool(reading) and reading["checkin"] == STAY_A[1] and reading["checkout"] == STAY_A[2] \
         and reading["adults"] == 2 and reading["children"] == 1
-    return ok, f"lectura={reading and (reading['checkin'], reading['checkout'], reading['adults'], reading['children'])}", False
+    found = reading and (reading["checkin"], reading["checkout"], reading["adults"], reading["children"])
+    return ok, f"lectura={found}", False
 
 
 def case_no_booking_without_name(h):

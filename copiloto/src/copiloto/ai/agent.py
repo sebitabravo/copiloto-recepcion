@@ -10,10 +10,10 @@ from copiloto.ai.llm import LlmClient, parse_arguments
 from copiloto.ai.prompts import WEEKDAYS, build_system_prompt
 from copiloto.ai.sessions import AiSession
 from copiloto.ai.tools import LABELS, ToolHooks, ToolRunner, tool_specs
-from copiloto.textutil import parse_guests, parse_stay
 from copiloto.config import Settings
 from copiloto.hotel import HotelData
 from copiloto.pms import PmsAdapter
+from copiloto.textutil import parse_guests, parse_stay
 
 MAX_STEPS = 5
 MAX_REPLY = 1200

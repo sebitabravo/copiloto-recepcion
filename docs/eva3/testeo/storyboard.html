@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storyboard · Copiloto de Recepción (3.1.2.1)</title>
+<style>
+  :root {
+    --bg:#f3ebdf; --card:#fffaf2; --ink:#211a12; --muted:#7b6953; --line:#ded0b9;
+    --accent:#8d5a2b; --guest:#35513f; --guest-ink:#f6f1e6;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:32px 20px 64px; background:var(--bg); color:var(--ink);
+    font:15px/1.5 system-ui, sans-serif; }
+  header { max-width:1180px; margin:0 auto 28px; }
+  h1 { font-size:clamp(1.6rem,3vw,2.4rem); margin:0 0 6px; }
+  .sub { color:var(--muted); max-width:70ch; margin:0; }
+  .meta { color:var(--muted); font-size:13px; margin-top:10px; }
+  .board { max-width:1180px; margin:0 auto; display:grid; gap:20px;
+    grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px;
+    display:grid; gap:12px; align-content:start; }
+  .panel h2 { font-size:15px; margin:0; display:flex; gap:8px; align-items:baseline; }
+  .num { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%;
+    background:var(--accent); color:#fffaf2; font-size:13px; font-weight:700; }
+  .scene { border:1px solid var(--line); border-radius:10px; background:var(--bg);
+    min-height:190px; padding:12px; display:grid; gap:8px; align-content:start; }
+  .phone { border:2px solid var(--ink); border-radius:18px; padding:10px; background:var(--card);
+    display:grid; gap:6px; max-width:290px; margin:0 auto; width:100%; }
+  .appbar { display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line);
+    padding-bottom:6px; font-size:12px; color:var(--muted); }
+  .dot { width:22px; height:22px; border-radius:50%; background:var(--accent); }
+  .bubble { max-width:85%; padding:7px 10px; border-radius:12px; font-size:12.5px; }
+  .in { background:var(--card); border:1px solid var(--line); border-bottom-left-radius:4px; }
+  .out { background:var(--guest); color:var(--guest-ink); justify-self:end;
+    border-bottom-right-radius:4px; }
+  .stamp { font-size:10px; color:var(--muted); text-align:right; }
+  .tool { font-size:11px; color:var(--accent); border:1px dashed var(--accent);
+    border-radius:8px; padding:4px 8px; justify-self:start; }
+  .desk { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .pane { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:8px;
+    font-size:12px; display:grid; gap:6px; align-content:start; }
+  .timer { font-size:20px; font-weight:700; }
+  .row { height:8px; border-radius:4px; background:var(--line); }
+  .row.short { width:60%; }
+  .cap { margin:0; font-size:13.5px; }
+  .tests { margin:0; padding-left:18px; font-size:12.5px; color:var(--muted); }
+  @media print {
+    body { background:#fff; padding:0; }
+    .panel { break-inside:avoid; border-color:#bbb; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Storyboard del copiloto de recepción</h1>
+  <p class="sub">Seis escenas del recorrido completo: lo que ve el huésped y lo que ve recepción. Es el
+  recorrido que se muestra en la demo y el que se prueba en la sesión con usuarios.</p>
+  <p class="meta">Instrumento 3.1.2.1 · Innovación y Emprendimiento III · EVA 3 · versión 1</p>
+</header>
+
+<main class="board">
+  <section class="panel">
+    <h2><span class="num">1</span> El huésped escribe</h2>
+    <div class="scene">
+      <div class="phone">
+        <div class="appbar"><span class="dot"></span> Hotel Boutique Bordeluz</div>
+        <div class="bubble out">Hola, ¿tienen habitación para el finde?</div>
+        <div class="stamp">09:41</div>
+      </div>
+    </div>
+    <p class="cap">La consulta llega por el canal que el huésped ya usa: mensajería. No hay formulario
+    ni registro previo.</p>
+    <ul class="tests">
+      <li>¿Entiende, sin explicación, que puede preguntar ahí?</li>
+      <li>¿Escribe una pregunta real o mira la página sin escribir?</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2><span class="num">2</span> Ubicación primero</h2>
+    <div class="scene">
+      <div class="phone">
+        <div class="appbar"><span class="dot"></span> Hotel Boutique Bordeluz</div>
+        <div class="bubble in">Estamos en el sector Molco, camino Villarrica–Pucón Km 12.5, frente a la
+          playa Calfurray. ¿Para qué fechas vienes?</div>
+        <div class="tool">get_hotel_info · dato verificado</div>
+        <div class="stamp">09:41</div>
+      </div>
+    </div>
+    <p class="cap">El primer dato que recibe el huésped es dónde está el hotel. Sin ubicación no hay
+    reserva: lo dijo la entrevista de la Unidad 1.</p>
+    <ul class="tests">
+      <li>¿La ubicación le sirve para decidir si sigue?</li>
+      <li>¿Le extraña que el bot dé la dirección antes de preguntar fechas?</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2><span class="num">3</span> Fechas y personas</h2>
+    <div class="scene">
+      <div class="phone">
+        <div class="appbar"><span class="dot"></span> Hotel Boutique Bordeluz</div>
+        <div class="bubble out">Del 12 al 14 de noviembre, 2 adultos y 1 niño</div>
+        <div class="bubble in">Perfecto, déjame revisar la disponibilidad.</div>
+        <div class="stamp">09:42</div>
+      </div>
+    </div>
+    <p class="cap">Dos datos, en lenguaje natural. El copiloto no pide un formulario: extrae fechas y
+    personas de la conversación.</p>
+    <ul class="tests">
+      <li>¿Las fechas que escribió se interpretan como espera?</li>
+      <li>¿Corrige un error de fecha si la persona escribe otra cosa?</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2><span class="num">4</span> Disponibilidad con sello de hora</h2>
+    <div class="scene">
+      <div class="phone">
+        <div class="appbar"><span class="dot"></span> Hotel Boutique Bordeluz</div>
+        <div class="bubble in">Hay 3 habitaciones disponibles para esas fechas, desde $78.000 la
+          noche. Disponible según lectura del PMS a las 09:42. Pendiente de confirmación por recepción.</div>
+        <div class="tool">check_availability · PMS</div>
+        <div class="stamp">09:42</div>
+      </div>
+    </div>
+    <p class="cap">La diferencia central del producto: el bot no promete, informa la lectura y su hora.
+    La confirmación la hace una persona.</p>
+    <ul class="tests">
+      <li>¿Distingue «disponible» de «reservado»?</li>
+      <li>¿La hora de lectura le da confianza o le resulta ruido?</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2><span class="num">5</span> Pre-reserva y aviso</h2>
+    <div class="scene">
+      <div class="phone">
+        <div class="appbar"><span class="dot"></span> Hotel Boutique Bordeluz</div>
+        <div class="bubble in">Te dejo la solicitud registrada. Recepción confirma en pocos minutos;
+          el horario de atención es de 08:00 a 22:00.</div>
+        <div class="tool">pre-booking · vence 15 min</div>
+        <div class="stamp">09:43</div>
+      </div>
+    </div>
+    <p class="cap">El huésped sabe qué pasa después y cuándo. Si es de noche, el copiloto captura y
+    avisa al turno siguiente.</p>
+    <ul class="tests">
+      <li>¿Sabe qué esperar y en cuánto tiempo?</li>
+      <li>¿Le queda claro que todavía no hay reserva?</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2><span class="num">6</span> Recepción confirma</h2>
+    <div class="scene">
+      <div class="desk">
+        <div class="pane">
+          <strong style="font-size:12px">Chatwoot</strong>
+          <div class="row"></div><div class="row short"></div>
+          <div class="row"></div>
+          <span class="tool">etiqueta comercial · nota privada</span>
+        </div>
+        <div class="pane">
+          <strong style="font-size:12px">Panel</strong>
+          <div class="timer">01:12</div>
+          <div class="row short"></div><div class="row"></div>
+          <span class="tool">confirmar en PMS</span>
+        </div>
+      </div>
+    </div>
+    <p class="cap">Recepción ve fechas, personas, lectura del PMS y el cronómetro. Confirma en el PMS
+    con una persona mirando el inventario.</p>
+    <ul class="tests">
+      <li>¿Entiende qué llegó sin leer todo el chat?</li>
+      <li>¿Sabe qué botón apretar y qué pasa después?</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>
