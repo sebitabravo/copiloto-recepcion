@@ -82,7 +82,7 @@
       </div>
       <span class="pill" id="model-label">Conectando con el asistente…</span>
     </div>
-    <p class="section-intro">Este es el canal de WhatsApp del hotel. Escribe como un huésped: el copiloto responde y, en la traza, ves las herramientas que invoca y lo que devuelven.</p>
+    <p class="section-intro">Simulador de conversación tipo WhatsApp: escribe como un huésped y el asistente responde desde el servidor real de la demo. No está conectado a un número de WhatsApp; el canal conectado a la bandeja de recepción está debajo del simulador.</p>
     <p id="ai-disclaimer" class="disclaimer" hidden>Demo con IA. Todo es ficticio: no escribas datos personales reales. Las reservas se crean en un PMS simulado.</p>
     <p id="capability" class="small" hidden></p>
     <div id="guided-banner" class="notice" hidden>La IA no está configurada en este servidor: el asistente responde con el flujo guiado (sin IA).</div>
@@ -112,39 +112,42 @@
               <div id="rate-status" class="rate-status" role="status" aria-live="polite" hidden></div>
               <form id="chat-form" class="composer">
                 <label class="sr-only" for="message-input">Tu mensaje al asistente</label>
-                <textarea id="message-input" rows="2" maxlength="400" placeholder="Escribe tu mensaje…" aria-describedby="input-help char-count"></textarea>
+                <textarea id="message-input" rows="1" maxlength="400" placeholder="Escribe tu mensaje…" aria-describedby="input-help char-count"></textarea>
                 <div class="composer-bottom"><span id="char-count">0/400</span><button id="send" class="button primary send-button" type="submit" aria-label="Enviar mensaje" disabled><span aria-hidden="true">↑</span></button></div>
                 <p id="input-help">Enter envía · Shift + Enter agrega una línea</p>
               </form>
             </div>
           </div>
-          <p class="device-caption">Vista simulada · la conversación sí corre contra el servidor de la demo.</p>
-          <button id="reset" class="text-button" type="button">↻ Reiniciar conversación</button>
+          <p class="device-caption">Simulador tipo WhatsApp · la conversación corre contra el servidor de la demo, sin pasar por WhatsApp.</p>
+          <div class="demo-toolbar">
+            <button id="toggle-actions" class="text-button" type="button" aria-expanded="false" aria-controls="actions-panel">Ver acciones del asistente</button>
+            <button id="reset" class="text-button" type="button">↻ Reiniciar conversación</button>
+          </div>
         </div>
 
-        <aside class="thinking card" aria-labelledby="thinking-title">
+        <aside id="actions-panel" class="thinking card" aria-labelledby="thinking-title" hidden>
           <div class="thinking-heading">
-            <p class="eyebrow">Traza</p>
-            <h2 id="thinking-title">Así piensa la IA</h2>
-            <p>No mostramos pensamientos internos: aquí ves las herramientas y acciones que devuelve el servidor.</p>
+            <p class="eyebrow">Vista técnica</p>
+            <h2 id="thinking-title">Acciones del asistente</h2>
+            <p>Qué consultó o hizo el asistente en cada turno. Los nombres técnicos están dentro de «Detalle técnico».</p>
           </div>
           <div class="usage"><span id="response-time">Respuesta en — s</span><span id="messages-left">Mensajes restantes: —</span></div>
           <div id="timeline-empty" class="timeline-empty">
-            <p>Envía un mensaje para ver las herramientas y acciones del asistente.</p>
+            <p>Envía un mensaje para ver qué consulta o hace el asistente.</p>
             <ul class="ghost-trace" aria-hidden="true">
-              <li><b>get_hotel_info</b><em>ubicación y servicios</em></li>
-              <li><b>check_availability</b><em>fechas y tarifa</em></li>
-              <li><b>create_booking</b><em>reserva en el PMS</em></li>
-              <li><b>handoff_to_human</b><em>derivación a recepción</em></li>
+              <li><b>Consulta la información del hotel</b><em>ubicación y servicios</em></li>
+              <li><b>Verifica disponibilidad</b><em>fechas y tarifa</em></li>
+              <li><b>Registra una reserva de demostración</b><em>en el PMS simulado</em></li>
+              <li><b>Pide ayuda a recepción</b><em>derivación a una persona</em></li>
             </ul>
-            <p class="ghost-note">Cada turno agrega una tarjeta por herramienta; una reserva creada agrega su comprobante.</p>
+            <p class="ghost-note">Cada turno agrega una tarjeta por acción; una reserva creada agrega su comprobante.</p>
           </div>
           <div id="timeline" class="timeline"></div>
         </aside>
       </div>
       <div class="secondary-chat">
         <button id="open-chat" class="text-button" type="button">Probar en la bandeja real de recepción</button>
-        <p>Es el canal real del hotel: la conversación llega a la bandeja de recepción.</p>
+        <p>Canal conectado: esta conversación sí llega a la bandeja de recepción (Chatwoot), aparte del simulador.</p>
         <p id="chat-status" class="small" role="status" aria-live="polite"></p>
       </div>
     </div>
@@ -204,10 +207,10 @@
     <div class="section-heading">
       <div>
         <p class="eyebrow">Herramientas</p>
-        <h2 id="cap-title">Cuatro acciones, ninguna improvisada</h2>
+        <h2 id="cap-title">Cuatro acciones concretas</h2>
       </div>
     </div>
-    <p class="section-intro">La IA no inventa datos: pide información a herramientas concretas y actúa solo con lo que devuelven.</p>
+    <p class="section-intro">El asistente consulta herramientas concretas para responder con datos del hotel y del PMS simulado. Eso reduce el riesgo de errores, pero no lo elimina: por eso recepción revisa antes de confirmar.</p>
     <ul class="capabilities">
       <li class="capability">
         <span class="cap-index" aria-hidden="true">01</span>
