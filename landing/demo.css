@@ -1858,3 +1858,116 @@ body.is-hidden * {
   .reveal.waiting .step { opacity: 1; transform: none; }
   .ticker-track { animation: none; flex-wrap: wrap; width: auto; }
 }
+
+/* ---------- Simulador: la conversación manda; las acciones del asistente son una capa opcional ---------- */
+
+.demo-grid {
+  grid-template-columns: minmax(0, 520px);
+  justify-content: center;
+}
+
+.demo-grid.with-actions {
+  grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
+  justify-content: stretch;
+}
+
+.messages { height: clamp(420px, 64vh, 580px); }
+
+.composer { padding: 8px 10px 6px; }
+.composer textarea { min-height: 40px; max-height: 96px; padding: 9px 16px; }
+.composer p { margin: 4px 0 0; text-align: center; }
+
+.demo-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 22px;
+  margin-top: 8px;
+}
+
+.demo-toolbar .text-button { display: inline-block; margin: 0; }
+
+.event-summary { margin: 6px 0 0; }
+
+.availability {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+
+.availability-head { margin: 0 0 8px; color: var(--ink-2); font-size: .74rem; font-weight: 600; }
+
+.availability-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+
+.availability-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+  font-size: .76rem;
+}
+
+.availability-list li:first-child { padding-top: 0; border-top: 0; }
+.availability-list strong { font-family: var(--font-ui); color: var(--ink); }
+.availability-list li > span { color: var(--muted); }
+.availability-list .availability-price { grid-column: 1; }
+.availability-list .availability-total { grid-column: 2; grid-row: 2; color: var(--ink); font-weight: 600; text-align: right; }
+.availability-list li > span:nth-of-type(1) { grid-column: 2; grid-row: 1; text-align: right; }
+
+.availability-note,
+.availability-empty { margin: 8px 0 0; color: var(--muted); font-size: .7rem; }
+
+details.tech { margin-top: 10px; }
+
+details.tech summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: .72rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+details.tech[open] summary { margin-bottom: 8px; }
+details.tech code { display: block; margin-bottom: 6px; color: var(--accent); font-size: .72rem; }
+
+@media (max-width: 820px) {
+  .demo-grid,
+  .demo-grid.with-actions { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* En el móvil la pantalla del usuario ya es un teléfono: sin marco, sin cámara ni barra de estado falsas. */
+@media (max-width: 620px) {
+  .demo-stage {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+  .device-side,
+  .device-camera,
+  .device-status { display: none; }
+  .phone { border: 1px solid var(--line); border-radius: 18px; box-shadow: none; }
+  .messages { height: min(68vh, 520px); }
+  .composer p { display: none; }
+}
+
+/* Cuadro de escritura compacto: texto y botón de envío en una sola fila */
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 4px 8px;
+}
+.composer textarea { grid-column: 1; }
+.composer-bottom {
+  grid-column: 2;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+}
+.composer p { grid-column: 1 / -1; }

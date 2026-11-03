@@ -124,13 +124,14 @@ Quedan **pendientes de validar con el hotel**: Km 12.5 vs 2.5 de la dirección, 
 
 ## Límites declarados
 
-- **PMS real**: Pxsol no tiene API pública documentada. `PxsolAdapter` es un stub con el contrato; la
-  integración real necesita credenciales del hotel y el acuerdo con el proveedor.
+- **PMS real**: Pxsol no tiene API pública documentada. El adaptador HTTP genérico (`HttpPmsAdapter`) habla el
+  contrato de `docs/conector-pms.md` y `pms_bridge` conecta Beds24; la integración real necesita credenciales del
+  hotel y el acuerdo con el proveedor.
 - **Canales**: la demo usa el chat web. WhatsApp y Telegram no están incluidos ni se probaron; nunca conectes el
   número real del hotel a esta demo.
-- **IA opcional**: con `LLM_API_KEY` el asistente entiende lenguaje libre y, en la demo, reserva por sí solo en el
-  PMS simulado (`AI_MODE=full`); sin key funciona con el flujo guiado. EVA2 describe un bot determinista que no
-  confirma: eso equivale a `AI_MODE=assisted`. Ver [asistente con IA](docs/ia.md). Para correrlo con un modelo
+- **IA opcional**: con `LLM_API_KEY` el asistente entiende lenguaje libre y, conversa, consulta y deriva, y
+  recepción confirma (`AI_MODE=assisted`, el valor por defecto, coherente con EVA2); `AI_MODE=full` agrega la
+  reserva automática en el PMS simulado, solo como demostración técnica. Sin key funciona con el flujo guiado. Ver [asistente con IA](docs/ia.md). Para correrlo con un modelo
   local sin costo, ver [IA local](docs/ia-local.md).
 - Las métricas (solo contadores) no tienen autenticación propia: en un servidor, publícalas detrás de un
   proxy con login (ver [despliegue](docs/despliegue.md)).

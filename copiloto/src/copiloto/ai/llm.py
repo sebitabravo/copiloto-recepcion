@@ -33,9 +33,6 @@ class LlmReply:
 
 
 class LlmClient:
-    # El cliente declara si puede forzar una herramienta; los dobles de prueba no lo hacen.
-    supports_tool_choice = True
-
     def __init__(self, base_url: str, api_key: str, model: str, timeout_s: float = 25.0,
                  http: httpx.AsyncClient | None = None, retries: int = 1):
         self._url = f"{base_url.rstrip('/')}/chat/completions"

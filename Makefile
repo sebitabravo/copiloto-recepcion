@@ -2,7 +2,7 @@
 COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
 
 .DEFAULT_GOAL := help
-.PHONY: help up down reset env ps logs test seed health e2e creds smoke backup ai-smoke demo model piloto beds24-check
+.PHONY: help up down reset env ps logs test seed health e2e creds smoke backup ai-smoke demo model piloto beds24-check wa-up wa-down wa-qr wa-e2e
 
 help: ## Muestra esta ayuda
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z0-9_-]+:.*## / {printf "  \033[1m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -34,10 +34,11 @@ logs: ## Sigue los logs del copiloto y el PMS
 health: ## Espera y comprueba los healthchecks
 	./scripts/wait-healthy.sh
 
-test: ## Tests de copiloto, pms_mock y el puente de PMS
+test: ## Tests de copiloto, pms_mock y los puentes (PMS y WhatsApp)
 	cd copiloto && uv run pytest -q
 	cd pms_mock && uv run pytest -q
 	cd pms_bridge && uv run pytest -q
+	cd wa_bridge && uv run pytest -q
 
 bridge: ## Levanta el puente Beds24 en 8300 (requiere BEDS24_* configurado)
 	cd pms_bridge && uv run uvicorn pms_bridge.main:app --port 8300
@@ -80,3 +81,21 @@ piloto: ## Informe del piloto: métricas contra las metas de la Unidad 2 (DAYS=1
 
 beds24-check: ## Verifica credenciales y lectura de Beds24 antes de conectar el copiloto
 	python3 scripts/beds24_check.py
+
+# Canal de WhatsApp (OpenWA, no oficial). Requiere `make up` previo. Re-siembra para crear el inbox de WhatsApp.
+wa-up: env ## Levanta el canal de WhatsApp de la demo (OpenWA + puente); luego escanea el QR
+	$(COMPOSE) --profile whatsapp build wa-bridge
+	$(COMPOSE) --profile whatsapp up -d openwa
+	WA_BRIDGE_URL=http://wa-bridge:8400 ./scripts/seed-chatwoot.sh
+	$(COMPOSE) --profile whatsapp up -d --force-recreate wa-bridge
+	$(COMPOSE) up -d --force-recreate copiloto
+	@echo "Siguiente paso: make wa-qr (crea la sesión y muestra dónde escanear el QR)"
+
+wa-qr: ## Muestra cómo vincular el teléfono dedicado (QR de OpenWA)
+	./scripts/wa-session.sh
+
+wa-down: ## Detiene OpenWA y el puente (conserva la sesión vinculada)
+	$(COMPOSE) --profile whatsapp stop openwa wa-bridge
+
+wa-e2e: ## Prueba E2E del canal de WhatsApp sin teléfono (OpenWA simulado). SLA=1 agrega la prueba de 195 s
+	./scripts/wa-e2e.sh $(if $(SLA),--sla,)

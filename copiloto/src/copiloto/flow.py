@@ -14,6 +14,7 @@ import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, timedelta
+from urllib.parse import urlparse
 
 from copiloto import store
 from copiloto.ai import sessions as ai_sessions
@@ -38,6 +39,7 @@ from copiloto.textutil import (
 logger = logging.getLogger(__name__)
 
 WEB_WIDGET = "Channel::WebWidget"
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal"}
 MENU_OPTIONS = [
     ("Ubicación", "ubicacion"),
     ("Habitaciones y fotos", "habitaciones"),
@@ -246,6 +248,14 @@ class Copiloto:
         hint = "Responde con el número de la opción."
         await self.chatwoot.send_message(ctx.conversation_id, "\n".join([content, *lines, hint]))
 
+    def _privacy_line(self, ctx: Context) -> str:
+        """Frase de privacidad del saludo. Fuera del widget el huésped lee desde su teléfono: una URL local no abre."""
+        base = "Al escribirme aceptas el tratamiento de tus datos según el aviso de privacidad"
+        host = urlparse(self.settings.public_url).hostname or ""
+        if ctx.channel != WEB_WIDGET and host in LOCAL_HOSTS:
+            return base + " del hotel, que te entrega recepción si lo pides."
+        return f"{base}: {self.settings.public_url}/privacidad"
+
     async def _welcome(self, ctx: Context) -> None:
         name = self.hotel.hotel["name"]
         if self.agent is not None:
@@ -254,10 +264,7 @@ class Copiloto:
         else:
             intro = (f"¡Hola! Soy el Copiloto de Recepción del {name} (demo). Resuelvo al tiro las consultas "
                      "frecuentes y paso tu solicitud a recepción, que es quien valida y cierra cada reserva. ")
-        await self._say(ctx, (
-            intro + "Al escribirme aceptas el tratamiento de tus datos según el aviso de privacidad: "
-            f"{self.settings.public_url}/privacidad"
-        ))
+        await self._say(ctx, intro + self._privacy_line(ctx))
         await self._show_location(ctx)
 
     async def _show_location(self, ctx: Context) -> None:

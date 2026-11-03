@@ -36,6 +36,15 @@ async def test_sla_amber_120_red_180(harness, settings):
     assert len(harness.chatwoot.notes(1)) == notes_before, "la alerta se emite una sola vez"
 
 
+async def test_a_delayed_worker_still_labels_amber_when_it_jumps_straight_to_red(harness, settings):
+    """Regresión: si el worker se atrasa y la primera pasada cae sobre los 180 s, el ámbar se perdía para siempre."""
+    await handed_off(harness)
+    worker = SlaWorker(settings, harness.db, harness.chatwoot, harness.clock)
+    harness.clock.advance(185)
+    await worker.tick()
+    assert {"sla-ambar", "sla-vencido"} <= set(harness.chatwoot.labels[1])
+
+
 async def test_sla_clock_not_reset_on_assignment(harness):
     await handed_off(harness)
     started = store.get_state(harness.db, 1).sla_started_at

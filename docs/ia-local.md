@@ -39,7 +39,7 @@ pague la carga del modelo en memoria. Sale con código 1 si algo falta.
 
 | Variable | Valor | Para qué |
 |---|---|---|
-| `AI_MODE` | `full` o `assisted` | `full` permite crear la reserva en el PMS simulado; `assisted` solo reúne datos y deriva |
+| `AI_MODE` | `assisted` o `full` | `assisted` solo reúne datos y deriva; `full` permite crear la reserva en el PMS simulado |
 | `LLM_BASE_URL` | `http://host.docker.internal:11434/v1` | Endpoint compatible con OpenAI visto desde el contenedor |
 | `LLM_MODEL` | `qwen2.5-7b-instruct` | Nombre del alias con que se levantó el modelo |
 | `LLM_API_KEY` | `local` | El servidor local no valida clave, pero el copiloto exige una no vacía para activar la IA |

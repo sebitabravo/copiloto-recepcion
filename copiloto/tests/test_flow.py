@@ -270,3 +270,29 @@ async def test_children_answer_accepts_natural_negatives(harness):
         await harness.say("2 adultos", conversation_id=conversation_id)
         await harness.say(answer, conversation_id=conversation_id)
         assert store.get_state(harness.db, conversation_id).data.get("children") == 0, answer
+
+
+async def test_whatsapp_greeting_never_sends_a_localhost_link(harness):
+    """Regresión: el aviso de privacidad apuntaba a localhost, inalcanzable desde el teléfono del huésped."""
+    await harness.say("hola", channel="Channel::Api")
+    first = harness.chatwoot.guest_texts()[0]
+    assert "localhost" not in first and "privacidad" in first.lower()
+
+
+async def test_whatsapp_greeting_links_the_privacy_notice_when_the_url_is_public(settings, clock):
+    from dataclasses import replace
+
+    from conftest import FakeChatwoot, FakePms, Harness
+    from copiloto.events import connect, init_db
+    from copiloto.hotel import HotelData
+    db = connect(":memory:")
+    init_db(db)
+    public = replace(settings, public_url="https://copiloto.hotelbordeluz.cl")
+    h = Harness(public, HotelData.load(public.hotel_data_path), db, FakeChatwoot(), FakePms(), clock)
+    await h.say("hola", channel="Channel::Api")
+    assert "https://copiloto.hotelbordeluz.cl/privacidad" in h.chatwoot.guest_texts()[0]
+
+
+async def test_web_widget_greeting_keeps_the_local_link(harness):
+    await harness.say("hola")
+    assert "/privacidad" in harness.chatwoot.guest_texts()[0]

@@ -13,8 +13,9 @@ reservar o derivar a una persona. Sin IA configurada, el mismo bot funciona con 
 | Variable | Valor por defecto | Para qué |
 |---|---|---|
 | `LLM_API_KEY` | vacío | Sin key no hay IA: el asistente usa el flujo guiado |
-| `AI_MODE` | `full` | `full`: también reserva en el PMS simulado · `assisted`: no reserva, deriva a recepción · `off`: sin IA |
+| `AI_MODE` | `assisted` | `assisted`: no reserva, deriva a recepción · `full`: también reserva en el PMS simulado (solo demostración) · `off`: sin IA |
 | `LLM_BASE_URL` | `https://api.deepseek.com` | Cualquier API compatible con OpenAI (`/chat/completions` con herramientas) |
+| `AI_TURN_TIMEOUT_S` | `12` | Tope en segundos de todo el turno de IA (reintentos incluidos); al vencer, el huésped sigue con el menú guiado |
 | `LLM_MODEL` | `deepseek-flash` | Nombre del modelo (según la documentación de DeepSeek al 28-oct-2026) |
 
 ## Cómo piensa
@@ -53,9 +54,9 @@ El modelo propone; el código valida y ejecuta. Nada que diga el modelo se toma 
 
 ## Relación con los informes
 
-EVA2 define un bot determinista que nunca confirma (R3). Ese comportamiento es `AI_MODE=assisted`: la IA
-conversa, consulta y arma la pre-información, y la persona valida. `AI_MODE=full` es una extensión de la demo,
-con PMS simulado, para mostrar el potencial; en un hotel real con el PMS verdadero conviene `assisted`.
+EVA2 define un bot que nunca confirma (R3). Ese comportamiento es `AI_MODE=assisted`, el valor por defecto: la IA
+conversa, consulta y arma la pre-información, y la persona valida. `AI_MODE=full` es una extensión técnica,
+con PMS simulado, para mostrar el potencial; con un PMS real debe usarse `assisted`.
 
 ## Límites honestos
 

@@ -199,7 +199,7 @@
         'La IA puede crear la reserva de demostración por sí sola.' :
         'La IA no crea reservas: deja la solicitud lista para recepción.';
       document.querySelector('[data-scenario="booking"]').hidden = !aiEnabled;
-      setConnectionLabel(aiEnabled ? 'en línea' : 'flujo guiado');
+      setConnectionLabel(aiEnabled ? 'asistente con IA' : 'flujo guiado');
       get('status-dot').classList.add('ready');
       if (!turns) get('messages-left').textContent = `Mensajes restantes: ${data.messages_per_session ?? '—'}`;
       updateInitialGreeting();
@@ -238,6 +238,53 @@
     create_booking: 'PMS simulado',
     handoff_to_human: 'bandeja de recepción'
   };
+  const toolTitles = {
+    get_hotel_info: 'Consultó la información del hotel',
+    check_availability: 'Verificó disponibilidad',
+    create_booking: 'Registró una reserva de demostración',
+    handoff_to_human: 'Pidió ayuda a recepción'
+  };
+  const dayMonth = new Intl.DateTimeFormat('es-CL', {day:'numeric', month:'short', timeZone:'UTC'});
+  function shortDate(value) {
+    const parsed = new Date(`${value}T00:00:00Z`);
+    return Number.isNaN(parsed.getTime()) ? String(value) : dayMonth.format(parsed);
+  }
+  function availabilityCard(result, args) {
+    const card = create('div', 'availability');
+    const dates = args && args.checkin && args.checkout ? `${shortDate(args.checkin)} → ${shortDate(args.checkout)} · ` : '';
+    card.append(create('p', 'availability-head', `${dates}${result.noches ?? '—'} noches · lectura ${result.lectura || 'sin hora'}`));
+    if (!Array.isArray(result.opciones) || !result.opciones.length) {
+      card.append(create('p', 'availability-empty', 'Sin cupo para esas fechas y personas.'));
+      return card;
+    }
+    const list = create('ul', 'availability-list');
+    result.opciones.forEach(option => {
+      const row = create('li');
+      row.append(
+        create('strong', '', option.nombre),
+        create('span', '', option.cupos === 1 ? 'queda 1' : `quedan ${option.cupos}`),
+        create('span', 'availability-price', `${money.format(Number(option.precio_noche_clp) || 0)} por noche`),
+        create('span', 'availability-total', `${money.format(Number(option.total_clp) || 0)} en total`));
+      list.append(row);
+    });
+    card.append(list, create('p', 'availability-note', 'Precios y cupos simulados: recepción los confirma.'));
+    return card;
+  }
+  function technicalDetail(event) {
+    const detail = create('details', 'tech');
+    detail.append(create('summary', '', 'Detalle técnico'), create('code', '', event.name || 'tool_call'));
+    const argumentsList = create('div', 'arguments');
+    if (event.arguments && typeof event.arguments === 'object') {
+      Object.entries(event.arguments).forEach(([key, value]) => {
+        const formatted = typeof value === 'object' ? JSON.stringify(value) : String(value);
+        argumentsList.append(create('span', '', `${key}: ${formatted}`));
+      });
+    }
+    detail.append(argumentsList, create('p', '', `${event.ms ?? '—'} ms`));
+    // De dónde salió el dato: la traza nunca muestra un valor sin origen.
+    detail.append(create('span', 'event-source', `fuente: ${toolSources[event.name] || 'servidor de la demo'}`));
+    return detail;
+  }
   function eventCard(event) {
     const card = create('article', 'event-card');
     if (event.type === 'tool_call') {
@@ -245,19 +292,12 @@
       const icon = create('span', 'event-icon');
       icon.append(toolIcon(event.name));
       const result = create('span', `event-result${event.ok ? '' : ' failed'}`, event.ok ? '✓' : '✕');
-      result.setAttribute('aria-label', event.ok ? 'Herramienta completada' : 'Herramienta con error');
-      heading.append(icon, create('h3', '', event.label || 'Consulta de herramienta'), result);
+      result.setAttribute('aria-label', event.ok ? 'Acción completada' : 'Acción con error');
+      heading.append(icon, create('h3', '', toolTitles[event.name] || event.label || 'Acción del asistente'), result);
       card.append(heading);
-      const argumentsList = create('div', 'arguments');
-      if (event.arguments && typeof event.arguments === 'object') {
-        Object.entries(event.arguments).forEach(([key, value]) => {
-          const formatted = typeof value === 'object' ? JSON.stringify(value) : String(value);
-          argumentsList.append(create('span', '', `${key}: ${formatted}`));
-        });
-      }
-      card.append(argumentsList, create('p', '', event.summary || ''), create('p', '', `${event.ms ?? '—'} ms`));
-      // De dónde salió el dato: la traza nunca muestra un valor sin origen.
-      card.append(create('span', 'event-source', `fuente: ${toolSources[event.name] || 'servidor de la demo'}`));
+      if (event.summary) card.append(create('p', 'event-summary', event.summary));
+      if (event.result && event.name === 'check_availability') card.append(availabilityCard(event.result, event.arguments));
+      card.append(technicalDetail(event));
     } else if (event.type === 'booking_created') {
       card.classList.add('booking-ticket');
       card.append(create('h3', '', `Reserva #${event.booking_id} creada en el PMS simulado`),
@@ -274,8 +314,24 @@
     return card;
   }
   const pause = milliseconds => new Promise(resolve => window.setTimeout(resolve, milliseconds));
+  let actionCount = 0;
+  function updateActionsToggle() {
+    const panel = get('actions-panel');
+    const toggle = get('toggle-actions');
+    const open = !panel.hidden;
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.textContent = open ? 'Ocultar acciones del asistente' :
+      (actionCount ? `Ver acciones del asistente (${actionCount})` : 'Ver acciones del asistente');
+    document.querySelector('.demo-grid').classList.toggle('with-actions', open);
+  }
+  get('toggle-actions').addEventListener('click', () => {
+    get('actions-panel').hidden = !get('actions-panel').hidden;
+    updateActionsToggle();
+  });
   async function showEvents(events) {
     if (!Array.isArray(events) || !events.length) return;
+    actionCount += events.filter(event => event && event.type === 'tool_call').length;
+    updateActionsToggle();
     get('timeline-empty').hidden = true;
     get('timeline').append(create('p', 'turn-label', `Turno ${turns} · acciones del asistente`));
     for (const event of events) {
@@ -323,6 +379,8 @@
     messageList.append(create('div', 'chat-date', 'Hoy'));
     get('timeline').replaceChildren();
     get('timeline-empty').hidden = false;
+    actionCount = 0;
+    updateActionsToggle();
     get('response-time').textContent = 'Respuesta en — s';
     get('messages-left').textContent = 'Mensajes restantes: —';
     get('scenario-status').textContent = '';

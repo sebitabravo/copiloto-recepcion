@@ -7,7 +7,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from pms_bridge.beds24 import Beds24Client, Beds24Error, RoomMap, parse_rooms, read_at, stay_offers
+from pms_bridge.beds24 import Beds24Client, Beds24Error, parse_rooms, read_at, stay_offers
 from pms_bridge.main import create_app
 
 ROOMS_JSON = json.dumps([

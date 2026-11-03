@@ -81,10 +81,10 @@ en `.env.runtime` (gitignored). Nunca las commitees.
    `/privacidad`.
 4. Cambia la URL del Dashboard App en Chatwoot (Configuración → Integraciones → Dashboard Apps) a la URL
    pública del panel, y `PMS_STAFF_URL` a la del PMS.
-5. Respalda los volúmenes `pg_data` y `copiloto_data`.
+5. Respalda con `make backup` (Chatwoot y las bases SQLite; ver `docs/whatsapp-demo.md` para el canal de WhatsApp).
 
 ## Del PMS simulado al real
 
-Implementa `PxsolAdapter` (`copiloto/src/copiloto/pms.py`) con la misma firma que `MockPxsolAdapter`: lectura
-de solo consulta con sello de hora. Necesita credenciales del hotel y el contrato del proveedor. La
+Apunta `PMS_URL` a un servicio que cumpla `docs/conector-pms.md` (el adaptador HTTP genérico está en
+`copiloto/src/copiloto/pms.py`; `pms_bridge` lo hace para Beds24): lectura de solo consulta con sello de hora. Necesita credenciales del hotel y el contrato del proveedor. La
 confirmación sigue siendo humana.

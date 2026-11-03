@@ -49,6 +49,18 @@ async def test_availability_tool_loop_records_prebooking_and_quick_replies(make_
     assert "niño" not in payload, "los eventos no guardan texto del huésped"
 
 
+async def test_availability_event_carries_a_structured_result_for_the_demo_card(make_ai):
+    h, _ = make_ai([call("check_availability", **STAY), say("Tengo estas opciones.")])
+    session = ai_sessions.load(h.db, "cw:card", h.clock())
+    result = await h.core.agent.respond(session, "2 adultos y un niño del 15 al 18 de noviembre",
+                                        ToolHooks(conversation_id=None, in_shift=True))
+    event = next(e for e in result.events if e["name"] == "check_availability")
+    card = event["result"]
+    assert card["noches"] == 3 and card["lectura"] and card["opciones"]
+    assert set(card["opciones"][0]) == {"nombre", "cupos", "precio_noche_clp", "total_clp"}
+    assert card["opciones"][0]["total_clp"] == card["opciones"][0]["precio_noche_clp"] * 3
+
+
 async def test_booking_without_a_fresh_matching_availability_reading_is_refused(make_ai):
     book = call("create_booking", guest_name="Camila Rojas", room_code="doble_con_jacuzzi", guest_confirmed=True,
                 **STAY)
@@ -161,6 +173,52 @@ async def test_handoff_tool_opens_the_conversation_with_the_assistant_detail(mak
     assert "el asistente con IA derivó la conversación" in note and "Quiere hablar por un reclamo" in note
     assert store.get_state(h.db, 1).sla_started_at is not None
     assert "Ya pasé tu consulta a recepción" in h.chatwoot.guest_texts()[-1]
+
+
+async def test_a_handoff_already_done_survives_a_later_model_outage(make_ai):
+    """Regresión: la derivación determinista se hacía y luego un fallo del modelo la pisaba con el menú."""
+    h, llm = make_ai([LlmUnavailable("http 503")])
+    await h.say("hola")
+    await h.say("quiero hablar con una persona")
+    assert h.chatwoot.statuses[1] == "open" and store.get_state(h.db, 1).step != "menu"
+    assert not any("no está disponible ahora" in t for t in h.chatwoot.guest_texts())
+    assert llm.calls == [], "no hace falta consultar al modelo para avisar a recepción"
+
+
+async def test_the_deadline_also_covers_the_work_before_the_first_model_call(make_ai, ai_settings, monkeypatch):
+    import asyncio
+
+    from copiloto.ai import agent as agent_module
+    original = agent_module.ToolRunner.run
+
+    async def slow(self, name, args):
+        await asyncio.sleep(0.2)
+        return await original(self, name, args)
+
+    monkeypatch.setattr(agent_module.ToolRunner, "run", slow)
+    h, llm = make_ai([say("no debería llegar")], replace(ai_settings, ai_turn_timeout_s=0.05))
+    await h.say("hola")
+    await h.say("¿cómo llego al hotel?")
+    assert any("no está disponible ahora" in t for t in h.chatwoot.guest_texts())
+    assert llm.calls == []
+
+
+async def test_the_whole_ai_turn_has_a_deadline_and_falls_back_to_the_menu(make_ai, ai_settings):
+    import asyncio
+    import time
+
+    class SlowLlm:
+        async def chat(self, *args, **kwargs):
+            await asyncio.sleep(5)
+
+    h, _ = make_ai([], replace(ai_settings, ai_turn_timeout_s=0.1))
+    h.core.agent.llm = SlowLlm()
+    await h.say("hola")
+    started = time.monotonic()
+    await h.say("quiero reservar")
+    assert time.monotonic() - started < 2
+    assert any("no está disponible ahora" in t for t in h.chatwoot.guest_texts())
+    assert store.get_state(h.db, 1).step == "menu"
 
 
 async def test_llm_outage_degrades_to_the_guided_menu(make_ai):

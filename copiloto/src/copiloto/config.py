@@ -55,6 +55,8 @@ class Settings:
     llm_api_key: str = ""
     llm_model: str = "qwen2.5-7b-instruct"
     llm_timeout_s: float = 25.0
+    # Tope del turno completo (reintentos y herramientas incluidos): pasado ese plazo se vuelve al menú guiado
+    ai_turn_timeout_s: float = 12.0
     llm_max_tokens: int = 500
     ai_max_history: int = 12
     pms_staff_token: str = ""
@@ -87,6 +89,7 @@ class Settings:
             llm_model=env.get("LLM_MODEL", cls.llm_model),
             # Un modelo local en CPU puede necesitar más de 25 s por turno.
             llm_timeout_s=float(env.get("LLM_TIMEOUT_S", cls.llm_timeout_s)),
+            ai_turn_timeout_s=float(env.get("AI_TURN_TIMEOUT_S", cls.ai_turn_timeout_s)),
             pms_staff_token=env.get("PMS_STAFF_TOKEN", ""),
             demo_enabled=env.get("DEMO_ENABLED", "1") not in ("0", "false", "no"),
             landing_origin=env.get("LANDING_ORIGIN", cls.landing_origin).rstrip("/"),

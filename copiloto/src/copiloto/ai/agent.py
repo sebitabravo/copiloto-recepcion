@@ -1,12 +1,13 @@
 """Bucle del agente: el modelo decide qué herramienta usar, el código valida y ejecuta, y la salida se revisa."""
 
+import asyncio
 import json
 import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from copiloto.ai.llm import LlmClient, parse_arguments
+from copiloto.ai.llm import LlmClient, LlmUnavailable, parse_arguments
 from copiloto.ai.prompts import WEEKDAYS, build_system_prompt
 from copiloto.ai.sessions import AiSession
 from copiloto.ai.tools import LABELS, ToolHooks, ToolRunner, tool_specs
@@ -79,6 +80,16 @@ def _money(value: int) -> str:
     return "$" + f"{value:,}".replace(",", ".")
 
 
+def _result_card(name: str, outcome) -> dict | None:
+    """Resumen estructurado para la tarjeta de la demo web; solo la disponibilidad lo necesita."""
+    if name != "check_availability" or not outcome.ok:
+        return None
+    data = outcome.data
+    return {"lectura": data.get("lectura_pms"), "noches": data.get("noches"),
+            "opciones": [{key: option[key] for key in ("nombre", "cupos", "precio_noche_clp", "total_clp")}
+                         for option in data.get("opciones", [])]}
+
+
 class Agent:
     def __init__(self, llm: LlmClient, hotel: HotelData, pms: PmsAdapter, settings: Settings,
                  clock: Callable[[], float] = time.time):
@@ -103,6 +114,7 @@ class Agent:
         return prompt + ("\n\nESTADO DE LA SESIÓN\n" + "\n".join(notes) if notes else "")
 
     async def respond(self, session: AiSession, user_text: str, hooks: ToolHooks) -> AgentResult:
+        deadline = time.monotonic() + self.settings.ai_turn_timeout_s
         runner = ToolRunner(self.hotel, self.pms, self.settings, self.clock, session, hooks)
         # Las herramientas no confían en el modelo: el «sí» del huésped se verifica sobre su propio texto.
         session.state["last_user_text"] = user_text
@@ -143,12 +155,23 @@ class Agent:
                 result.events.append(outcome.event)
             if outcome.ok:
                 session.state["data_seen"] = True
+                if hooks.conversation_id is not None:
+                    # Recepción ya fue avisada y el huésped informado: no se pide otra respuesta al modelo,
+                    # porque si fallara el menú pisaría una derivación ya hecha.
+                    result.handed_off = True
+                    return self._finish(session, user_text, result, None)
             messages.append({"role": "system", "content": "Aviso a recepción: "
                              + json.dumps(outcome.data, ensure_ascii=False)})
         for step in range(MAX_STEPS):
             started = time.monotonic()
+            if deadline <= started:
+                raise LlmUnavailable("plazo del turno agotado")
             # No se usa tool_choice="required": llama.cpp lo ignora y el modelo tiende a narrar la llamada.
-            reply = await self.llm.chat(messages, specs, max_tokens=self.settings.llm_max_tokens)
+            try:
+                async with asyncio.timeout(max(deadline - started, 0)):
+                    reply = await self.llm.chat(messages, specs, max_tokens=self.settings.llm_max_tokens)
+            except TimeoutError:
+                raise LlmUnavailable("plazo del turno agotado") from None
             result.llm_ms += int((time.monotonic() - started) * 1000)
             if reply.tokens is not None:
                 result.tokens = (result.tokens or 0) + reply.tokens
@@ -170,7 +193,7 @@ class Agent:
                         result.events.append({
                             "type": "tool_call", "name": "check_availability",
                             "label": LABELS["check_availability"], "arguments": arguments,
-                            "summary": outcome.summary,
+                            "summary": outcome.summary, "result": _result_card("check_availability", outcome),
                             "ms": int((time.monotonic() - tool_started) * 1000), "ok": outcome.ok})
                         messages.append({"role": "system", "content": "Disponibilidad leída del PMS: "
                                          + json.dumps(outcome.data, ensure_ascii=False)})
@@ -187,8 +210,8 @@ class Agent:
                 result.events.append({
                     "type": "tool_call", "name": call.name, "label": LABELS.get(call.name, call.name),
                     "arguments": {k: v for k, v in args.items() if k != "guest_confirmed"},
-                    "summary": outcome.summary, "ms": int((time.monotonic() - tool_started) * 1000),
-                    "ok": outcome.ok})
+                    "summary": outcome.summary, "result": _result_card(call.name, outcome),
+                    "ms": int((time.monotonic() - tool_started) * 1000), "ok": outcome.ok})
                 if outcome.event:
                     result.events.append(outcome.event)
                 if call.name == "create_booking" and outcome.ok and not outcome.data.get("ya_existia"):
