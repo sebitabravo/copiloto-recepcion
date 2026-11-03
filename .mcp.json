@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "elevenlabs": {
+      "command": "bash",
+      "args": ["${CLAUDE_PROJECT_DIR:-.}/scripts/elevenlabs-mcp.sh"]
+    }
+  }
+}
