@@ -52,6 +52,3 @@ class ChatwootClient:
     async def set_status(self, conversation_id: int, status: str) -> None:
         await self._request("POST", f"/conversations/{conversation_id}/toggle_status",
                             json={"status": status})
-
-    async def aclose(self) -> None:
-        await self._http.aclose()

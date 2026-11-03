@@ -2,7 +2,7 @@ from datetime import date
 
 import httpx
 import pytest
-from copiloto.pms import MockPxsolAdapter, PmsUnavailable
+from copiloto.pms import HttpPmsAdapter, PmsUnavailable
 
 OFFER = {"code": "doble_con_jacuzzi", "name": "Habitación Doble con Jacuzzi", "max_adults": 2, "max_children": 1,
          "m2": 32, "available_units": 2, "nightly_price_clp": 80000}
@@ -10,8 +10,8 @@ READING = {"read_at": "2026-10-28T15:00:00-03:00", "source": "pms-mock", "simula
            "room_types": [OFFER]}
 
 
-def adapter(handler) -> MockPxsolAdapter:
-    return MockPxsolAdapter("http://pms.test", http=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+def adapter(handler) -> HttpPmsAdapter:
+    return HttpPmsAdapter("http://pms.test", http=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
 
 
 async def read(handler):

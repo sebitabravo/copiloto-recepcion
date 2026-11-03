@@ -121,10 +121,6 @@ class HttpPmsAdapter(PmsAdapter):
             raise PmsUnavailable("Respuesta de reserva inválida") from exc
 
 
-# Nombre histórico: el servicio pms-mock expone el contrato y se habla igual que con un PMS real.
-MockPxsolAdapter = HttpPmsAdapter
-
-
 class UnavailablePmsAdapter(PmsAdapter):
     """Hotel sin PMS integrado: toda lectura falla y el copiloto deriva a recepción.
 
