@@ -57,7 +57,9 @@ class SlaWorker:
             return
         elapsed = now - state.sla_started_at
         if elapsed >= self.settings.sla_red_s:
-            await self.chatwoot.add_labels(conversation_id, ["sla-vencido"])
+            # Si el worker se atrasó y nunca marcó el ámbar, la etiqueta se pone junto con la roja
+            missed_amber = [] if state.sla_amber_done else ["sla-ambar"]
+            await self.chatwoot.add_labels(conversation_id, [*missed_amber, "sla-vencido"])
             if self._running(conversation_id) is None:
                 return
             await self.chatwoot.send_message(
