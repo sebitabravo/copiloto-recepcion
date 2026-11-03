@@ -28,7 +28,7 @@ fi
 
 echo "Modelo: $ALIAS  ·  puerto: $PORT  ·  contexto: $CTX"
 echo "Deja estas variables en .env:"
-echo "  AI_MODE=full"
+echo "  AI_MODE=assisted"
 echo "  LLM_BASE_URL=http://host.docker.internal:$PORT/v1"
 echo "  LLM_MODEL=$ALIAS"
 echo "  LLM_API_KEY=local"

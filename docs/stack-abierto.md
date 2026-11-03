@@ -25,7 +25,8 @@ de terceros**. Este documento lista cada pieza, su licencia y qué queda fuera d
 |---|---|---|
 | **PMS del hotel** | Es el sistema del cliente. Si usa Beds24 (propietario), el hotel ya lo paga; nosotros no. Si usa HotelDruid (AGPLv3), puede correr todo abierto | HotelDruid: AGPLv3, PHP + MySQL/PostgreSQL/SQLite, sin API REST — el puente tendría que leer su base de datos |
 | **Runtime de contenedores** | Docker Desktop y OrbStack son propietarios. OrbStack es gratis para uso personal | Podman o Colima, ambos open source |
-| **Proveedor de WhatsApp** | Conectar el número oficial exige un BSP (Meta Cloud API o similar) y tiene costo por conversación | El stack ya opera con Chatwoot por widget web sin costo; WhatsApp queda como costo del canal, no del producto |
+| **Proveedor de WhatsApp** | En producción se usa la Meta Cloud API directa (sin BSP obligatorio) con un número del hotel; Meta cobra por mensaje entregado según categoría y país, y las tarifas vigentes deben confirmarse en su tarjeta de precios | El stack ya opera con Chatwoot por widget web sin costo; WhatsApp queda como costo del canal, no del producto |
+| **Canal de demo por WhatsApp** | OpenWA (MIT) es un gateway no oficial y WhatsApp puede suspender el número. Solo con un número dedicado, nunca en producción. Ver `docs/whatsapp-demo.md` | Meta Cloud API oficial |
 
 ## Cómo se sostiene la regla
 
@@ -55,6 +56,6 @@ Total sin mensajería: 90.000 CLP. Es la cifra que ya usa la Unidad 2.
 ## Qué implica para el cliente
 
 - No hay cuota por consulta ni por habitación.
-- Los datos de huéspedes no salen del hotel.
+- Los datos de huéspedes no salen del hotel, salvo los mensajes que el propio huésped envía por WhatsApp, que pasan por la red de Meta.
 - Si el modelo local no está disponible, el copiloto sigue atendiendo con el flujo guiado.
 - La salida es posible: los datos viven en PostgreSQL y SQLite dentro del hotel.
