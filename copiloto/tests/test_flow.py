@@ -283,8 +283,8 @@ async def test_whatsapp_greeting_links_the_privacy_notice_when_the_url_is_public
     from dataclasses import replace
 
     from conftest import FakeChatwoot, FakePms, Harness
-    from copiloto.hotel import HotelData
     from copiloto.events import connect, init_db
+    from copiloto.hotel import HotelData
     db = connect(":memory:")
     init_db(db)
     public = replace(settings, public_url="https://copiloto.hotelbordeluz.cl")
