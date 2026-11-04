@@ -61,6 +61,7 @@ class Settings:
     # Voz de la demo (opcional): sin clave y sin voz elegida, la demo sigue solo con texto
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = ""
+    elevenlabs_voice_id_en: str = ""
     elevenlabs_model: str = "eleven_flash_v2_5"
     voice_max_chars: int = 450
     voice_chars_per_hour: int = 20000
@@ -98,6 +99,7 @@ class Settings:
             ai_turn_timeout_s=float(env.get("AI_TURN_TIMEOUT_S", cls.ai_turn_timeout_s)),
             elevenlabs_api_key=env.get("ELEVENLABS_API_KEY", ""),
             elevenlabs_voice_id=env.get("ELEVENLABS_VOICE_ID", ""),
+            elevenlabs_voice_id_en=env.get("ELEVENLABS_VOICE_ID_EN", ""),
             elevenlabs_model=env.get("ELEVENLABS_MODEL", cls.elevenlabs_model),
             voice_chars_per_hour=int(env.get("VOICE_CHARS_PER_HOUR", cls.voice_chars_per_hour)),
             pms_staff_token=env.get("PMS_STAFF_TOKEN", ""),

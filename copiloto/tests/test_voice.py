@@ -2,7 +2,16 @@ import json
 
 import httpx
 import pytest
-from copiloto.voice import CharBudget, ElevenLabsClient, TtsUnavailable, greeting, speakable
+from copiloto.ai.prompts import build_system_prompt
+from copiloto.voice import (
+    CharBudget,
+    ElevenLabsClient,
+    TtsUnavailable,
+    greeting,
+    greeting_en,
+    guess_language,
+    speakable,
+)
 
 
 def test_greeting_always_says_it_is_a_virtual_assistant_and_offers_a_person():
@@ -80,3 +89,38 @@ async def test_synthesize_maps_provider_and_network_failures_to_one_error():
 
     with pytest.raises(TtsUnavailable):
         await client(boom).synthesize("Hola")
+
+
+def test_language_guess_tells_english_guests_from_spanish_ones():
+    assert guess_language("Hola, quiero reservar una habitación") == "es"
+    assert guess_language("¿Tienen piscina?") == "es"
+    assert guess_language("I would like to book a room for two adults") == "en"
+    assert guess_language("Do you have parking and what time is check-in?") == "en"
+    assert guess_language("Good morning") == "en" and guess_language("Hi there") == "en"
+    assert guess_language("") == "es"
+
+
+def test_english_greeting_also_discloses_the_virtual_assistant():
+    text = greeting_en("Hotel Boutique Bordeluz")
+    assert "virtual assistant" in text and "Hotel Boutique Bordeluz" in text and "person" in text
+
+
+def test_voice_prompt_asks_for_ai_disclosure_and_english_replies():
+    prompt = build_system_prompt("2026-11-04", "miércoles", "assisted", "Hotel X", voice=True)
+    assert "asistente virtual" in prompt and "inglés" in prompt
+
+
+async def test_english_synthesis_uses_the_english_voice_and_language_code():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["body"] = json.loads(request.read())
+        return httpx.Response(200, content=b"x")
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    tts = ElevenLabsClient("sk-test", "voz-es", "eleven_flash_v2_5", http, voice_id_en="voz-en")
+    await tts.synthesize("Hello", language="en")
+    assert "/voz-en?" in seen["url"] and seen["body"]["language_code"] == "en"
+    await tts.synthesize("Hola", language="es")
+    assert "/voz-es?" in seen["url"] and seen["body"]["language_code"] == "es"

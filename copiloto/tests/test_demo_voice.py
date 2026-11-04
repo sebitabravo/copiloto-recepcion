@@ -15,10 +15,12 @@ STAY = {"checkin": "2026-11-15", "checkout": "2026-11-18", "adults": 2, "childre
 class FakeTts:
     def __init__(self, fail: bool = False):
         self.texts: list[str] = []
+        self.languages: list[str] = []
         self.fail = fail
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(self, text: str, language: str = "es") -> bytes:
         self.texts.append(text)
+        self.languages.append(language)
         if self.fail:
             raise TtsUnavailable("http 500")
         return b"audio:" + text.encode()
@@ -159,9 +161,9 @@ def test_concurrent_cold_greeting_requests_synthesize_once(ai_settings, harness)
     import httpx
 
     class SlowTts(FakeTts):
-        async def synthesize(self, text):
+        async def synthesize(self, text, language="es"):
             await asyncio.sleep(0.05)
-            return await super().synthesize(text)
+            return await super().synthesize(text, language)
 
     slow = SlowTts()
     client, _ = voice_client(ai_settings, harness, tts=slow)
@@ -196,3 +198,12 @@ def test_concurrent_turns_of_the_same_session_never_exceed_the_message_cap(ai_se
 
     codes = sorted(response.status_code for response in asyncio.run(both()))
     assert codes == [200, 429]
+
+
+def test_an_english_guest_gets_an_english_spoken_reply_and_greeting(ai_settings, harness):
+    client, tts = voice_client(ai_settings, harness, FakeLlm([say("Sure, we have rooms available.")]))
+    body = speak(client, "Do you have rooms for two adults?").json()
+    assert body["spoken_language"] == "en" and tts.languages == ["en"]
+    greeting = client.get("/api/demo/voice/greeting?lang=en").json()
+    assert "virtual assistant" in greeting["text"] and greeting["language"] == "en"
+    assert client.get("/api/demo/voice/greeting").json()["language"] == "es"
