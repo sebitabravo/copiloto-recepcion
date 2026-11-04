@@ -30,7 +30,7 @@ Una tarjeta nueva en la landing (aparece solo si la voz está configurada) permi
 **Activarla**
 
 1. En tu cuenta de ElevenLabs elige una voz en español (idealmente latinoamericana) y copia su ID. Si es de la Voice Library, agrégala antes a tu cuenta.
-2. En `.env`: `ELEVENLABS_API_KEY=...` y `ELEVENLABS_VOICE_ID=...`. El modelo por defecto es `eleven_flash_v2_5` (baja latencia, 32 idiomas); se cambia con `ELEVENLABS_MODEL`.
+2. En `.env`: `ELEVENLABS_API_KEY=...`, `ELEVENLABS_VOICE_ID=...` (español) y, si quieres inglés, `ELEVENLABS_VOICE_ID_EN=...`. El modelo por defecto es `eleven_flash_v2_5` (baja latencia, 32 idiomas); se cambia con `ELEVENLABS_MODEL`.
 3. `make up` y abre la landing. Sin clave o sin voz, la tarjeta no se muestra y todo sigue en texto.
 
 **Cómo está acotado**
@@ -45,3 +45,28 @@ Una tarjeta nueva en la landing (aparece solo si la voz está configurada) permi
 **Costo orientativo:** ElevenLabs cobra créditos por carácter. Con respuestas de unos 300 caracteres, 1 000 respuestas son unos 300 000 caracteres: revisa tu plan antes de una presentación larga (`check_subscription` en el MCP).
 
 **Pendiente de validar con tu cuenta:** calidad y acento de la voz elegida, el micrófono en tu navegador y que el ID de voz funcione por API.
+
+## Voces candidatas (español chileno)
+
+La biblioteca compartida de ElevenLabs tiene más de 30 voces con acento `chilean` (filtro `GET /v1/shared-voices?accent=chilean`). Son **candidatas**: no las he escuchado en audio. Escúchalas en la biblioteca antes de elegir.
+
+| Voz | ID | Género / edad | Uso declarado |
+|---|---|---|---|
+| Marcela - Chilean Sales & Customer Care | `PeRxbnxvwcESkQcDM8Fi` | F / media | conversacional, atención al cliente |
+| Javiera | `uQKt669VHGzAA4LAJAaT` | F / joven | conversacional |
+| Paulina - Warm | `nU2Od41FnF7WAvt16wiO` | F / joven | conversacional, cálida |
+| Silvana - Warm | `PFIHlfMr2oOjR5RKVg2N` | F / media | informativa |
+| Cristóbal | `IhY4M972n9BRInNffBsN` | M / joven | conversacional |
+| Joaquín | `HqDjrw2JtdcxsDBOK5ZW` | M / joven | conversacional |
+| Alejandro - Neutral studio accent | `m3IrTXgclGG0hR8ORocn` | M / media | informativa, neutra |
+
+**Qué puede y qué no puede hacer una voz:**
+
+- La biblioteca etiqueta el acento como `chilean`. **No hay etiqueta de Temuco, Araucanía ni campo.** Ninguna voz reproduce el habla rural de la zona por sí sola.
+- Lo que sí cambia la forma de hablar es el texto: frases cortas, palabras de uso común, fechas y precios dichos en palabras. Eso lo hace el prompt (`MODO VOZ` en `ai/prompts.py`).
+- Para entender a hablantes rurales, el reconocimiento (`es-CL` en el navegador) es la parte más débil. No he medido su precisión con hablantes de la zona. Hay que probarlo con personas reales antes de prometerlo.
+- **Entrenar la voz con grabaciones de la zona** (clonación) exige consentimiento de cada persona y verificación. No lo hago sin eso.
+
+**Inglés:** usa una voz en inglés para `ELEVENLABS_VOICE_ID_EN`. Una voz chilena hablando inglés suena con acento. Si no la pones, el inglés usa la misma voz española.
+
+**Pendiente:** no he verificado qué modelos aceptan diccionarios de pronunciación (para Temuco, Pucón, Traiguén, Molco). La API lo permite (`POST /v1/pronunciation-dictionaries/add-from-rules`), pero no lo he creado.
