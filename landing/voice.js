@@ -10,6 +10,9 @@
   const log = get('voice-log');
   const stateLabel = get('voice-state');
   const talk = get('voice-talk');
+  const langSelect = get('voice-lang');
+  const LANG_CODES = {es: 'es-CL', en: 'en-US'};
+  const currentLang = () => (langSelect && langSelect.value === 'en' ? 'en' : 'es');
   const typed = get('voice-form');
   const typedInput = get('voice-typed-input');
   let inCall = false;
@@ -119,7 +122,7 @@
     if (listening) { recognition.stop(); return; }
     stopAudio();
     recognition = new Recognition();
-    recognition.lang = 'es-CL';
+    recognition.lang = LANG_CODES[currentLang()];
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.addEventListener('result', event => {
@@ -148,7 +151,7 @@
     setState('Conectando…');
     updateControls();
     try {
-      const data = await request('/api/demo/voice/greeting', undefined, controller);
+      const data = await request(`/api/demo/voice/greeting?lang=${currentLang()}`, undefined, controller);
       if (version === callVersion) await speakReply({reply:data.text, audio_b64:data.audio_b64, voice_error:data.voice_error}, version);
     } catch (error) {
       if (version === callVersion) {
