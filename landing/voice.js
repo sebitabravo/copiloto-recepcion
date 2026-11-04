@@ -55,9 +55,32 @@
     talk.textContent = listening ? 'Escuchando… toca para enviar' : 'Tocar para hablar';
     talk.setAttribute('aria-pressed', String(listening));
   }
+  const canSpeakBrowser = Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
   function stopAudio() {
     if (audio) { audio.pause(); audio = null; }
+    if (canSpeakBrowser) window.speechSynthesis.cancel();
     if (settlePlayback) { settlePlayback(); settlePlayback = null; }
+  }
+  // Voz del navegador: sin costo y sin servidor. Si el navegador no avisa el fin, un tiempo de seguridad libera la espera.
+  function speakBrowser(text, language) {
+    return new Promise(resolve => {
+      stopAudio();
+      settlePlayback = resolve;
+      const utterance = new SpeechSynthesisUtterance(text);
+      // Chileno primero; después latinoamericano; la voz castellana solo como último recurso
+      const wanted = language === 'en' ? ['en-US', 'en'] : ['es-CL', 'es-MX', 'es-419', 'es-US', 'es'];
+      const voices = window.speechSynthesis.getVoices();
+      const voice = wanted
+        .map(code => voices.find(item => item.lang.replace('_', '-').toLowerCase().startsWith(code.toLowerCase())))
+        .find(Boolean);
+      utterance.lang = language === 'en' ? 'en-US' : 'es-CL';
+      if (voice) utterance.voice = voice;
+      utterance.rate = 0.95;
+      const safety = window.setTimeout(resolve, Math.max(4000, text.length * 90));
+      utterance.onend = () => { window.clearTimeout(safety); resolve(); };
+      utterance.onerror = () => { window.clearTimeout(safety); resolve(); };
+      window.speechSynthesis.speak(utterance);
+    });
   }
   function play(base64) {
     return new Promise(resolve => {
@@ -87,9 +110,14 @@
     addLine('Asistente virtual', data.reply);
     (data.events || []).filter(event => event && event.type === 'handoff')
       .forEach(() => addLine('Sistema', 'Se avisó a una persona de recepción (simulado).', 'system'));
+    const spokenText = data.spoken || data.reply;
+    const language = data.spoken_language || data.language || currentLang();
     if (data.audio_b64) {
       setState('Hablando…');
       await play(data.audio_b64);
+    } else if (canSpeakBrowser && spokenText) {
+      setState('Hablando (voz del navegador)…');
+      await speakBrowser(spokenText, language);
     } else if (data.voice_error) {
       addLine('Sistema', 'Sin audio por ahora: puedes leer la respuesta.', 'system');
     }
@@ -152,7 +180,10 @@
     updateControls();
     try {
       const data = await request(`/api/demo/voice/greeting?lang=${currentLang()}`, undefined, controller);
-      if (version === callVersion) await speakReply({reply:data.text, audio_b64:data.audio_b64, voice_error:data.voice_error}, version);
+      if (version === callVersion) {
+        await speakReply({reply:data.text, spoken:data.text, language:data.language, audio_b64:data.audio_b64,
+          voice_error:data.voice_error}, version);
+      }
     } catch (error) {
       if (version === callVersion) {
         addLine('Sistema', error.message, 'system');
