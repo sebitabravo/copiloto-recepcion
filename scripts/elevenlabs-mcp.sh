@@ -7,12 +7,15 @@ cd "$(dirname "$0")/.."
 
 VERSION="0.12.2"
 
-# La clave sale del entorno o, si falta, de ELEVENLABS_API_KEY en .env. Nunca se escribe en archivos versionados.
-if [ -z "${ELEVENLABS_API_KEY:-}" ] && [ -f .env ]; then
-  ELEVENLABS_API_KEY="$(sed -n 's/^ELEVENLABS_API_KEY=//p' .env | head -n 1 | tr -d '"' | tr -d "'")"
-fi
+# La clave sale del entorno o, si falta, de ELEVENLABS_API_KEY en .env o .env.local (el CLI de ElevenLabs la deja ahí).
+# Nunca se escribe en archivos versionados.
+for envfile in .env .env.local; do
+  if [ -z "${ELEVENLABS_API_KEY:-}" ] && [ -f "$envfile" ]; then
+    ELEVENLABS_API_KEY="$(sed -n 's/^ELEVENLABS_API_KEY=//p' "$envfile" | head -n 1 | tr -d '"' | tr -d "'")"
+  fi
+done
 if [ -z "${ELEVENLABS_API_KEY:-}" ]; then
-  echo "Falta ELEVENLABS_API_KEY: expórtala en tu shell o agrégala a .env (ver docs/voz.md)." >&2
+  echo "Falta ELEVENLABS_API_KEY: expórtala en tu shell o agrégala a .env o .env.local (ver docs/voz.md)." >&2
   exit 1
 fi
 export ELEVENLABS_API_KEY
