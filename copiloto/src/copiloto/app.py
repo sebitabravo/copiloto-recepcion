@@ -34,7 +34,15 @@ from copiloto.hotel import HotelData
 from copiloto.pms import PmsAdapter, build_pms_adapter
 from copiloto.ratelimit import SlidingWindowLimiter
 from copiloto.sla import SlaWorker
-from copiloto.voice import CharBudget, ElevenLabsClient, TtsUnavailable, greeting_for, guess_language, speakable
+from copiloto.voice import (
+    CharBudget,
+    ElevenLabsClient,
+    PiperClient,
+    TtsUnavailable,
+    greeting_for,
+    guess_language,
+    speakable,
+)
 
 logger = logging.getLogger(__name__)
 STATIC = Path(__file__).parent / "static"
@@ -86,7 +94,7 @@ async def read_capped(request: Request, limit: int) -> bytes:
 def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None = None,
                pms: PmsAdapter | None = None, clock=time.time, run_workers: bool = True,
                db: sqlite3.Connection | None = None, llm_agent: Agent | None = None,
-               tts: ElevenLabsClient | None = None) -> FastAPI:
+               tts: ElevenLabsClient | None = None, piper: PiperClient | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     if settings.env == "production":
         settings.validate_runtime()
@@ -103,10 +111,18 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     if tts is None and agent is not None and settings.voice_active:
         tts = ElevenLabsClient(settings.elevenlabs_api_key, settings.elevenlabs_voice_id, settings.elevenlabs_model,
                                voice_id_en=settings.elevenlabs_voice_id_en or None)
+    if piper is None and settings.piper_model_path:
+        piper = PiperClient(settings.piper_model_path, settings.piper_config_path or None)
+    # Cadena de voz: ElevenLabs (de pago, con topes) → Piper (local) → texto con voz del navegador
+    voice_providers = []
+    if tts is not None:
+        voice_providers.append(("elevenlabs", tts, "mp3"))
+    if piper is not None:
+        voice_providers.append(("piper", piper, "wav"))
     voice_budget = CharBudget(settings.voice_chars_per_hour, clock=clock)
     voice_monthly_budget = CharBudget(settings.voice_chars_per_month, window_s=30 * 86400, clock=clock)
-    greeting_audio: dict[str, str] = {}
-    audio_cache: OrderedDict[str, str] = OrderedDict()
+    greeting_audio: dict[str, tuple[str, str]] = {}
+    audio_cache: OrderedDict[str, tuple[str, str]] = OrderedDict()
     greeting_lock = asyncio.Lock()
     session_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
     core = Copiloto(settings, hotel, db, chatwoot, pms, clock, agent)
@@ -377,7 +393,7 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
                 "autonomous_booking": settings.autonomous_booking and agent is not None,
                 # La voz existe siempre que haya IA: sin ElevenLabs la responde el navegador (gratis)
                 "voice": agent is not None and settings.demo_enabled,
-                "tts": "elevenlabs" if tts is not None else "browser",
+                "tts": ("elevenlabs" if tts is not None else "piper" if piper is not None else "browser"),
                 "max_message_chars": DEMO_MAX_MESSAGE, "messages_per_session": settings.demo_messages_per_session,
                 "disclaimer": "Demo con IA: no escribas datos personales reales."}
 
@@ -437,45 +453,52 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     async def demo_chat(request: Request):
         return await demo_turn(request, voice=False)
 
-    async def synthesize(text: str, language: str = "es") -> tuple[str | None, str | None]:
-        """Audio en base64 y el motivo si no hubo: la voz nunca impide que el huésped lea la respuesta."""
+    async def synthesize(text: str, language: str = "es") -> tuple[str | None, str | None, str | None]:
+        """(audio base64, motivo si no hubo, formato). La voz nunca impide que el huésped lea la respuesta."""
         if not text.strip():
-            return None, None
-        if tts is None:
-            return None, "voz_no_disponible"
+            return None, None, None
+        if not voice_providers:
+            return None, "voz_no_disponible", None
         key = hashlib.sha256(f"{language}|{text}".encode()).hexdigest()
         if key in audio_cache:
             audio_cache.move_to_end(key)
-            return audio_cache[key], None
+            encoded, fmt = audio_cache[key]
+            return encoded, None, fmt
         size = len(text)
-        if not (voice_budget.fits(size) and voice_monthly_budget.fits(size)):
-            return None, "tope_de_voz"
-        voice_budget.take(size)
-        voice_monthly_budget.take(size)
-        try:
-            encoded = base64.b64encode(await tts.synthesize(text, language=language)).decode("ascii")
-            audio_cache[key] = encoded
+        error = "voz_no_disponible"
+        for name, provider, fmt in voice_providers:
+            if name == "elevenlabs" and not (voice_budget.fits(size) and voice_monthly_budget.fits(size)):
+                error = "tope_de_voz"
+                continue
+            try:
+                raw = await provider.synthesize(text, language=language)
+            except TtsUnavailable:
+                logger.warning("El proveedor de voz %s no respondió; se prueba el siguiente", name)
+                continue
+            if name == "elevenlabs":
+                voice_budget.take(size)
+                voice_monthly_budget.take(size)
+            encoded = base64.b64encode(raw).decode("ascii")
+            audio_cache[key] = (encoded, fmt)
             if len(audio_cache) > AUDIO_CACHE_MAX:
                 audio_cache.popitem(last=False)
-            return encoded, None
-        except TtsUnavailable:
-            logger.warning("La voz no estuvo disponible; se responde solo con texto")
-            return None, "voz_no_disponible"
+            return encoded, None, fmt
+        return None, error, None
 
     @app.get("/api/demo/voice/greeting", dependencies=limited)
     async def demo_voice_greeting(lang: str = Query(default="es", pattern="^(es|en)$")):
         if not settings.demo_enabled:
             return demo_error(503, "voz_no_disponible")
         text = speakable(greeting_for(lang, hotel.hotel["name"]), settings.voice_max_chars + 120)
-        if tts is None:
-            return {"text": text, "audio_b64": None, "voice_error": "voz_no_disponible", "language": lang}
         async with greeting_lock:  # una sola síntesis en vuelo por idioma: cada saludo se paga una vez
             if lang not in greeting_audio:
-                audio, error = await synthesize(text, lang)
+                audio, error, fmt = await synthesize(text, lang)
                 if audio is None:
-                    return {"text": text, "audio_b64": None, "voice_error": error, "language": lang}
-                greeting_audio[lang] = audio
-        return {"text": text, "audio_b64": greeting_audio[lang], "voice_error": None, "language": lang}
+                    return {"text": text, "audio_b64": None, "audio_format": None, "voice_error": error,
+                            "language": lang}
+                greeting_audio[lang] = (audio, fmt)
+        audio, fmt = greeting_audio[lang]
+        return {"text": text, "audio_b64": audio, "audio_format": fmt, "voice_error": None, "language": lang}
 
     @app.post("/api/demo/voice")
     async def demo_voice(request: Request):
@@ -485,8 +508,8 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
             return turn
         language = turn["spoken_language"]
         spoken = speakable(turn["reply"], settings.voice_max_chars)
-        audio, error = await synthesize(spoken, language)
-        return {**turn, "spoken": spoken, "audio_b64": audio, "voice_error": error}
+        audio, error, fmt = await synthesize(spoken, language)
+        return {**turn, "spoken": spoken, "audio_b64": audio, "audio_format": fmt, "voice_error": error}
 
     @app.post("/api/demo/reset")
     async def demo_reset(request: Request):

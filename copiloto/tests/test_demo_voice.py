@@ -26,12 +26,21 @@ class FakeTts:
         return b"audio:" + text.encode()
 
 
-def voice_client(settings, harness, llm=None, tts="default"):
+class FakePiper:
+    def __init__(self):
+        self.languages: list[str] = []
+
+    async def synthesize(self, text: str, language: str = "es") -> bytes:
+        self.languages.append(language)
+        return b"RIFF-fake"
+
+
+def voice_client(settings, harness, llm=None, tts="default", piper=None):
     llm = llm if llm is not None else FakeLlm([])
     agent = Agent(llm, harness.hotel, harness.pms, settings, lambda: harness.clock())
     fake = FakeTts() if tts == "default" else tts
     app = create_app(settings, chatwoot=FakeChatwoot(), pms=harness.pms, clock=harness.clock, run_workers=False,
-                     db=harness.db, llm_agent=agent, tts=fake)
+                     db=harness.db, llm_agent=agent, tts=fake, piper=piper)
     return TestClient(app), fake
 
 
@@ -232,3 +241,32 @@ def test_repeated_identical_replies_are_synthesized_once_and_charged_once(ai_set
     second = speak(client, "¿y tienen gimnasio?").json()
     assert first["audio_b64"] == second["audio_b64"] and first["audio_b64"]
     assert len(tts.texts) == 1, "el mismo texto no se paga dos veces"
+
+
+def test_when_elevenlabs_fails_the_local_piper_voice_answers_in_wav(ai_settings, harness):
+    piper = FakePiper()
+    client, _ = voice_client(ai_settings, harness, FakeLlm([say("Tenemos piscina.")]),
+                             tts=FakeTts(fail=True), piper=piper)
+    body = speak(client, "piscina").json()
+    assert body["audio_b64"] and body["audio_format"] == "wav" and body["voice_error"] is None
+    assert piper.languages == ["es"]
+
+
+def test_when_the_monthly_cap_blocks_elevenlabs_piper_still_speaks(ai_settings, harness):
+    piper = FakePiper()
+    capped = replace(ai_settings, voice_chars_per_month=1)
+    client, tts = voice_client(capped, harness, FakeLlm([say("Hola.")]), piper=piper)
+    body = speak(client, "hola").json()
+    assert body["audio_format"] == "wav" and tts.texts == []
+
+
+def test_greeting_uses_piper_when_elevenlabs_is_not_configured(ai_settings, harness):
+    piper = FakePiper()
+    client, _ = voice_client(ai_settings, harness, tts=None, piper=piper)
+    greeting = client.get("/api/demo/voice/greeting").json()
+    assert greeting["audio_format"] == "wav" and greeting["audio_b64"] and greeting["voice_error"] is None
+
+
+def test_status_names_the_provider_in_use(ai_settings, harness):
+    client, _ = voice_client(ai_settings, harness, tts=None, piper=FakePiper())
+    assert client.get("/api/demo/status").json()["tts"] == "piper"

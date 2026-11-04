@@ -82,11 +82,12 @@
       window.speechSynthesis.speak(utterance);
     });
   }
-  function play(base64) {
+  function play(base64, format) {
     return new Promise(resolve => {
       stopAudio();
       settlePlayback = resolve;
-      audio = new Audio(`data:audio/mpeg;base64,${base64}`);
+      const mime = format === 'wav' ? 'audio/wav' : 'audio/mpeg';
+      audio = new Audio(`data:${mime};base64,${base64}`);
       audio.addEventListener('ended', resolve, {once:true});
       audio.addEventListener('error', resolve, {once:true});
       audio.play().catch(resolve);
@@ -114,7 +115,7 @@
     const language = data.spoken_language || data.language || currentLang();
     if (data.audio_b64) {
       setState('Hablando…');
-      await play(data.audio_b64);
+      await play(data.audio_b64, data.audio_format);
     } else if (canSpeakBrowser && spokenText) {
       setState('Hablando (voz del navegador)…');
       await speakBrowser(spokenText, language);
