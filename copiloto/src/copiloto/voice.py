@@ -3,8 +3,12 @@
 El saludo es una constante (no pasa por el modelo) para que siempre diga que es un asistente virtual.
 """
 
+import asyncio
+import io
 import re
+import threading
 import time
+import wave
 from collections import deque
 from collections.abc import Callable
 
@@ -120,3 +124,43 @@ class ElevenLabsClient:
         if response.status_code != 200 or not response.content:
             raise TtsUnavailable(f"http {response.status_code}")
         return response.content
+
+
+class PiperClient:
+    """Respaldo local con Piper (MIT en la versión rhasspy 1.2.0). Sin API de pago.
+
+    Requiere instalar `piper-tts` y un modelo ONNX con su configuración. El motor se importa y se carga solo al
+    primer uso. La voz de Piper es solo en español: en inglés no responde y el texto queda como única salida.
+    """
+
+    def __init__(self, model_path: str, config_path: str | None = None,
+                 voice_factory: Callable[[], object] | None = None):
+        self._model_path = model_path
+        self._config_path = config_path
+        self._factory = voice_factory or self._default_factory
+        self._voice = None
+        self._lock = threading.Lock()
+
+    def _default_factory(self):
+        from piper import PiperVoice  # import tardío: piper es opcional
+        return PiperVoice.load(self._model_path, self._config_path)
+
+    def _get_voice(self):
+        with self._lock:
+            if self._voice is None:
+                self._voice = self._factory()
+            return self._voice
+
+    def _synthesize_sync(self, text: str) -> bytes:
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as wav:
+            self._get_voice().synthesize(text, wav)
+        return buffer.getvalue()
+
+    async def synthesize(self, text: str, language: str = "es") -> bytes:
+        if language != "es":
+            raise TtsUnavailable("piper solo tiene voz en español")
+        try:
+            return await asyncio.to_thread(self._synthesize_sync, text)
+        except Exception as exc:
+            raise TtsUnavailable(type(exc).__name__) from None

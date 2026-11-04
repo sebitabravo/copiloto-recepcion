@@ -39,4 +39,4 @@ El copiloto funciona en tres niveles. Cada nivel depende solo del anterior.
 ## Pendiente (no implementado)
 
 - Audio pregrabado persistente para las FAQ fijas: una vez generado, no se vuelve a pagar.
-- Voz local de respaldo (por ejemplo Piper, como usa AgroVoz) cuando se acaben los créditos. Calidad menor; no probada aquí.
+- Piper como respaldo local: implementado como opción (`PIPER_MODEL_PATH`); sin probar en el servidor real. Ver `docs/voz.md`.
