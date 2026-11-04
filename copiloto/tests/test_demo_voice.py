@@ -207,3 +207,12 @@ def test_an_english_guest_gets_an_english_spoken_reply_and_greeting(ai_settings,
     greeting = client.get("/api/demo/voice/greeting?lang=en").json()
     assert "virtual assistant" in greeting["text"] and greeting["language"] == "en"
     assert client.get("/api/demo/voice/greeting").json()["language"] == "es"
+
+
+def test_the_monthly_character_cap_blocks_audio_even_when_the_hourly_cap_allows_it(ai_settings, harness):
+    limited = replace(ai_settings, voice_chars_per_hour=10_000, voice_chars_per_month=12)
+    client, tts = voice_client(limited, harness, FakeLlm([say("Hola."), say("Hola."), say("Hola.")]))
+    first, second, third = (speak(client, "hola").json() for _ in range(3))
+    assert first["audio_b64"] and second["audio_b64"]
+    assert third["audio_b64"] is None and third["voice_error"] == "tope_de_voz"
+    assert len(tts.texts) == 2

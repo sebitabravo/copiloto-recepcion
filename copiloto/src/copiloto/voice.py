@@ -84,13 +84,17 @@ class CharBudget:
         self.max_chars, self.window_s, self.clock = max_chars, window_s, clock or time.time
         self._spent: deque[tuple[float, int]] = deque()
 
-    def take(self, chars: int) -> bool:
+    def fits(self, chars: int) -> bool:
+        """Dice si `chars` cabe en la ventana sin consumirlo."""
         now = self.clock()
         while self._spent and now - self._spent[0][0] >= self.window_s:
             self._spent.popleft()
-        if sum(amount for _, amount in self._spent) + chars > self.max_chars:
+        return sum(amount for _, amount in self._spent) + chars <= self.max_chars
+
+    def take(self, chars: int) -> bool:
+        if not self.fits(chars):
             return False
-        self._spent.append((now, chars))
+        self._spent.append((self.clock(), chars))
         return True
 
 

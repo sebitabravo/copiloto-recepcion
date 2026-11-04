@@ -102,6 +102,7 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         tts = ElevenLabsClient(settings.elevenlabs_api_key, settings.elevenlabs_voice_id, settings.elevenlabs_model,
                                voice_id_en=settings.elevenlabs_voice_id_en or None)
     voice_budget = CharBudget(settings.voice_chars_per_hour, clock=clock)
+    voice_monthly_budget = CharBudget(settings.voice_chars_per_month, window_s=30 * 86400, clock=clock)
     greeting_audio: dict[str, str] = {}
     greeting_lock = asyncio.Lock()
     session_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
@@ -435,8 +436,11 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         """Audio en base64 y el motivo si no hubo: la voz nunca impide que el huésped lea la respuesta."""
         if not text.strip():
             return None, None
-        if not voice_budget.take(len(text)):
+        size = len(text)
+        if not (voice_budget.fits(size) and voice_monthly_budget.fits(size)):
             return None, "tope_de_voz"
+        voice_budget.take(size)
+        voice_monthly_budget.take(size)
         try:
             return base64.b64encode(await tts.synthesize(text, language=language)).decode("ascii"), None
         except TtsUnavailable:

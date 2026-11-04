@@ -124,3 +124,10 @@ async def test_english_synthesis_uses_the_english_voice_and_language_code():
     assert "/voz-en?" in seen["url"] and seen["body"]["language_code"] == "en"
     await tts.synthesize("Hola", language="es")
     assert "/voz-es?" in seen["url"] and seen["body"]["language_code"] == "es"
+
+
+def test_char_budget_fits_does_not_consume_until_taken():
+    now = {"t": 0.0}
+    budget = CharBudget(10, window_s=60, clock=lambda: now["t"])
+    assert budget.fits(10) and budget.fits(10)
+    assert budget.take(10) and not budget.fits(1)

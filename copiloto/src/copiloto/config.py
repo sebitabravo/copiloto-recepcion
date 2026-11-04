@@ -65,6 +65,8 @@ class Settings:
     elevenlabs_model: str = "eleven_flash_v2_5"
     voice_max_chars: int = 450
     voice_chars_per_hour: int = 20000
+    # Starter de ElevenLabs incluye 40 000 caracteres al mes: el tope mensual queda bajo ese límite
+    voice_chars_per_month: int = 30000
     ai_max_history: int = 12
     pms_staff_token: str = ""
     demo_enabled: bool = True
@@ -102,6 +104,7 @@ class Settings:
             elevenlabs_voice_id_en=env.get("ELEVENLABS_VOICE_ID_EN", ""),
             elevenlabs_model=env.get("ELEVENLABS_MODEL", cls.elevenlabs_model),
             voice_chars_per_hour=int(env.get("VOICE_CHARS_PER_HOUR", cls.voice_chars_per_hour)),
+            voice_chars_per_month=int(env.get("VOICE_CHARS_PER_MONTH", cls.voice_chars_per_month)),
             pms_staff_token=env.get("PMS_STAFF_TOKEN", ""),
             demo_enabled=env.get("DEMO_ENABLED", "1") not in ("0", "false", "no"),
             landing_origin=env.get("LANDING_ORIGIN", cls.landing_origin).rstrip("/"),
