@@ -166,6 +166,27 @@
       </div>
       <p id="scenario-status" role="status" aria-live="polite"></p>
     </div>
+    <div id="voice-demo" class="voice card" hidden>
+      <div>
+        <p class="eyebrow">Voz</p>
+        <h3>Habla con el asistente</h3>
+        <p>Demo de voz en el navegador · no es una llamada de WhatsApp. El asistente es una IA y lo dice al empezar la llamada.</p>
+      </div>
+      <div class="voice-controls">
+        <button id="voice-start" class="button primary" type="button">Iniciar llamada de prueba</button>
+        <button id="voice-talk" class="button" type="button" aria-pressed="false" hidden>Tocar para hablar</button>
+        <button id="voice-hangup" class="text-button" type="button" hidden>Colgar</button>
+      </div>
+      <p id="voice-state" class="voice-state" role="status" aria-live="polite"></p>
+      <p id="voice-support" class="small" hidden>Este navegador no reconoce voz: usa Chrome o Edge para hablar, o escribe tu mensaje abajo.</p>
+      <ol id="voice-log" class="voice-log" aria-label="Transcripción de la llamada"></ol>
+      <form id="voice-form" class="voice-typed" hidden>
+        <label class="sr-only" for="voice-typed-input">Escribir en lugar de hablar</label>
+        <input id="voice-typed-input" type="text" maxlength="400" placeholder="O escribe tu mensaje y el asistente responde en voz…" autocomplete="off">
+        <button class="button" type="submit">Enviar</button>
+      </form>
+      <p class="small">Privacidad: el navegador envía tu voz a su servicio de reconocimiento (en Chrome, Google) y el texto de las respuestas va a ElevenLabs para generar la voz. No guardamos audio. No uses datos personales reales.</p>
+    </div>
     <div id="assistant-announcement" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     <noscript><p>Activa JavaScript para conversar con el asistente y ver sus herramientas.</p></noscript>
   </section>
@@ -308,5 +329,6 @@
 
 <script src="config.js" defer></script>
 <script src="demo.js" defer></script>
+<script src="voice.js" defer></script>
 </body>
 </html>
