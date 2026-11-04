@@ -22,3 +22,26 @@ Los tres agentes lanzan lo mismo, `scripts/elevenlabs-mcp.sh`, que fija la versi
 **Actualizar la versión:** cambia `VERSION` en `scripts/elevenlabs-mcp.sh` tras revisar el paquete en PyPI.
 
 **Probar sin gastar créditos:** `check_subscription` y `list_models` no generan audio.
+
+## Demo de voz en el navegador
+
+Una tarjeta nueva en la landing (aparece solo si la voz está configurada) permite hablar con el asistente: el navegador reconoce tu voz (Web Speech API, `es-CL`), el servidor consulta al mismo asistente con IA y devuelve la respuesta con la voz de ElevenLabs. **No es una llamada de WhatsApp** y no hay interrupción en pleno habla: se toca para hablar, se espera la respuesta y se vuelve a tocar.
+
+**Activarla**
+
+1. En tu cuenta de ElevenLabs elige una voz en español (idealmente latinoamericana) y copia su ID. Si es de la Voice Library, agrégala antes a tu cuenta.
+2. En `.env`: `ELEVENLABS_API_KEY=...` y `ELEVENLABS_VOICE_ID=...`. El modelo por defecto es `eleven_flash_v2_5` (baja latencia, 32 idiomas); se cambia con `ELEVENLABS_MODEL`.
+3. `make up` y abre la landing. Sin clave o sin voz, la tarjeta no se muestra y todo sigue en texto.
+
+**Cómo está acotado**
+
+- **Siempre avisa que es una IA.** El saludo es una constante del servidor (no pasa por el modelo): "Hola, soy el asistente virtual del hotel...". La voz es natural, no pretende ser una persona.
+- **Nunca reserva por voz.** El reconocimiento puede errar nombres y fechas: por voz el asistente corre siempre en modo asistido, aunque `AI_MODE` sea `full`. Recepción confirma.
+- **Solo sintetiza lo que responde el asistente**, nunca texto enviado por el navegador, así nadie puede gastar tus créditos con texto propio.
+- **Respuestas cortas para el oído:** máximo 3 frases, sin listas ni enlaces (se reemplazan por "te lo envío por escrito"), tope de `450` caracteres por respuesta y de `VOICE_CHARS_PER_HOUR` (20 000) por hora en total.
+- **Degrada, no falla:** si ElevenLabs responde 401, 402, 429 o 5xx, o se acaba el tope, el huésped ve el texto y la tarjeta avisa "sin audio por ahora".
+- **Privacidad:** el navegador envía el audio al servicio de reconocimiento (en Chrome, Google) y el texto de las respuestas va a ElevenLabs. No se guarda audio. `/privacidad` lo declara cuando la voz está activa.
+
+**Costo orientativo:** ElevenLabs cobra créditos por carácter. Con respuestas de unos 300 caracteres, 1 000 respuestas son unos 300 000 caracteres: revisa tu plan antes de una presentación larga (`check_subscription` en el MCP).
+
+**Pendiente de validar con tu cuenta:** calidad y acento de la voz elegida, el micrófono en tu navegador y que el ID de voz funcione por API.
