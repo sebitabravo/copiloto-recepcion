@@ -1,31 +1,14 @@
 # Voz con ElevenLabs
 
-Dos usos distintos, con la misma cuenta:
-
-1. **Agentes de desarrollo** (Claude Code, Codex, OpenCode) usan el servidor MCP oficial para probar voces y generar audios de ejemplo mientras se desarrolla.
-2. **La app** (demo de voz) llama a la API de ElevenLabs por su cuenta, desde el servidor, con la clave en `.env`. No depende del MCP.
+La demo de voz llama a la API de ElevenLabs desde el servidor, con la clave en `.env`. Sin clave, todo funciona con la voz del navegador.
 
 ## Voz sin costo (por defecto)
 
 Si no configuras `ELEVENLABS_API_KEY`, la demo habla con la voz del navegador (`speechSynthesis`, con preferencia por es-CL y luego latinoamericano). No cuesta nada y no sale ningún audio del servidor. Depende de las voces instaladas en el equipo: en macOS hay voces chilenas; en otros equipos puede sonar más distinto.
 
-## Servidor MCP para los agentes
+## Clave de API
 
-Los tres agentes lanzan lo mismo, `scripts/elevenlabs-mcp.sh`, que fija la versión del paquete (`elevenlabs-mcp==0.12.2`, publicado por ElevenLabs) y acota los archivos de entrada y salida a `.voice-assets/` (ignorada por git).
-
-| Agente | Archivo | Notas |
-|---|---|---|
-| Claude Code | `.mcp.json` + `.claude/settings.json` | Pide aprobación la primera vez que abres el proyecto |
-| Codex | `.codex/config.toml` | Solo se carga en proyectos de confianza |
-| OpenCode | `opencode.json` | |
-
-**Clave:** crea una API key en ElevenLabs (Settings → API keys) y deja `ELEVENLABS_API_KEY=...` en tu `.env` (archivo ignorado por git) o expórtala en tu shell. El script la toma de ahí; nunca se escribe en archivos versionados.
-
-**Herramientas bloqueadas a propósito** en los tres agentes: `make_outbound_call` (llama a teléfonos reales), `create_agent`, `add_knowledge_base_to_agent`, `simulate_conversation`, `voice_clone`, `create_voice_from_preview` y `list_phone_numbers`. Las demás, como `text_to_speech`, `search_voices` y `check_subscription`, gastan créditos de tu plan: revisa `check_subscription` antes de generar mucho.
-
-**Actualizar la versión:** cambia `VERSION` en `scripts/elevenlabs-mcp.sh` tras revisar el paquete en PyPI.
-
-**Probar sin gastar créditos:** `check_subscription` y `list_models` no generan audio.
+**Clave:** crea una API key en ElevenLabs (Settings → API keys) y deja `ELEVENLABS_API_KEY=...` en tu `.env` (archivo ignorado por git) o expórtala en tu shell. La app la toma de ahí; nunca se escribe en archivos versionados.
 
 ## Demo de voz en el navegador
 
@@ -46,7 +29,7 @@ Una tarjeta nueva en la landing (aparece solo si la voz está configurada) permi
 - **Degrada, no falla:** si ElevenLabs responde 401, 402, 429 o 5xx, o se acaba el tope, el huésped ve el texto y la tarjeta avisa "sin audio por ahora".
 - **Privacidad:** el navegador envía el audio al servicio de reconocimiento (en Chrome, Google) y el texto de las respuestas va a ElevenLabs. No se guarda audio. `/privacidad` lo declara cuando la voz está activa.
 
-**Costo orientativo:** ElevenLabs cobra créditos por carácter. Con respuestas de unos 300 caracteres, 1 000 respuestas son unos 300 000 caracteres: revisa tu plan antes de una presentación larga (`check_subscription` en el MCP).
+**Costo orientativo:** ElevenLabs cobra créditos por carácter. Con respuestas de unos 300 caracteres, 1 000 respuestas son unos 300 000 caracteres: revisa tu plan antes de una presentación larga.
 
 **Pendiente de validar con tu cuenta:** calidad y acento de la voz elegida, el micrófono en tu navegador y que el ID de voz funcione por API.
 

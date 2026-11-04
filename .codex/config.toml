@@ -1,8 +1,0 @@
-# Solo se carga si confías en el proyecto. La clave se toma del entorno o de .env (ver scripts/elevenlabs-mcp.sh).
-[mcp_servers.elevenlabs]
-command = "bash"
-args = ["scripts/elevenlabs-mcp.sh"]
-env_vars = ["ELEVENLABS_API_KEY"]
-startup_timeout_sec = 60
-# Herramientas que llaman a teléfonos reales, crean agentes o clonan voces: bloqueadas a propósito
-disabled_tools = ["make_outbound_call", "create_agent", "add_knowledge_base_to_agent", "simulate_conversation", "voice_clone", "create_voice_from_preview", "list_phone_numbers"]
