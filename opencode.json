@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "elevenlabs": {
+      "type": "local",
+      "command": [
+        "bash",
+        "scripts/elevenlabs-mcp.sh"
+      ],
+      "enabled": true,
+      "timeout": 60000
+    }
+  },
+  "tools": {
+    "elevenlabs_make_outbound_call": false,
+    "elevenlabs_create_agent": false,
+    "elevenlabs_add_knowledge_base_to_agent": false,
+    "elevenlabs_simulate_conversation": false,
+    "elevenlabs_voice_clone": false,
+    "elevenlabs_create_voice_from_preview": false,
+    "elevenlabs_list_phone_numbers": false
+  }
+}

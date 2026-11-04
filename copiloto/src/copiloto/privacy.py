@@ -75,6 +75,10 @@ AI_LOCAL = ("El asistente usa un modelo de lenguaje que se ejecuta en la misma i
             "demostración usa datos ficticios: no escribas datos personales reales. Guardamos un historial acotado "
             "de la conversación solo para que el asistente mantenga el hilo, y se borra con la retención.")
 
+VOICE_ON = ("Si usas la demo de voz, el audio de tu micrófono lo transcribe el navegador (en Chrome, con el servicio "
+            "de reconocimiento de voz de Google) y el texto de cada respuesta se envía a ElevenLabs para generar "
+            "la voz. No guardamos el audio.")
+
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "host.docker.internal", "0.0.0.0")
 
 
@@ -82,13 +86,15 @@ def _is_local(base_url: str) -> bool:
     return any(host in (base_url or "") for host in LOCAL_HOSTS)
 
 
-def render(hotel: HotelData, ai_provider: str | None = None, ai_base_url: str = "") -> str:
+def render(hotel: HotelData, ai_provider: str | None = None, ai_base_url: str = "", voice: bool = False) -> str:
     if not ai_provider:
         paragraph = AI_OFF
     elif _is_local(ai_base_url):
         paragraph = AI_LOCAL.format(provider=ai_provider)
     else:
         paragraph = AI_ON.format(provider=ai_provider)
+    if voice:
+        paragraph = f"{paragraph} {VOICE_ON}"
     return PAGE.format(
         ai_paragraph=escape(paragraph),
         hotel=escape(hotel.hotel["name"]),

@@ -1971,3 +1971,76 @@ details.tech code { display: block; margin-bottom: 6px; color: var(--accent); fo
   margin: 0;
 }
 .composer p { grid-column: 1 / -1; }
+
+/* ---------- Demo de voz ---------- */
+
+.voice {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.voice-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.voice-state { min-height: 1.4em; margin: 0; color: var(--muted); font-size: .85rem; }
+
+.voice-log {
+  display: grid;
+  gap: 8px;
+  max-height: 280px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.voice-log:empty { display: none; }
+
+.voice-line {
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card-2);
+  font-size: .88rem;
+}
+
+.voice-line strong { color: var(--accent); font-family: var(--font-ui); font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; }
+.voice-line.guest { background: color-mix(in oklab, var(--accent) 10%, var(--card-2)); }
+.voice-line.system { color: var(--muted); font-size: .8rem; }
+
+.voice-typed { display: flex; gap: 10px; }
+.voice-typed input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: .88rem;
+}
+
+@media (max-width: 620px) {
+  .voice-typed { flex-direction: column; }
+}
+
+/* Selector de idioma de la tarjeta de voz: mismo lenguaje visual que el resto de controles */
+.voice-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: .85rem;
+}
+
+.voice-lang select {
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: .85rem;
+}

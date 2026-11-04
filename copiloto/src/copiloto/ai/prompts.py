@@ -47,6 +47,20 @@ MODE_NOTES = {
 }
 
 
-def build_system_prompt(today: str, weekday: str, mode: str, hotel_name: str = "el hotel") -> str:
-    return SYSTEM_PROMPT.format(today=today, weekday=weekday, hotel=hotel_name,
-                                mode_note=MODE_NOTES.get(mode, ""))
+VOICE_NOTE = (
+    "MODO VOZ: el huésped te escucha por teléfono, no te lee. Responde con un máximo de 3 frases cortas, sin listas, "
+    "sin viñetas, sin markdown y sin enlaces. Ofrece como mucho 2 o 3 opciones y pregunta cuál prefiere. Di los "
+    "precios en pesos. Si piden algo largo, resume y ofrece enviarlo por escrito. Habla como una recepcionista cálida "
+    "del sur de Chile: frases simples, tono cercano y respetuoso, sin jerga ni modismos forzados. Di las fechas con "
+    "el "
+    "día y el mes en palabras. Si no entiendes algo, pide repetirlo con una pregunta concreta. "
+    "Si el huésped escribe en "
+    "inglés, responde en inglés. Si te preguntan si eres una persona o una IA, di que eres el asistente virtual del "
+    "hotel y que recepción confirma las reservas.")
+
+
+def build_system_prompt(today: str, weekday: str, mode: str, hotel_name: str = "el hotel",
+                        voice: bool = False) -> str:
+    prompt = SYSTEM_PROMPT.format(today=today, weekday=weekday, hotel=hotel_name,
+                                  mode_note=MODE_NOTES.get(mode, ""))
+    return f"{prompt}\n{VOICE_NOTE}" if voice else prompt
