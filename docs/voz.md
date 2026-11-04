@@ -5,6 +5,10 @@ Dos usos distintos, con la misma cuenta:
 1. **Agentes de desarrollo** (Claude Code, Codex, OpenCode) usan el servidor MCP oficial para probar voces y generar audios de ejemplo mientras se desarrolla.
 2. **La app** (demo de voz) llama a la API de ElevenLabs por su cuenta, desde el servidor, con la clave en `.env`. No depende del MCP.
 
+## Voz sin costo (por defecto)
+
+Si no configuras `ELEVENLABS_API_KEY`, la demo habla con la voz del navegador (`speechSynthesis`, con preferencia por es-CL y luego latinoamericano). No cuesta nada y no sale ningún audio del servidor. Depende de las voces instaladas en el equipo: en macOS hay voces chilenas; en otros equipos puede sonar más distinto.
+
 ## Servidor MCP para los agentes
 
 Los tres agentes lanzan lo mismo, `scripts/elevenlabs-mcp.sh`, que fija la versión del paquete (`elevenlabs-mcp==0.12.2`, publicado por ElevenLabs) y acota los archivos de entrada y salida a `.voice-assets/` (ignorada por git).

@@ -77,19 +77,25 @@ def test_the_character_budget_degrades_to_text_only(ai_settings, harness):
     assert body["audio_b64"] is None and body["voice_error"] == "tope_de_voz" and tts.texts == []
 
 
-def test_voice_is_unavailable_without_a_tts_client(ai_settings, harness):
-    agent = Agent(FakeLlm([]), harness.hotel, harness.pms, ai_settings, lambda: harness.clock())
+def test_without_elevenlabs_the_voice_turn_still_answers_in_text_for_the_browser_to_speak(ai_settings, harness):
+    agent = Agent(FakeLlm([say("Hola de nuevo.")]), harness.hotel, harness.pms, ai_settings, lambda: harness.clock())
     app = create_app(ai_settings, chatwoot=FakeChatwoot(), pms=harness.pms, clock=harness.clock, run_workers=False,
                      db=harness.db, llm_agent=agent)
     client = TestClient(app)
-    assert speak(client, "hola").status_code == 503
-    assert client.get("/api/demo/voice/greeting").status_code == 503
-    assert client.get("/api/demo/status").json()["voice"] is False
+    body = speak(client, "hola").json()
+    assert body["reply"] == "Hola de nuevo." and body["audio_b64"] is None
+    assert body["voice_error"] == "voz_no_disponible" and body["spoken"] == "Hola de nuevo."
+    greeting = client.get("/api/demo/voice/greeting").json()
+    assert greeting["audio_b64"] is None and greeting["voice_error"] == "voz_no_disponible"
+    assert "asistente virtual" in greeting["text"]
+    status = client.get("/api/demo/status").json()
+    assert status["voice"] is True and status["tts"] == "browser"
 
 
 def test_status_announces_voice_when_available(ai_settings, harness):
     client, _ = voice_client(ai_settings, harness)
-    assert client.get("/api/demo/status").json()["voice"] is True
+    status = client.get("/api/demo/status").json()
+    assert status["voice"] is True and status["tts"] == "elevenlabs"
 
 
 def test_voice_never_offers_or_runs_create_booking_even_in_full_mode(ai_settings, harness):

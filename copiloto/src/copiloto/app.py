@@ -375,7 +375,9 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         return {"ai_enabled": agent is not None, "mode": settings.ai_mode if agent is not None else "off",
                 "model": settings.llm_model if agent is not None else None,
                 "autonomous_booking": settings.autonomous_booking and agent is not None,
-                "voice": tts is not None and settings.demo_enabled,
+                # La voz existe siempre que haya IA: sin ElevenLabs la responde el navegador (gratis)
+                "voice": agent is not None and settings.demo_enabled,
+                "tts": "elevenlabs" if tts is not None else "browser",
                 "max_message_chars": DEMO_MAX_MESSAGE, "messages_per_session": settings.demo_messages_per_session,
                 "disclaimer": "Demo con IA: no escribas datos personales reales."}
 
@@ -439,6 +441,8 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         """Audio en base64 y el motivo si no hubo: la voz nunca impide que el huésped lea la respuesta."""
         if not text.strip():
             return None, None
+        if tts is None:
+            return None, "voz_no_disponible"
         key = hashlib.sha256(f"{language}|{text}".encode()).hexdigest()
         if key in audio_cache:
             audio_cache.move_to_end(key)
@@ -460,9 +464,11 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
 
     @app.get("/api/demo/voice/greeting", dependencies=limited)
     async def demo_voice_greeting(lang: str = Query(default="es", pattern="^(es|en)$")):
-        if tts is None or not settings.demo_enabled:
+        if not settings.demo_enabled:
             return demo_error(503, "voz_no_disponible")
         text = speakable(greeting_for(lang, hotel.hotel["name"]), settings.voice_max_chars + 120)
+        if tts is None:
+            return {"text": text, "audio_b64": None, "voice_error": "voz_no_disponible", "language": lang}
         async with greeting_lock:  # una sola síntesis en vuelo por idioma: cada saludo se paga una vez
             if lang not in greeting_audio:
                 audio, error = await synthesize(text, lang)
@@ -474,8 +480,6 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     @app.post("/api/demo/voice")
     async def demo_voice(request: Request):
         """Turno por voz: se sintetiza solo la respuesta del asistente, nunca texto enviado por el navegador."""
-        if tts is None:
-            return demo_error(503, "voz_no_disponible")
         turn = await demo_turn(request, voice=True)
         if isinstance(turn, JSONResponse):
             return turn

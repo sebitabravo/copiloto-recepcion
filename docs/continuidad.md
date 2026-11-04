@@ -6,13 +6,14 @@ El copiloto funciona en tres niveles. Cada nivel depende solo del anterior.
 |---|---|---|---|
 | 1. Sin IA ni voz | Flujo guiado (botones y números), FAQ verificadas del hotel, derivación a recepción con nota, cronómetro de 180 s, panel y métricas | Ninguno | 0 |
 | 2. Con IA (texto) | Lo anterior + asistente conversacional con herramientas (disponibilidad, derivación) | Modelo de lenguaje | Según consumo |
-| 3. Con voz | Lo anterior + respuestas habladas y tarjeta de voz en la landing | ElevenLabs | Plan Starter o similar |
+| 3. Con voz | Lo anterior + respuestas habladas y tarjeta de voz en la landing. Voz del navegador por defecto (sin costo); ElevenLabs solo si se configura | Ninguno, o ElevenLabs opcional | 0, o plan Starter si se activa ElevenLabs |
 
 ## Qué pasa cuando se acaba cada servicio
 
 - **Se acaba la IA** (clave inválida, saldo en cero o error del proveedor): el asistente cae al flujo guiado. Está cubierto por pruebas (`test_llm_outage_degrades_to_the_guided_menu`).
 - **Se acaba la cuota de voz** (ElevenLabs responde 401, 402, 429 o 5xx): la respuesta llega en texto y la tarjeta muestra "sin audio por ahora". La conversación no se corta.
 - **Tope interno de voz** (`VOICE_CHARS_PER_HOUR`, `VOICE_CHARS_PER_MONTH`): mismo comportamiento, sin llamadas al proveedor.
+- **Sin ElevenLabs configurado:** la voz la pone el navegador (`speechSynthesis`), gratis. El servidor responde con el texto y no llama a ningún proveedor de voz.
 
 ## Cómo cerrar sin romper la demo
 
