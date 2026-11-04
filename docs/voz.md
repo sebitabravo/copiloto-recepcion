@@ -38,7 +38,7 @@ Una tarjeta nueva en la landing (aparece solo si la voz está configurada) permi
 - **Siempre avisa que es una IA.** El saludo es una constante del servidor (no pasa por el modelo): "Hola, soy el asistente virtual del hotel...". La voz es natural, no pretende ser una persona.
 - **Nunca reserva por voz.** El reconocimiento puede errar nombres y fechas: por voz el asistente corre siempre en modo asistido, aunque `AI_MODE` sea `full`. Recepción confirma.
 - **Solo sintetiza lo que responde el asistente**, nunca texto enviado por el navegador, así nadie puede gastar tus créditos con texto propio.
-- **Respuestas cortas para el oído:** máximo 3 frases, sin listas ni enlaces (se reemplazan por "te lo envío por escrito"), tope de `450` caracteres por respuesta y de `VOICE_CHARS_PER_HOUR` (20 000) por hora en total.
+- **Respuestas cortas para el oído:** máximo 3 frases, sin listas ni enlaces (se reemplazan por "te lo envío por escrito"), tope de `450` caracteres por respuesta, de `VOICE_CHARS_PER_HOUR` (20 000) por hora y de `VOICE_CHARS_PER_MONTH` (30 000) por mes. El plan Starter incluye 40 000 caracteres al mes: el tope mensual queda bajo ese límite.
 - **Degrada, no falla:** si ElevenLabs responde 401, 402, 429 o 5xx, o se acaba el tope, el huésped ve el texto y la tarjeta avisa "sin audio por ahora".
 - **Privacidad:** el navegador envía el audio al servicio de reconocimiento (en Chrome, Google) y el texto de las respuestas va a ElevenLabs. No se guarda audio. `/privacidad` lo declara cuando la voz está activa.
 
