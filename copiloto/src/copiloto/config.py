@@ -58,6 +58,12 @@ class Settings:
     # Tope del turno completo (reintentos y herramientas incluidos): pasado ese plazo se vuelve al menú guiado
     ai_turn_timeout_s: float = 12.0
     llm_max_tokens: int = 500
+    # Voz de la demo (opcional): sin clave y sin voz elegida, la demo sigue solo con texto
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = ""
+    elevenlabs_model: str = "eleven_flash_v2_5"
+    voice_max_chars: int = 450
+    voice_chars_per_hour: int = 20000
     ai_max_history: int = 12
     pms_staff_token: str = ""
     demo_enabled: bool = True
@@ -90,6 +96,10 @@ class Settings:
             # Un modelo local en CPU puede necesitar más de 25 s por turno.
             llm_timeout_s=float(env.get("LLM_TIMEOUT_S", cls.llm_timeout_s)),
             ai_turn_timeout_s=float(env.get("AI_TURN_TIMEOUT_S", cls.ai_turn_timeout_s)),
+            elevenlabs_api_key=env.get("ELEVENLABS_API_KEY", ""),
+            elevenlabs_voice_id=env.get("ELEVENLABS_VOICE_ID", ""),
+            elevenlabs_model=env.get("ELEVENLABS_MODEL", cls.elevenlabs_model),
+            voice_chars_per_hour=int(env.get("VOICE_CHARS_PER_HOUR", cls.voice_chars_per_hour)),
             pms_staff_token=env.get("PMS_STAFF_TOKEN", ""),
             demo_enabled=env.get("DEMO_ENABLED", "1") not in ("0", "false", "no"),
             landing_origin=env.get("LANDING_ORIGIN", cls.landing_origin).rstrip("/"),
@@ -126,6 +136,11 @@ class Settings:
     def ai_active(self) -> bool:
         """La IA solo se usa con modo distinto de off y una API key; sin key el asistente sigue guiado."""
         return self.ai_mode in ("assisted", "full") and bool(self.llm_api_key)
+
+    @property
+    def voice_active(self) -> bool:
+        """La voz necesita la IA activa, la clave de ElevenLabs y una voz elegida."""
+        return self.ai_active and bool(self.elevenlabs_api_key) and bool(self.elevenlabs_voice_id)
 
     @property
     def autonomous_booking(self) -> bool:

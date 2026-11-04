@@ -5,7 +5,7 @@ import json
 import re
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from copiloto.ai.llm import LlmClient, LlmUnavailable, parse_arguments
 from copiloto.ai.prompts import WEEKDAYS, build_system_prompt
@@ -95,11 +95,11 @@ class Agent:
                  clock: Callable[[], float] = time.time):
         self.llm, self.hotel, self.pms, self.settings, self.clock = llm, hotel, pms, settings, clock
 
-    def _system(self, session: AiSession) -> str:
-        today = self.settings.local(self.clock()).date()
-        mode = "full" if self.settings.autonomous_booking else "assisted"
+    def _system(self, session: AiSession, settings: Settings) -> str:
+        today = settings.local(self.clock()).date()
+        mode = "full" if settings.autonomous_booking else "assisted"
         prompt = build_system_prompt(today.isoformat(), WEEKDAYS[today.weekday()], mode,
-                                     self.hotel.hotel["name"])
+                                     self.hotel.hotel["name"], voice=bool(session.state.get("voice")))
         last = session.state.get("last_availability")
         notes = []
         if last:
@@ -113,13 +113,17 @@ class Agent:
                          f"{made['checkout']}) a nombre de {made['guest_name']}.")
         return prompt + ("\n\nESTADO DE LA SESIÓN\n" + "\n".join(notes) if notes else "")
 
-    async def respond(self, session: AiSession, user_text: str, hooks: ToolHooks) -> AgentResult:
+    async def respond(self, session: AiSession, user_text: str, hooks: ToolHooks,
+                      voice: bool = False) -> AgentResult:
         deadline = time.monotonic() + self.settings.ai_turn_timeout_s
-        runner = ToolRunner(self.hotel, self.pms, self.settings, self.clock, session, hooks)
+        # Por voz el reconocimiento puede errar nombres y fechas: nunca se reserva solo, sea cual sea el modo global
+        settings = replace(self.settings, ai_mode="assisted") if voice else self.settings
+        session.state["voice"] = voice
+        runner = ToolRunner(self.hotel, self.pms, settings, self.clock, session, hooks)
         # Las herramientas no confían en el modelo: el «sí» del huésped se verifica sobre su propio texto.
         session.state["last_user_text"] = user_text
-        specs = tool_specs("full" if self.settings.autonomous_booking else "assisted")
-        messages = [{"role": "system", "content": self._system(session)}, *session.history,
+        specs = tool_specs("full" if settings.autonomous_booking else "assisted")
+        messages = [{"role": "system", "content": self._system(session, settings)}, *session.history,
                     {"role": "user", "content": user_text}]
         result = AgentResult(None)
         text: str | None = None
