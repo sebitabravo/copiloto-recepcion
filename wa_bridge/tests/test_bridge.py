@@ -9,12 +9,12 @@ import os
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-
-from wa_bridge import store
 from wa_bridge.bridge import Bridge, render_content
 from wa_bridge.config import Settings
 from wa_bridge.main import create_app, verify_chatwoot_signature
 from wa_bridge.openwa import OpenWAClient, to_chat_id, verify_openwa_signature
+
+from wa_bridge import store
 
 GUEST = "56911111111@c.us"
 OPENWA_SECRET = "openwa-secret"
@@ -495,7 +495,9 @@ async def test_openwa_client_sends_text_with_the_ready_session():
         calls.append((request.method, request.url.path, request.headers.get("x-api-key"),
                       json.loads(request.content) if request.content else None))
         if request.url.path == "/api/sessions":
-            return httpx.Response(200, json=[{"id": "s0", "name": "default", "status": "qr"}, {"id": "s1", "name": "default", "status": "ready"}])
+            sessions = [{"id": "s0", "name": "default", "status": "qr"},
+                        {"id": "s1", "name": "default", "status": "ready"}]
+            return httpx.Response(200, json=sessions)
         return httpx.Response(200, json={"ok": True})
 
     client = OpenWAClient("http://openwa:2785", "key", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
@@ -506,7 +508,8 @@ async def test_openwa_client_sends_text_with_the_ready_session():
 
 async def test_openwa_client_fails_loudly_when_no_session_is_ready():
     from wa_bridge.openwa import OpenWAError
-    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=[{"id": "s0", "name": "default", "status": "qr"}]))
+    sessions = [{"id": "s0", "name": "default", "status": "qr"}]
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=sessions))
     client = OpenWAClient("http://openwa:2785", "key", httpx.AsyncClient(transport=transport))
     with pytest.raises(OpenWAError):
         await client.send_text("56911111111@c.us", "Hola")

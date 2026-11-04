@@ -18,7 +18,7 @@ from .bridge import Bridge
 from .chatwoot import ChatwootClient
 from .config import Settings
 from .openwa import OpenWAClient, verify_openwa_signature
-
+from .transcribe import WhisperTranscriber
 
 DEDUPE_RETENTION_S = 30 * 86400
 MAPPING_RETENTION_S = 90 * 86400  # igual que la retención del copiloto (data/hotel.yaml: privacy.retention_days)
@@ -63,11 +63,15 @@ def create_app(settings: Settings | None = None, bridge: Bridge | None = None, c
         db = store.connect(settings.db_path)
         store.purge_processed(db, clock() - DEDUPE_RETENTION_S)
         store.purge_mappings(db, clock() - MAPPING_RETENTION_S)
+        transcriber = None
+        if settings.voice_notes:
+            transcriber = WhisperTranscriber(model_size=settings.whisper_model, cache_dir=settings.whisper_cache_dir,
+                                             max_seconds=settings.voice_max_seconds)
         bridge = Bridge(
             settings, db,
             ChatwootClient(settings.chatwoot_url, settings.inbox_identifier, settings.chatwoot_account_id,
                            settings.chatwoot_admin_token),
-            OpenWAClient(settings.openwa_url, settings.openwa_api_key), clock)
+            OpenWAClient(settings.openwa_url, settings.openwa_api_key), clock, transcriber=transcriber)
     app = FastAPI(title="Puente WhatsApp · OpenWA")
 
     @app.get("/health")
