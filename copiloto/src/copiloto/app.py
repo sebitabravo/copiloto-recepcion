@@ -10,6 +10,7 @@ import re
 import sqlite3
 import time
 import weakref
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlencode
@@ -38,6 +39,7 @@ from copiloto.voice import CharBudget, ElevenLabsClient, TtsUnavailable, greetin
 logger = logging.getLogger(__name__)
 STATIC = Path(__file__).parent / "static"
 PURGE_INTERVAL_S = 86400
+AUDIO_CACHE_MAX = 200
 DEMO_SESSION_ID = re.compile(r"^[A-Za-z0-9-]{16,64}$")
 DEMO_MAX_MESSAGE = 400
 
@@ -104,6 +106,7 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     voice_budget = CharBudget(settings.voice_chars_per_hour, clock=clock)
     voice_monthly_budget = CharBudget(settings.voice_chars_per_month, window_s=30 * 86400, clock=clock)
     greeting_audio: dict[str, str] = {}
+    audio_cache: OrderedDict[str, str] = OrderedDict()
     greeting_lock = asyncio.Lock()
     session_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
     core = Copiloto(settings, hotel, db, chatwoot, pms, clock, agent)
@@ -436,13 +439,21 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         """Audio en base64 y el motivo si no hubo: la voz nunca impide que el huésped lea la respuesta."""
         if not text.strip():
             return None, None
+        key = hashlib.sha256(f"{language}|{text}".encode()).hexdigest()
+        if key in audio_cache:
+            audio_cache.move_to_end(key)
+            return audio_cache[key], None
         size = len(text)
         if not (voice_budget.fits(size) and voice_monthly_budget.fits(size)):
             return None, "tope_de_voz"
         voice_budget.take(size)
         voice_monthly_budget.take(size)
         try:
-            return base64.b64encode(await tts.synthesize(text, language=language)).decode("ascii"), None
+            encoded = base64.b64encode(await tts.synthesize(text, language=language)).decode("ascii")
+            audio_cache[key] = encoded
+            if len(audio_cache) > AUDIO_CACHE_MAX:
+                audio_cache.popitem(last=False)
+            return encoded, None
         except TtsUnavailable:
             logger.warning("La voz no estuvo disponible; se responde solo con texto")
             return None, "voz_no_disponible"

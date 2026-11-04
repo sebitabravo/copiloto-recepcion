@@ -210,9 +210,19 @@ def test_an_english_guest_gets_an_english_spoken_reply_and_greeting(ai_settings,
 
 
 def test_the_monthly_character_cap_blocks_audio_even_when_the_hourly_cap_allows_it(ai_settings, harness):
-    limited = replace(ai_settings, voice_chars_per_hour=10_000, voice_chars_per_month=12)
-    client, tts = voice_client(limited, harness, FakeLlm([say("Hola."), say("Hola."), say("Hola.")]))
+    limited = replace(ai_settings, voice_chars_per_hour=10_000, voice_chars_per_month=20)
+    client, tts = voice_client(limited, harness, FakeLlm([say("Hola uno."), say("Hola dos."), say("Hola tres.")]))
     first, second, third = (speak(client, "hola").json() for _ in range(3))
+    # 9 + 9 caracteres caben en el tope de 20
     assert first["audio_b64"] and second["audio_b64"]
     assert third["audio_b64"] is None and third["voice_error"] == "tope_de_voz"
     assert len(tts.texts) == 2
+
+
+def test_repeated_identical_replies_are_synthesized_once_and_charged_once(ai_settings, harness):
+    reply = "Lo confirma recepción."
+    client, tts = voice_client(ai_settings, harness, FakeLlm([say(reply), say(reply)]))
+    first = speak(client, "¿tienen gimnasio?").json()
+    second = speak(client, "¿y tienen gimnasio?").json()
+    assert first["audio_b64"] == second["audio_b64"] and first["audio_b64"]
+    assert len(tts.texts) == 1, "el mismo texto no se paga dos veces"
