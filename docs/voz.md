@@ -74,3 +74,13 @@ La biblioteca compartida de ElevenLabs tiene más de 30 voces con acento `chilea
 **Inglés:** usa una voz en inglés para `ELEVENLABS_VOICE_ID_EN`. Una voz chilena hablando inglés suena con acento. Si no la pones, el inglés usa la misma voz española.
 
 **Pendiente:** no he verificado qué modelos aceptan diccionarios de pronunciación (para Temuco, Pucón, Traiguén, Molco). La API lo permite (`POST /v1/pronunciation-dictionaries/add-from-rules`), pero no lo he creado.
+
+## Respaldo local con Piper (opcional)
+
+Si ElevenLabs no responde o se agota su tope, la app puede responder con Piper (motor local, sin API de pago).
+
+- Requiere instalar `piper-tts==1.2.0` (licencia MIT, verificada en PyPI) y un modelo ONNX con su configuración. Esta versión no se instala en el contenedor por defecto: su dependencia `piper-phonemize` no tiene wheel en macOS arm64. Probarla en el servidor real antes de usarla.
+- Evita la versión nueva `piper-tts` 1.8.0 del repo `OHF-voice/piper1-gpl`: es **GPL-3.0-or-later**. Usarla en un repo público obliga a decisiones de licencia que no tomamos aquí.
+- Modelo: `PIPER_MODEL_PATH` y `PIPER_CONFIG_PATH`. El modelo `es_MX-claude-high` tiene una model card que indica dataset y licencia Apache-2.0, según un resumen de la página; verifícala en el original antes de usarla.
+- En inglés Piper no responde (su voz es solo española); el inglés queda con voz del navegador o texto.
+

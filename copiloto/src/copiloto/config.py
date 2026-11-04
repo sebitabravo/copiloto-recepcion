@@ -67,6 +67,9 @@ class Settings:
     voice_chars_per_hour: int = 20000
     # Starter de ElevenLabs incluye 40 000 caracteres al mes: el tope mensual queda bajo ese límite
     voice_chars_per_month: int = 30000
+    # Respaldo local con Piper (opcional): ruta al modelo ONNX y a su configuración
+    piper_model_path: str = ""
+    piper_config_path: str = ""
     ai_max_history: int = 12
     pms_staff_token: str = ""
     demo_enabled: bool = True
@@ -105,6 +108,8 @@ class Settings:
             elevenlabs_model=env.get("ELEVENLABS_MODEL", cls.elevenlabs_model),
             voice_chars_per_hour=int(env.get("VOICE_CHARS_PER_HOUR", cls.voice_chars_per_hour)),
             voice_chars_per_month=int(env.get("VOICE_CHARS_PER_MONTH", cls.voice_chars_per_month)),
+            piper_model_path=env.get("PIPER_MODEL_PATH", ""),
+            piper_config_path=env.get("PIPER_CONFIG_PATH", ""),
             pms_staff_token=env.get("PMS_STAFF_TOKEN", ""),
             demo_enabled=env.get("DEMO_ENABLED", "1") not in ("0", "false", "no"),
             landing_origin=env.get("LANDING_ORIGIN", cls.landing_origin).rstrip("/"),
