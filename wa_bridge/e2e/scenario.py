@@ -29,7 +29,8 @@ def new_chat() -> str:
 
 
 def inject(chat: str, body: str = "", **extra) -> int:
-    return httpx.post(f"{FAKE}/_inject", json={"chatId": chat, "body": body, **extra}, timeout=15).json()["bridge_status"]
+    response = httpx.post(f"{FAKE}/_inject", json={"chatId": chat, "body": body, **extra}, timeout=15)
+    return response.json()["bridge_status"]
 
 
 def sent_to(chat: str) -> list[str]:

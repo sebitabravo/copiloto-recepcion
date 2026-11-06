@@ -78,3 +78,11 @@ Evidencia: `docker compose -f infra/docker-compose.yml --project-directory . --p
 ## Detener
 
 `make wa-down` detiene OpenWA y el puente. La sesión vinculada se conserva; `make reset` la borra junto con el resto.
+
+## Notas de voz
+
+- Si `VOICE_NOTES=1`, la nota se transcribe aquí con Whisper local (`WHISPER_MODEL`, por defecto `small`). El audio se borra al terminar. Ver `docs/consentimiento-y-retencion.md`.
+- Sin `VOICE_NOTES=1`, el huésped recibe el aviso de solo texto, como antes.
+- **No verificado con OpenWA 0.27.1:** el puente espera el audio inline en `data.media.data` (base64). AgroVoz lo confirmó con tráfico real de su versión; la documentación de OpenWA no lo describe. Antes de la demo hay que enviar una nota real desde el teléfono dedicado y revisar en los logs del puente si llega el audio.
+- Modelo: la primera nota descarga Whisper (cientos de MB) al volumen `wa_bridge_state`. Conviene hacer esa primera transcripción antes de la presentación.
+

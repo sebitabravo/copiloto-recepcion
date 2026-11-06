@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     conversation_id INTEGER PRIMARY KEY, chat_id TEXT NOT NULL, created_at REAL NOT NULL, last_seen REAL);
 CREATE INDEX IF NOT EXISTS conversations_chat ON conversations (chat_id, created_at);
 CREATE TABLE IF NOT EXISTS processed (key TEXT PRIMARY KEY, at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS voice_notice (chat_id TEXT PRIMARY KEY, notified_at REAL NOT NULL);
 """
 
 
@@ -46,6 +47,7 @@ def purge_mappings(db: sqlite3.Connection, older_than: float) -> None:
     """Borra conversaciones sin actividad reciente y los contactos sin conversación (el chat incluye el teléfono)."""
     db.execute("DELETE FROM conversations WHERE COALESCE(last_seen, created_at) < ?", (older_than,))
     db.execute("DELETE FROM contacts WHERE chat_id NOT IN (SELECT chat_id FROM conversations)")
+    db.execute("DELETE FROM voice_notice WHERE notified_at < ?", (older_than,))
     db.commit()
 
 
@@ -81,3 +83,13 @@ def chat_for_conversation(db: sqlite3.Connection, conversation_id: int) -> str |
     row = db.execute("SELECT chat_id FROM conversations WHERE conversation_id = ?",
                      (conversation_id,)).fetchone()
     return row["chat_id"] if row else None
+
+
+def notice_sent(db: sqlite3.Connection, chat_id: str) -> bool:
+    """El aviso de notas de voz se envía una vez por huésped y sobrevive a reinicios."""
+    return db.execute("SELECT 1 FROM voice_notice WHERE chat_id = ?", (chat_id,)).fetchone() is not None
+
+
+def mark_notice(db: sqlite3.Connection, chat_id: str, now: float) -> None:
+    db.execute("INSERT OR REPLACE INTO voice_notice (chat_id, notified_at) VALUES (?, ?)", (chat_id, now))
+    db.commit()

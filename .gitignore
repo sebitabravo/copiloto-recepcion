@@ -11,3 +11,5 @@ node_modules/
 landing/config.js
 .atl/
 backups/
+.playwright-mcp/
+odd/tasks/demo-security-workflow.md

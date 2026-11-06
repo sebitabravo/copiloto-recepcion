@@ -43,3 +43,27 @@ def test_overnight_and_regular_shifts(settings):
     assert overnight.in_shift(local_epoch(2026, 10, 28, 23, 30))
     assert overnight.in_shift(local_epoch(2026, 10, 28, 5, 59))
     assert not overnight.in_shift(local_epoch(2026, 10, 28, 12, 0))
+
+
+@pytest.mark.parametrize("url", ["http://pms-mock:8200", "http://localhost:8200/", "http://127.0.0.1:8200"])
+def test_demo_sandbox_only_accepts_known_local_mock_destinations(settings, url):
+    assert replace(settings, pms_url=url).demo_sandbox_authorized is True
+
+
+@pytest.mark.parametrize("changes", [
+    {"pms_adapter": "none"}, {"pms_url": "https://pms-mock:8200"},
+    {"pms_url": "http://hotel.example:8200"}, {"pms_url": "http://pms-mock:8200.evil.test"},
+    {"pms_url": "http://user@pms-mock:8200"}, {"pms_url": "http://localhost:8200/api"},
+    {"pms_url": "http://localhost:8200?target=real"}, {"pms_booking_path": "/api/v1/bookings/"},
+    {"pms_booking_path": "https://hotel.example/bookings"}, {"pms_booking_path": "/api/v1/../bookings"},
+])
+def test_demo_sandbox_fails_closed_for_other_destinations_and_paths(settings, changes):
+    assert replace(settings, **changes).demo_sandbox_authorized is False
+
+
+def test_production_rejects_non_loopback_http_public_url(settings):
+    strong = replace(settings, env="production", webhook_secret="w" * 32, pms_events_secret="p" * 32,
+                     panel_token="t" * 32, pseudonym_salt="s" * 32, chatwoot_bot_token="b" * 32,
+                     public_url="http://hotel.example")
+    with pytest.raises(ValueError, match="HTTPS"):
+        strong.validate_runtime()

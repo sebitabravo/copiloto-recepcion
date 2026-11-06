@@ -56,6 +56,7 @@ COMMERCIAL_TERMS = ("reservar", "reserva", "disponibilidad", "disponible", "coti
 PHOTO_TERMS = ("foto", "fotos", "galeria", "imagenes", "habitaciones", "tipos de habitacion")
 LOCATION_TERMS = ("ubicacion", "donde", "direccion", "como llegar", "mapa", "llegar", "queda")
 MAX_ADULTS = 4
+FALLBACK_LIMIT = 3
 MAX_CHILDREN = 3
 AI_CONVERSATION_CAP = 60
 
@@ -346,6 +347,12 @@ class Copiloto:
     async def _fallback(self, ctx: Context) -> None:
         count = ctx.state.data.get("fallbacks", 0) + 1
         ctx.state.data["fallbacks"] = count
+        if count >= FALLBACK_LIMIT:
+            # Tres respuestas sin sentido seguidas: no seguir ofreciendo el mismo menú, pasar a una persona
+            ctx.state.data.pop("fallbacks", None)
+            await self._say(ctx, "Prefiero no hacerte perder más tiempo: te paso con una persona de recepción.")
+            await self._handoff(ctx, "no_entendi_tres_veces")
+            return
         extra = " También puedes escribir «recepción» para hablar con una persona." if count >= 2 else ""
         await self._say(ctx, "No estoy seguro de haberte entendido. Elige una opción del menú." + extra)
         await self._send_menu(ctx)

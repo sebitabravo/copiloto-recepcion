@@ -3,6 +3,7 @@
 import os
 from dataclasses import dataclass
 from datetime import datetime, time
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 
@@ -58,6 +59,18 @@ class Settings:
     # Tope del turno completo (reintentos y herramientas incluidos): pasado ese plazo se vuelve al menú guiado
     ai_turn_timeout_s: float = 12.0
     llm_max_tokens: int = 500
+    # Voz de la demo (opcional): sin clave y sin voz elegida, la demo sigue solo con texto
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = ""
+    elevenlabs_voice_id_en: str = ""
+    elevenlabs_model: str = "eleven_flash_v2_5"
+    voice_max_chars: int = 450
+    voice_chars_per_hour: int = 20000
+    # Starter de ElevenLabs incluye 40 000 caracteres al mes: el tope mensual queda bajo ese límite
+    voice_chars_per_month: int = 30000
+    # Respaldo local con Piper (opcional): ruta al modelo ONNX y a su configuración
+    piper_model_path: str = ""
+    piper_config_path: str = ""
     ai_max_history: int = 12
     pms_staff_token: str = ""
     demo_enabled: bool = True
@@ -90,6 +103,14 @@ class Settings:
             # Un modelo local en CPU puede necesitar más de 25 s por turno.
             llm_timeout_s=float(env.get("LLM_TIMEOUT_S", cls.llm_timeout_s)),
             ai_turn_timeout_s=float(env.get("AI_TURN_TIMEOUT_S", cls.ai_turn_timeout_s)),
+            elevenlabs_api_key=env.get("ELEVENLABS_API_KEY", ""),
+            elevenlabs_voice_id=env.get("ELEVENLABS_VOICE_ID", ""),
+            elevenlabs_voice_id_en=env.get("ELEVENLABS_VOICE_ID_EN", ""),
+            elevenlabs_model=env.get("ELEVENLABS_MODEL", cls.elevenlabs_model),
+            voice_chars_per_hour=int(env.get("VOICE_CHARS_PER_HOUR", cls.voice_chars_per_hour)),
+            voice_chars_per_month=int(env.get("VOICE_CHARS_PER_MONTH", cls.voice_chars_per_month)),
+            piper_model_path=env.get("PIPER_MODEL_PATH", ""),
+            piper_config_path=env.get("PIPER_CONFIG_PATH", ""),
             pms_staff_token=env.get("PMS_STAFF_TOKEN", ""),
             demo_enabled=env.get("DEMO_ENABLED", "1") not in ("0", "false", "no"),
             landing_origin=env.get("LANDING_ORIGIN", cls.landing_origin).rstrip("/"),
@@ -121,11 +142,29 @@ class Settings:
             raise ValueError("AI_MODE=full necesita PMS_STAFF_TOKEN para crear reservas en el PMS")
         if weak:
             raise ValueError("Secretos ausentes o demasiado cortos (mínimo 16 caracteres): " + ", ".join(weak))
+        public = urlsplit(self.public_url)
+        if self.env == "production" and not (
+            public.scheme == "https" and public.hostname
+            or public.scheme == "http" and public.hostname in ("localhost", "127.0.0.1")
+        ):
+            raise ValueError("COPILOTO_PUBLIC_URL necesita HTTPS fuera de localhost/127.0.0.1")
+
+    @property
+    def demo_sandbox_authorized(self) -> bool:
+        """Local demo allowlist, not proof that an arbitrary PMS is a sandbox."""
+        return (self.pms_adapter == "http" and self.pms_booking_path == "/api/v1/bookings"
+                and self.pms_url.rstrip("/") in {
+                    "http://pms-mock:8200", "http://localhost:8200", "http://127.0.0.1:8200"})
 
     @property
     def ai_active(self) -> bool:
         """La IA solo se usa con modo distinto de off y una API key; sin key el asistente sigue guiado."""
         return self.ai_mode in ("assisted", "full") and bool(self.llm_api_key)
+
+    @property
+    def voice_active(self) -> bool:
+        """La voz necesita la IA activa, la clave de ElevenLabs y una voz elegida."""
+        return self.ai_active and bool(self.elevenlabs_api_key) and bool(self.elevenlabs_voice_id)
 
     @property
     def autonomous_booking(self) -> bool:

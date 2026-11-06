@@ -16,6 +16,7 @@ class Faq:
     answer: str
     source: str
     status: str
+    answer_en: str = ""
 
 
 class HotelData:
@@ -29,7 +30,7 @@ class HotelData:
         self.rooms = raw["rooms"]
         self.faqs = [
             Faq(item["id"], item["label"], tuple(item["keywords"]), item["answer"], item["source"],
-                item["status"])
+                item["status"], item.get("answer_en", ""))
             for item in raw["faqs"]
         ]
         self._rooms_by_code = {room["code"]: room for room in self.rooms}
@@ -53,7 +54,7 @@ class HotelData:
         plain = normalize(text)
         best: tuple[int, int, Faq] | None = None
         for faq in self.faqs:
-            hits = [kw for kw in faq.keywords if contains_word(plain, kw)]
+            hits = [kw for kw in faq.keywords if _term_in(plain, kw)]
             if not hits:
                 continue
             score = (len(hits), max(len(normalize(kw)) for kw in hits))
@@ -67,3 +68,8 @@ class HotelData:
     def faq_by_label(self, text: str) -> Faq | None:
         plain = normalize(text)
         return next((faq for faq in self.faqs if normalize(faq.label) == plain), None)
+
+
+def _term_in(plain: str, keyword: str) -> bool:
+    """Acepta el plural simple: «tarjetas» coincide con la palabra clave «tarjeta»."""
+    return any(contains_word(plain, form) for form in (keyword, keyword + "s", keyword + "es"))
