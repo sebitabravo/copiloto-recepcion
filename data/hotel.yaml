@@ -84,8 +84,9 @@ promotions:
 faqs:
   - id: piscina
     label: Piscina
-    keywords: [piscina, pileta, nadar, temperada]
+    keywords: [piscina, pileta, nadar, temperada, pool, swimming]
     answer: "Tenemos piscina temperada, disponible durante todo el año y incluida en tu estadía."
+    answer_en: "We have a heated pool, open all year and included in your stay."
     source: https://www.hotelbordeluz.cl/servicios
     status: verificado
   - id: tinajas
@@ -96,14 +97,16 @@ faqs:
     status: verificado
   - id: desayuno
     label: Desayuno
-    keywords: [desayuno, desayunar, buffet, buffete, comida, comedor]
+    keywords: [desayuno, desayunar, buffet, buffete, comida, comedor, breakfast]
     answer: "Todas las habitaciones incluyen desayuno continental (buffet en temporada alta), en un comedor con vista al lago."
+    answer_en: "All rooms include continental breakfast (buffet in high season), served in a dining room with a lake view."
     source: https://www.hotelbordeluz.cl/servicios
     status: verificado
   - id: checkin
     label: Horarios de check-in y check-out
     keywords: [check-in, checkin, check in, check-out, checkout, check out, horario de ingreso, hora de llegada, hora de salida, a que hora]
     answer: "El check-in es desde las 15:00 y el check-out hasta las 12:00. Early check-in o late check-out dependen de disponibilidad y tienen costo."
+    answer_en: "Check-in is from 15:00 and check-out is until 12:00. Early check-in or late check-out depend on availability and have a cost."
     source: términos y condiciones (PDF del sitio)
     status: verificado
   - id: cancelacion
@@ -134,12 +137,14 @@ faqs:
     label: Estacionamiento
     keywords: [estacionamiento, parking, auto, vehiculo, vehículo, aparcar]
     answer: "Las habitaciones cuentan con estacionamiento."
+    answer_en: "The rooms come with parking."
     source: https://www.hotelbordeluz.cl/habitaciones
     status: verificado
   - id: wifi
     label: WiFi y climatización
     keywords: [wifi, wi-fi, internet, aire acondicionado, calefaccion, calefacción]
     answer: "Las habitaciones tienen WiFi, aire acondicionado y calefacción, baño privado en suite y televisor."
+    answer_en: "The rooms have WiFi, air conditioning and heating, a private en-suite bathroom and a TV."
     source: https://www.hotelbordeluz.cl/habitaciones
     status: verificado
   - id: promociones

@@ -18,6 +18,12 @@ class Settings:
     inbox_secret: str
     db_path: str
     retry_delays_s: tuple[float, ...] = (1.0, 3.0)
+    # Notas de voz: transcripción local (Whisper). Apagada por defecto.
+    voice_notes: bool = False
+    whisper_model: str = "small"
+    whisper_cache_dir: str = "/var/lib/wa-bridge/models"
+    voice_max_seconds: float = 60.0
+    max_voice_bytes: int = 1_000_000
     # Ventana para reordenar por id las respuestas que Chatwoot entrega en jobs paralelos
     reorder_window_s: float = 0.4
     max_body_bytes: int = 1_000_000
@@ -25,7 +31,7 @@ class Settings:
     signature_tolerance_s: int = 300
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         env = os.environ
         return cls(
             openwa_url=env.get("OPENWA_API_URL", "http://openwa:2785").rstrip("/"),
@@ -37,4 +43,7 @@ class Settings:
             inbox_identifier=env.get("CHATWOOT_WA_INBOX_IDENTIFIER", ""),
             inbox_secret=env.get("CHATWOOT_WA_INBOX_SECRET", ""),
             db_path=env.get("WA_BRIDGE_DB_PATH", "/var/lib/wa-bridge/bridge.sqlite"),
+            voice_notes=env.get("VOICE_NOTES", "0").strip().lower() in ("1", "true", "yes"),
+            whisper_model=env.get("WHISPER_MODEL", "small"),
+            whisper_cache_dir=env.get("WHISPER_CACHE_DIR", "/var/lib/wa-bridge/models"),
         )

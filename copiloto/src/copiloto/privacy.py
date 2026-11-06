@@ -1,4 +1,4 @@
-"""Aviso de privacidad (borrador para revisión del hotel), conforme al diseño de EVA2 y a la Ley 21.719."""
+"""Aviso de privacidad del prototipo, pendiente de revisión del hotel y revisión legal."""
 
 from html import escape
 
@@ -27,21 +27,25 @@ PAGE = """<!doctype html>
 <main>
 <h1>Aviso de privacidad</h1>
 <p class="draft"><strong>Borrador para revisión del hotel.</strong> Prototipo académico INNOVA3 · INACAP.
-No es el sitio oficial de {hotel}. Todos los datos de la demostración son ficticios.</p>
+No es el sitio oficial de {hotel}. Usa solo datos ficticios. Este borrador no constituye una certificación legal.</p>
 
 <h2>Quién es el responsable</h2>
 <p>{hotel}. Contacto para consultas y ejercicio de derechos:
 <a href="mailto:{contact}">{contact}</a>.</p>
 
 <h2>Para qué usamos tus datos (finalidad)</h2>
-<p>Orientar tu consulta, mostrarte información del hotel y, si lo pides, derivar tu solicitud de
-disponibilidad a una persona de recepción. El asistente no confirma reservas: solo las deja
-como pre-información y recepción las valida.</p>
+<p>Orientar tu consulta y mostrar información del hotel. En modo completo, si el servidor habilita la reserva
+autónoma, la demo puede crear una reserva en el PMS simulado después de mostrar una propuesta y recibir tu
+confirmación explícita. Los modos asistido y de voz no crean reservas autónomas. El flujo sin IA responde
+información del hotel, sin consultar disponibilidad.</p>
+<p>La derivación del simulador no notifica a recepción. El widget separado de Chatwoot sí envía la conversación
+a su bandeja cuando está configurado y conectado. Reiniciar el historial no elimina reservas del PMS.</p>
 
 <h2>Qué datos tratamos (datos mínimos)</h2>
 <ul>
 <li>El texto de tus mensajes y el nombre que muestre tu canal de chat.</li>
 <li>Fechas de estadía y cantidad de adultos y niños, si los entregas.</li>
+<li>Nombre ficticio del huésped y habitación elegida para una propuesta de reserva de demostración.</li>
 </ul>
 <p>No pedimos RUT, datos de pago, correo ni teléfono dentro del chat.</p>
 
@@ -62,7 +66,8 @@ escribiendo a <a href="mailto:{contact}">{contact}</a>.</p>
 """
 
 
-AI_OFF = "El asistente funciona sin inteligencia artificial generativa y no envía tus mensajes a terceros."
+AI_OFF = ("El flujo sin IA no envía mensajes a un modelo generativo. El canal separado de recepción usa Chatwoot; "
+          "si usas voz, se aplica también el tratamiento indicado para ese canal.")
 AI_ON = ("El asistente usa un modelo de lenguaje de un tercero ({provider}) para entender tus mensajes: el texto "
          "de cada mensaje y los datos de tu consulta viajan a ese proveedor, que puede estar fuera de Chile. "
          "Por eso no debes escribir datos personales reales: esta demostración usa datos ficticios. Guardamos "
@@ -75,6 +80,10 @@ AI_LOCAL = ("El asistente usa un modelo de lenguaje que se ejecuta en la misma i
             "demostración usa datos ficticios: no escribas datos personales reales. Guardamos un historial acotado "
             "de la conversación solo para que el asistente mantenga el hilo, y se borra con la retención.")
 
+VOICE_ON = ("Si usas la demo de voz, el audio de tu micrófono lo transcribe el navegador (en Chrome, con el servicio "
+            "de reconocimiento de voz de Google) y el texto de cada respuesta se envía a ElevenLabs para generar "
+            "la voz. No guardamos el audio.")
+
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "host.docker.internal", "0.0.0.0")
 
 
@@ -82,13 +91,15 @@ def _is_local(base_url: str) -> bool:
     return any(host in (base_url or "") for host in LOCAL_HOSTS)
 
 
-def render(hotel: HotelData, ai_provider: str | None = None, ai_base_url: str = "") -> str:
+def render(hotel: HotelData, ai_provider: str | None = None, ai_base_url: str = "", voice: bool = False) -> str:
     if not ai_provider:
         paragraph = AI_OFF
     elif _is_local(ai_base_url):
         paragraph = AI_LOCAL.format(provider=ai_provider)
     else:
         paragraph = AI_ON.format(provider=ai_provider)
+    if voice:
+        paragraph = f"{paragraph} {VOICE_ON}"
     return PAGE.format(
         ai_paragraph=escape(paragraph),
         hotel=escape(hotel.hotel["name"]),

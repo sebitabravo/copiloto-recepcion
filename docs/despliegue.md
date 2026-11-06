@@ -75,8 +75,17 @@ en `.env.runtime` (gitignored). Nunca las commitees.
 
 1. Una VM con 4 GB de RAM y Docker. Copia el repo, corre `make up`.
 2. Pon un proxy con HTTPS delante (Caddy o nginx) y ajusta `FRONTEND_URL` en `infra/docker-compose.yml` a la URL pública de Chatwoot.
-3. `/api/panel/*` exige el `PANEL_TOKEN` (header `X-Panel-Token`; el seed lo deja en la URL del Dashboard
-   App) y `/webhooks/*` verifican firma o secreto. **`/metricas*` no tiene autenticación** (solo contadores):
+   Configura también `COPILOTO_PUBLIC_URL` con HTTPS: determina el atributo `Secure` de la cookie del panel.
+   En producción solo se permite HTTP para `localhost` y `127.0.0.1`, para conservar la demo local.
+3. `/api/panel/*` exige una sesión firmada o el `PANEL_TOKEN` en el header `X-Panel-Token`.
+   Sin clave configurada se rechazan ambos mecanismos, incluso en desarrollo. El acceso manual usa
+   `POST /api/panel/login`; la cookie dura 12 horas y es `HttpOnly`, `SameSite=Lax` y `Secure` con HTTPS.
+   El seed conserva el token inicial en la URL del Dashboard App por compatibilidad: al cargar, el panel
+   lo elimina inmediatamente de la ubicación y lo intercambia mediante el mismo login por una cookie.
+   No lo guarda en almacenamiento del navegador ni lo agrega a enlaces posteriores. El primer acceso
+   aún puede dejar esa URL inicial en logs del proxy: evita registrar query strings del panel y no compartas
+   ese enlace. Solo se cargan datos del personal después del intercambio y la validación de sesión.
+   `/webhooks/*` verifican firma o secreto. **`/metricas*` no tiene autenticación** (solo contadores):
    protégelo con login en el proxy. Expón sin login solo `/webhooks/*`, `/panel` (HTML estático) y
    `/privacidad`.
 4. Cambia la URL del Dashboard App en Chatwoot (Configuración → Integraciones → Dashboard Apps) a la URL
@@ -88,3 +97,24 @@ en `.env.runtime` (gitignored). Nunca las commitees.
 Apunta `PMS_URL` a un servicio que cumpla `docs/conector-pms.md` (el adaptador HTTP genérico está en
 `copiloto/src/copiloto/pms.py`; `pms_bridge` lo hace para Beds24): lectura de solo consulta con sello de hora. Necesita credenciales del hotel y el contrato del proveedor. La
 confirmación sigue siendo humana.
+
+## Límites de la demo pública
+
+La demo puede conversar y consultar un PMS externo, pero no crear reservas allí. Su autorización de
+escritura exige `PMS_ADAPTER=http`, `PMS_BOOKING_PATH=/api/v1/bookings` y una de estas bases exactas:
+`http://pms-mock:8200`, `http://localhost:8200` o `http://127.0.0.1:8200` (se admite una barra final).
+No se aceptan rutas alternativas, credenciales en la URL ni destinos externos. Es una lista local de
+destinos conocidos, no una prueba universal de que cualquier servidor sea un sandbox: no sustituyas
+el servicio de esas direcciones por un PMS real. Además, las herramientas exigen disponibilidad simulada.
+
+`GET /api/demo/status` informa `sandbox` y la capacidad efectiva `autonomous_booking`; conserva
+`mode=full` si ese es el modo configurado, aunque el destino impida reservar. La voz conserva su política
+asistida y no crea reservas. Estas restricciones no cambian la autenticación de la API del panel.
+
+Texto, voz y reinicio comparten un bloqueo por sesión dentro de la aplicación: se toma antes de cargar
+historial o revisar el cupo, y se conserva hasta guardar el turno. Reiniciar espera al turno activo y luego
+borra su historial; otras sesiones pueden avanzar independientemente. Los bloqueos sin usuarios se liberan
+mediante referencias débiles, sin mantener una entrada permanente por visitante.
+**Esto solo coordina un proceso**: no es un bloqueo distribuido ni garantiza exclusión entre varios workers
+o réplicas. Mantén un único proceso para esta demo; antes de escalar, implementa coordinación compartida
+para turnos, reinicios y límites de uso.

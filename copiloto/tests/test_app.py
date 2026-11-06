@@ -148,4 +148,4 @@ def test_privacy_notice_discloses_the_third_party_model_only_when_ai_is_active(a
                                db=harness.db, llm_agent=agent))
     assert "modelo de lenguaje de un tercero" in on.get("/privacidad").text
     off = make_client(replace(ai_settings, llm_api_key=""), harness)
-    assert "sin inteligencia artificial generativa" in off.get("/privacidad").text
+    assert "no envía mensajes a un modelo generativo" in off.get("/privacidad").text

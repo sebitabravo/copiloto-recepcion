@@ -11,9 +11,12 @@ STAY = {"checkin": "2026-11-15", "checkout": "2026-11-18", "adults": 2, "childre
 
 
 def test_only_an_explicit_answer_counts_as_confirmation():
-    assert guest_said_yes("sí, la doble con jacuzzi, soy Camila Rojas")
-    assert guest_said_yes("dale, confírmala")
-    assert guest_said_yes("perfecto")
+    assert guest_said_yes("Sí, confirmo la reserva")
+    assert guest_said_yes("Sí")
+    assert guest_said_yes("Confirmo la reserva")
+    for text in ("sí, pero no reserves", "sí, nunca", "perfecto", "quiero una reserva", "¿Sí?",
+                 "sí, la doble con jacuzzi, soy Camila Rojas", "dale, confírmala"):
+        assert not guest_said_yes(text)
     assert not guest_said_yes("¿cuánto sale la doble?")
     assert not guest_said_yes("no, mejor otra")
     assert not guest_said_yes("")

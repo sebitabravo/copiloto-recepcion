@@ -5,12 +5,12 @@ import json
 import re
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from copiloto.ai.llm import LlmClient, LlmUnavailable, parse_arguments
 from copiloto.ai.prompts import WEEKDAYS, build_system_prompt
 from copiloto.ai.sessions import AiSession
-from copiloto.ai.tools import LABELS, ToolHooks, ToolRunner, tool_specs
+from copiloto.ai.tools import LABELS, ToolHooks, ToolRunner, pending_proposal, tool_specs
 from copiloto.config import Settings
 from copiloto.hotel import HotelData
 from copiloto.pms import PmsAdapter
@@ -95,11 +95,11 @@ class Agent:
                  clock: Callable[[], float] = time.time):
         self.llm, self.hotel, self.pms, self.settings, self.clock = llm, hotel, pms, settings, clock
 
-    def _system(self, session: AiSession) -> str:
-        today = self.settings.local(self.clock()).date()
-        mode = "full" if self.settings.autonomous_booking else "assisted"
+    def _system(self, session: AiSession, settings: Settings) -> str:
+        today = settings.local(self.clock()).date()
+        mode = "full" if settings.autonomous_booking else "assisted"
         prompt = build_system_prompt(today.isoformat(), WEEKDAYS[today.weekday()], mode,
-                                     self.hotel.hotel["name"])
+                                     self.hotel.hotel["name"], voice=bool(session.state.get("voice")))
         last = session.state.get("last_availability")
         notes = []
         if last:
@@ -113,13 +113,21 @@ class Agent:
                          f"{made['checkout']}) a nombre de {made['guest_name']}.")
         return prompt + ("\n\nESTADO DE LA SESIÓN\n" + "\n".join(notes) if notes else "")
 
-    async def respond(self, session: AiSession, user_text: str, hooks: ToolHooks) -> AgentResult:
+    async def respond(self, session: AiSession, user_text: str, hooks: ToolHooks,
+                      voice: bool = False) -> AgentResult:
         deadline = time.monotonic() + self.settings.ai_turn_timeout_s
-        runner = ToolRunner(self.hotel, self.pms, self.settings, self.clock, session, hooks)
+        # Por voz el reconocimiento puede errar nombres y fechas: nunca se reserva solo, sea cual sea el modo global
+        denied = hooks.extra.get("sandbox_only") is True and hooks.extra.get("sandbox_authorized") is not True
+        settings = replace(self.settings, ai_mode="assisted") if voice or denied else self.settings
+        if not settings.autonomous_booking:
+            session.state.pop("pending_booking", None)
+        session.state["voice"] = voice
+        session.state["turn"] = session.state.get("turn", 0) + 1
+        runner = ToolRunner(self.hotel, self.pms, settings, self.clock, session, hooks)
         # Las herramientas no confían en el modelo: el «sí» del huésped se verifica sobre su propio texto.
         session.state["last_user_text"] = user_text
-        specs = tool_specs("full" if self.settings.autonomous_booking else "assisted")
-        messages = [{"role": "system", "content": self._system(session)}, *session.history,
+        specs = tool_specs("full" if settings.autonomous_booking else "assisted")
+        messages = [{"role": "system", "content": self._system(session, settings)}, *session.history,
                     {"role": "user", "content": user_text}]
         result = AgentResult(None)
         text: str | None = None
@@ -155,7 +163,7 @@ class Agent:
                 result.events.append(outcome.event)
             if outcome.ok:
                 session.state["data_seen"] = True
-                if hooks.conversation_id is not None:
+                if hooks.conversation_id is not None and hooks.handoff is not None:
                     # Recepción ya fue avisada y el huésped informado: no se pide otra respuesta al modelo,
                     # porque si fallara el menú pisaría una derivación ya hecha.
                     result.handed_off = True
@@ -214,11 +222,12 @@ class Agent:
                     "ms": int((time.monotonic() - tool_started) * 1000), "ok": outcome.ok})
                 if outcome.event:
                     result.events.append(outcome.event)
-                if call.name == "create_booking" and outcome.ok and not outcome.data.get("ya_existia"):
+                if outcome.event and outcome.event.get("type") == "booking_created":
                     result.booking = outcome.data
                 payload = json.dumps(outcome.data, ensure_ascii=False)[:MAX_TOOL_PAYLOAD]
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": payload})
-                if call.name == "handoff_to_human" and outcome.ok and hooks.conversation_id is not None:
+                if (call.name == "handoff_to_human" and outcome.ok and hooks.conversation_id is not None
+                        and hooks.handoff is not None):
                     result.handed_off = True
             if result.handed_off:
                 return self._finish(session, user_text, result, None)
@@ -241,12 +250,29 @@ class Agent:
             reply = SAFE_NO_BOOKING
             result.guardrails.append("confirmation_without_booking")
         reply = reply[:MAX_REPLY]
+        pending = pending_proposal(session, self.clock(), self.settings.prebooking_minutes * 60)
+        proposal_requested = any(event.get("type") == "booking_proposal" for event in result.events)
+        # Present new proposals authoritatively without replacing unrelated later hotel answers.
+        if pending and proposal_requested and not result.booking and not session.state.get("voice"):
+            b = pending
+            reply = (f"Propuesta de reserva para {b['guest_name']}: {b['room_name']} ({b['room_code']}), "
+                     f"{b['checkin']} a {b['checkout']} ({_count(b['nights'], 'noche', 'noches')}), "
+                     f"{_count(b['adults'], 'adulto', 'adultos')} y {_count(b['children'], 'niño', 'niños')}, "
+                     f"total {_money(b['total_clp'])}. Todavía no hay una reserva creada. "
+                     "¿Confirmas estos datos? Responde «Sí, confirmo la reserva» para continuar.")
+            if b["simulated"]:
+                reply += " Propuesta de demostración en el PMS simulado; no es una reserva real."
+            pending["presented_turn"] = session.state["turn"]
         if result.booking:
             b = result.booking
-            reply += (f"\n\nReserva de demostración #{b['booking_id']} creada en el PMS simulado: {b['room_name']}, "
+            heading = "Reserva de demostración" if b.get("simulated") else "Reserva"
+            destination = "PMS simulado" if b.get("simulated") else "PMS"
+            reply += (f"\n\n{heading} #{b['booking_id']} creada en el {destination}: {b['room_name']}, "
                       f"{b['checkin']} a {b['checkout']} ({_count(b['nights'], 'noche', 'noches')}), "
                       f"{_count(b['adults'], 'adulto', 'adultos')} y {_count(b['children'], 'niño', 'niños')}, "
-                      f"total {_money(b['total_clp'])}. Es una demostración: no es una reserva real.")
+                       f"total {_money(b['total_clp'])}.")
+            if b.get("simulated"):
+                reply += " Es una demostración: no es una reserva real."
         result.reply = reply
         session.add("user", user_text, self.settings.ai_max_history)
         session.add("assistant", reply, self.settings.ai_max_history)

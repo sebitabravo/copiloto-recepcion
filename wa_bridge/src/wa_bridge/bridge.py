@@ -7,6 +7,8 @@ Salida:   webhook del inbox API -> `send-text` de OpenWA, solo para mensajes sal
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import logging
 import sqlite3
 import weakref
@@ -20,7 +22,22 @@ from .openwa import OpenWAClient
 logger = logging.getLogger(__name__)
 
 TEXT_TYPES = {"chat", "text", ""}
+VOICE_TYPES = {"voice", "ptt", "audio"}
 UNSUPPORTED_REPLY = "Por ahora solo puedo leer mensajes de texto. ¿Me escribes tu consulta?"
+VOICE_NOTICE = ("Si me envías una nota de voz, la transcribimos aquí en el hotel y el audio se borra al terminar. "
+                "Si prefieres, escribe tu consulta.")
+VOICE_UNCLEAR_REPLY = "No logré entender la nota de voz. ¿Me la envías de nuevo o me escribes tu consulta?"
+
+
+def decode_media(data: dict) -> bytes | None:
+    """Audio inline en base64 (`data.media.data`). Formato de OpenWA 0.27.1 sin documentar."""
+    raw = (data.get("media") or {}).get("data") or ""
+    if not raw:
+        return None
+    try:
+        return base64.b64decode(raw, validate=True)
+    except (binascii.Error, ValueError):
+        return None
 
 
 def render_content(event: dict) -> str:
@@ -37,8 +54,10 @@ def render_content(event: dict) -> str:
 
 class Bridge:
     def __init__(self, settings: Settings, db: sqlite3.Connection, chatwoot: ChatwootClient,
-                 openwa: OpenWAClient, clock: Callable[[], float], sleep=asyncio.sleep):
+                 openwa: OpenWAClient, clock: Callable[[], float], sleep=asyncio.sleep,
+                 transcriber: Callable[[bytes], Awaitable[str]] | None = None):
         self.settings = settings
+        self.transcriber = transcriber
         self.sleep = sleep
         self._inflight: set[str] = set()
         self._outbox: dict[str, list[tuple[int, str, str]]] = {}
@@ -109,20 +128,51 @@ class Bridge:
         message_id = str(data.get("id") or event.get("idempotencyKey") or "")
         if not message_id:
             return
+        name = str((data.get("contact") or {}).get("pushName") or "") or "Huésped WhatsApp"
+        if data.get("type", "") in VOICE_TYPES:
+            await self._on_voice_note(chat_id, message_id, name, data)
+            return
         body = str(data.get("body") or "").strip()
         if data.get("type", "") not in TEXT_TYPES or not body:
             await self._deliver(f"wa:{message_id}", lambda: self.openwa.send_text(chat_id, UNSUPPORTED_REPLY))
             return
-        name = str((data.get("contact") or {}).get("pushName") or "") or "Huésped WhatsApp"
+        await self._post_guest_text(chat_id, message_id, name, body)
 
+    async def _post_guest_text(self, chat_id: str, message_id: str, name: str, text: str) -> None:
         async def post() -> None:
             async with self._lock(chat_id):
                 source_id, conversation_id = await self._conversation_for(chat_id, name)
                 await self.chatwoot.post_guest_message(source_id, conversation_id,
-                                                       body[:self.settings.max_text_chars])
+                                                       text[:self.settings.max_text_chars])
                 store.touch_conversation(self.db, conversation_id, self.clock())
 
         await self._deliver(f"wa:{message_id}", post)
+
+    async def _on_voice_note(self, chat_id: str, message_id: str, name: str, data: dict) -> None:
+        """Transcribe aquí y trata el texto como mensaje escrito. Siempre hay respuesta para el huésped."""
+        if self.transcriber is None:
+            await self._deliver(f"wa:{message_id}", lambda: self.openwa.send_text(chat_id, UNSUPPORTED_REPLY))
+            return
+        audio = decode_media(data)
+        if audio is None or len(audio) > self.settings.max_voice_bytes:
+            await self._deliver(f"wa:{message_id}", lambda: self.openwa.send_text(chat_id, VOICE_UNCLEAR_REPLY))
+            return
+        if not store.notice_sent(self.db, chat_id):
+            try:
+                await self.openwa.send_text(chat_id, VOICE_NOTICE)
+                store.mark_notice(self.db, chat_id, self.clock())
+            except Exception:
+                logger.warning("No se pudo enviar el aviso de notas de voz; se reintentará con la próxima nota")
+        try:
+            text = (await self.transcriber(audio)).strip()
+        except Exception:
+            # El motivo puede contener datos del audio: se registra solo el tipo de error
+            logger.warning("No se pudo transcribir una nota de voz (%s)", "error de transcripción")
+            text = ""
+        if not text:
+            await self._deliver(f"wa:{message_id}", lambda: self.openwa.send_text(chat_id, VOICE_UNCLEAR_REPLY))
+            return
+        await self._post_guest_text(chat_id, message_id, name, text)
 
     async def _conversation_for(self, chat_id: str, name: str) -> tuple[str, int]:
         source_id = store.contact_source(self.db, chat_id)

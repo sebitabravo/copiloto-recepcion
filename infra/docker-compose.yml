@@ -157,6 +157,14 @@ services:
       LLM_MODEL: ${LLM_MODEL:-deepseek-flash}
       LLM_TIMEOUT_S: ${LLM_TIMEOUT_S:-25}
       AI_TURN_TIMEOUT_S: ${AI_TURN_TIMEOUT_S:-12}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
+      ELEVENLABS_VOICE_ID_EN: ${ELEVENLABS_VOICE_ID_EN:-}
+      PIPER_MODEL_PATH: ${PIPER_MODEL_PATH:-}
+      PIPER_CONFIG_PATH: ${PIPER_CONFIG_PATH:-}
+      ELEVENLABS_MODEL: ${ELEVENLABS_MODEL:-eleven_flash_v2_5}
+      VOICE_CHARS_PER_HOUR: ${VOICE_CHARS_PER_HOUR:-20000}
+      VOICE_CHARS_PER_MONTH: ${VOICE_CHARS_PER_MONTH:-30000}
       PMS_STAFF_TOKEN: ${STAFF_TOKEN}
       DEMO_ENABLED: ${DEMO_ENABLED:-1}
       LANDING_ORIGIN: ${LANDING_ORIGIN:-http://localhost:8080}
@@ -233,6 +241,10 @@ services:
       OPENWA_WEBHOOK_SECRET: ${OPENWA_WEBHOOK_SECRET}
       CHATWOOT_URL: http://chatwoot:3000
       WA_BRIDGE_DB_PATH: /var/lib/wa-bridge/bridge.sqlite
+      # Notas de voz: transcripción local con Whisper. El audio se borra al terminar (ver docs/consentimiento-y-retencion.md)
+      VOICE_NOTES: ${VOICE_NOTES:-0}
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      WHISPER_CACHE_DIR: /var/lib/wa-bridge/models
     volumes:
       - wa_bridge_state:/var/lib/wa-bridge
     read_only: true
