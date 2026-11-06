@@ -1,3 +1,4 @@
+import logging
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -47,7 +48,7 @@ def test_health_and_seed(client):
     assert read_at.utcoffset() == read_at.astimezone(ZoneInfo("America/Santiago")).utcoffset()
     assert len(data["room_types"]) == 12
     assert sum(room["available_units"] for room in data["room_types"]) == 20
-    source = yaml.safe_load(DEFAULT_HOTEL_PATH.read_text())["rooms"]
+    source = yaml.safe_load(DEFAULT_HOTEL_PATH.read_text(encoding="utf-8"))["rooms"]
     for actual, expected in zip(data["room_types"], source, strict=True):
         for field in ("code", "name", "max_adults", "max_children", "m2"):
             assert actual[field] == expected[field]
@@ -89,10 +90,16 @@ def test_capacity_filtering(client):
     assert book(client, code="invented").status_code == 422
 
 
-@pytest.mark.parametrize("dates", [
-    {"checkout": "2026-11-01"}, {"checkout": "2026-10-30"}, {"checkin": "invalid"},
-    {"adults": 0}, {"children": -1},
-])
+@pytest.mark.parametrize(
+    "dates",
+    [
+        {"checkout": "2026-11-01"},
+        {"checkout": "2026-10-30"},
+        {"checkin": "invalid"},
+        {"adults": 0},
+        {"children": -1},
+    ],
+)
 def test_validation(client, dates):
     assert client.get("/api/v1/availability", params={**DATES, **dates}).status_code == 422
     assert book(client, **dates).status_code == 422
@@ -105,6 +112,14 @@ def test_dynamic_outage(client, monkeypatch):
     assert client.get("/health").status_code == 200
     monkeypatch.setenv("SIMULATE_DOWN", "0")
     assert inventory(client)
+
+
+def test_outage_blocks_writes_and_leaves_data_unchanged(client, monkeypatch):
+    monkeypatch.setenv("SIMULATE_DOWN", "1")
+    response = book(client)
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Simulated PMS outage"
+    assert client.get("/api/v1/bookings", headers=TOKEN).json() == []
 
 
 def test_authentication(client, monkeypatch):
@@ -133,9 +148,17 @@ def test_event_emitted_after_commit(client, monkeypatch):
         http_client.return_value.__enter__.return_value.post.side_effect = post
         result = book(client, conversation_id=42)
     assert result.status_code == 201
-    assert seen == [("http://events.test/event", {"kind": "booking_confirmed", "conversation_id": 42,
-                                               "booking_id": result.json()["booking_id"],
-                                               "source": "personal"})]
+    assert seen == [
+        (
+            "http://events.test/event",
+            {
+                "kind": "booking_confirmed",
+                "conversation_id": 42,
+                "booking_id": result.json()["booking_id"],
+                "source": "personal",
+            },
+        )
+    ]
     response.raise_for_status.assert_called_once()
 
 
@@ -149,10 +172,17 @@ def test_event_carries_secret_in_header_not_in_url(client, monkeypatch):
     assert post.call_args.kwargs["headers"] == {"X-Events-Token": "shh"}
 
 
-@pytest.mark.parametrize("failure", [httpx.ConnectError("offline"), httpx.HTTPStatusError(
-    "unavailable", request=httpx.Request("POST", "http://events.test/event"),
-    response=httpx.Response(503),
-)])
+@pytest.mark.parametrize(
+    "failure",
+    [
+        httpx.ConnectError("offline"),
+        httpx.HTTPStatusError(
+            "unavailable",
+            request=httpx.Request("POST", "http://events.test/event"),
+            response=httpx.Response(503),
+        ),
+    ],
+)
 def test_event_failure_isolated_and_retried(client, monkeypatch, failure):
     monkeypatch.setenv("COPILOTO_EVENTS_URL", "http://events.test/event")
     with patch("pms_mock.main.httpx.Client") as http_client, patch("pms_mock.main.time.sleep") as sleep:
@@ -172,6 +202,18 @@ def test_retry_recovers(client, monkeypatch):
         post.side_effect = [httpx.ConnectError("offline"), MagicMock()]
         assert book(client).status_code == 201
         assert post.call_count == 2
+
+
+def test_event_failure_logs_the_cause_and_the_final_loss(client, monkeypatch, caplog):
+    monkeypatch.setenv("COPILOTO_EVENTS_URL", "http://events.test/event")
+    with patch("pms_mock.main.httpx.Client") as http_client, patch("pms_mock.main.time.sleep"):
+        http_client.return_value.__enter__.return_value.post.side_effect = httpx.ConnectError("offline")
+        with caplog.at_level(logging.WARNING, logger="pms_mock.main"):
+            assert book(client).status_code == 201
+    retries = [record for record in caplog.records if record.levelno == logging.WARNING]
+    losses = [record for record in caplog.records if record.levelno == logging.ERROR]
+    assert retries and all(record.exc_info for record in retries), "el reintento debe registrar la causa"
+    assert len(losses) == 1 and losses[0].exc_info, "el fallo final debe quedar explícito con su causa"
 
 
 def test_no_event_without_url(client):
@@ -204,7 +246,7 @@ def test_hotel_override_and_fail_fast(tmp_path, monkeypatch):
     path.write_text("rooms: []")
     with pytest.raises(RuntimeError, match="exactly 12"):
         create_app()
-    source = yaml.safe_load(DEFAULT_HOTEL_PATH.read_text())
+    source = yaml.safe_load(DEFAULT_HOTEL_PATH.read_text(encoding="utf-8"))
     source["rooms"][0]["name"] = "Override room name"
     path.write_text(yaml.safe_dump(source))
     assert create_app().state.room_types[0].name == "Override room name"
@@ -218,7 +260,7 @@ def test_admin_is_local_spanish_and_manual(client):
     assert "URLSearchParams" in response.text
     assert "textContent" in response.text
     assert "innerHTML" not in response.text
-    assert '<script src=' not in response.text
+    assert "<script src=" not in response.text
     assert client.get("/api/v1/bookings", headers=TOKEN).json() == []
 
 
@@ -226,7 +268,7 @@ def test_room_types_are_public_and_match_yaml_order(client):
     response = client.get("/api/v1/room-types")
     assert response.status_code == 200
     rooms = response.json()
-    source = yaml.safe_load(DEFAULT_HOTEL_PATH.read_text())["rooms"]
+    source = yaml.safe_load(DEFAULT_HOTEL_PATH.read_text(encoding="utf-8"))["rooms"]
     fields = {"code", "name", "m2", "max_adults", "max_children"}
     assert len(rooms) == 12
     assert [room["code"] for room in rooms] == [room["code"] for room in source]
@@ -248,8 +290,15 @@ def test_admin_is_self_contained_html(client):
 def test_booking_source_defaults_to_personal_and_accepts_ia(client):
     first = book(client)
     assert first.status_code == 201 and first.json()["source"] == "personal"
-    payload = {"guest_name": "Demo IA", "checkin": "2027-06-01", "checkout": "2027-06-03",
-               "room_code": "doble_con_jacuzzi", "adults": 2, "children": 0, "source": "ia"}
+    payload = {
+        "guest_name": "Demo IA",
+        "checkin": "2027-06-01",
+        "checkout": "2027-06-03",
+        "room_code": "doble_con_jacuzzi",
+        "adults": 2,
+        "children": 0,
+        "source": "ia",
+    }
     created = client.post("/api/v1/bookings", json=payload, headers=TOKEN)
     assert created.status_code == 201 and created.json()["source"] == "ia"
     stored = {row["booking_id"]: row["source"] for row in client.get("/api/v1/bookings", headers=TOKEN).json()}
@@ -265,11 +314,15 @@ def test_existing_database_without_source_column_is_migrated(tmp_path, monkeypat
 
     path = tmp_path / "old.sqlite"
     with sqlite3.connect(path) as old:
-        old.execute("CREATE TABLE bookings (booking_id INTEGER PRIMARY KEY AUTOINCREMENT, guest_name TEXT NOT NULL,"
-                    " checkin TEXT NOT NULL, checkout TEXT NOT NULL, room_code TEXT NOT NULL, adults INTEGER NOT NULL,"
-                    " children INTEGER NOT NULL, conversation_id INTEGER, simulated INTEGER NOT NULL DEFAULT 1)")
-        old.execute("INSERT INTO bookings(guest_name, checkin, checkout, room_code, adults, children)"
-                    " VALUES ('Antigua', '2027-01-01', '2027-01-02', 'doble_sin_vista', 1, 0)")
+        old.execute(
+            "CREATE TABLE bookings (booking_id INTEGER PRIMARY KEY AUTOINCREMENT, guest_name TEXT NOT NULL,"
+            " checkin TEXT NOT NULL, checkout TEXT NOT NULL, room_code TEXT NOT NULL, adults INTEGER NOT NULL,"
+            " children INTEGER NOT NULL, conversation_id INTEGER, simulated INTEGER NOT NULL DEFAULT 1)"
+        )
+        old.execute(
+            "INSERT INTO bookings(guest_name, checkin, checkout, room_code, adults, children)"
+            " VALUES ('Antigua', '2027-01-01', '2027-01-02', 'doble_sin_vista', 1, 0)"
+        )
     initialize(str(path), load_rooms(DEFAULT_HOTEL_PATH))
     with sqlite3.connect(path) as migrated:
         assert migrated.execute("SELECT source FROM bookings").fetchone() == ("personal",)

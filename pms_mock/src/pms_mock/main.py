@@ -78,8 +78,7 @@ def initialize(path: str, rooms: list[RoomType]) -> None:
         if "source" not in columns:
             connection.execute("ALTER TABLE bookings ADD COLUMN source TEXT NOT NULL DEFAULT 'personal'")
         # Distribución simulada: dos unidades para los primeros ocho tipos del YAML.
-        expected = [room.code for index, room in enumerate(rooms)
-                    for _ in range(2 if index < 8 else 1)]
+        expected = [room.code for index, room in enumerate(rooms) for _ in range(2 if index < 8 else 1)]
         connection.execute("BEGIN IMMEDIATE")
         try:
             current = connection.execute("SELECT room_code FROM rooms ORDER BY room_id").fetchall()
@@ -147,9 +146,7 @@ class BookingRequest(Stay):
 
 def require_staff(x_staff_token: Annotated[str | None, Header()] = None) -> None:
     expected = os.getenv("STAFF_TOKEN")
-    if not expected or not x_staff_token or not hmac.compare_digest(
-        x_staff_token.encode(), expected.encode()
-    ):
+    if not expected or not x_staff_token or not hmac.compare_digest(x_staff_token.encode(), expected.encode()):
         raise HTTPException(status_code=401, detail="Valid staff token required")
 
 
@@ -167,8 +164,13 @@ def emit_event(url: str, event: dict) -> None:
             return
         except Exception:
             if attempt < 3:
-                time.sleep(0.05 * (2 ** attempt))
-    logger.warning("Booking event delivery failed after retries")
+                logger.warning(
+                    "Fallo entregando el evento de reserva (intento %d); reintentando", attempt + 1, exc_info=True
+                )
+                time.sleep(0.05 * (2**attempt))
+    logger.error(
+        "Evento de reserva NUNCA entregado a %s tras 4 intentos: se perdió la notificación", url, exc_info=True
+    )
 
 
 def create_app() -> FastAPI:
@@ -194,8 +196,10 @@ def create_app() -> FastAPI:
 
     @application.get("/api/v1/availability")
     def availability(
-        checkin: date, checkout: date,
-        adults: Annotated[int, Query(ge=1)], children: Annotated[int, Query(ge=0)],
+        checkin: date,
+        checkout: date,
+        adults: Annotated[int, Query(ge=1)],
+        children: Annotated[int, Query(ge=0)],
     ):
         if checkout <= checkin:
             raise HTTPException(status_code=422, detail="checkout must be after checkin")
@@ -210,14 +214,21 @@ def create_app() -> FastAPI:
                     continue
                 units = available_units(connection, room.code, checkin, checkout)
                 if units:
-                    result.append({**room.model_dump(), "available_units": units,
-                                   "nightly_price_clp": 65000 + index * 5000})
+                    result.append(
+                        {**room.model_dump(), "available_units": units, "nightly_price_clp": 65000 + index * 5000}
+                    )
             connection.rollback()
-        return {"read_at": datetime.now(ZoneInfo("America/Santiago")).isoformat(),
-                "source": "pms-mock", "simulated": True, "room_types": result}
+        return {
+            "read_at": datetime.now(ZoneInfo("America/Santiago")).isoformat(),
+            "source": "pms-mock",
+            "simulated": True,
+            "room_types": result,
+        }
 
     @application.post("/api/v1/bookings", dependencies=[Depends(require_staff)], status_code=201)
     def book(payload: BookingRequest, background_tasks: BackgroundTasks):
+        if os.getenv("SIMULATE_DOWN") == "1":
+            raise HTTPException(status_code=503, detail="Simulated PMS outage")
         room = next((room for room in rooms if room.code == payload.room_code), None)
         if room is None:
             raise HTTPException(status_code=422, detail="Unknown room_code")
@@ -231,9 +242,16 @@ def create_app() -> FastAPI:
                 cursor = connection.execute(
                     """INSERT INTO bookings(guest_name, checkin, checkout, room_code,
                        adults, children, conversation_id, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (payload.guest_name, payload.checkin.isoformat(), payload.checkout.isoformat(),
-                     payload.room_code, payload.adults, payload.children, payload.conversation_id,
-                     payload.source),
+                    (
+                        payload.guest_name,
+                        payload.checkin.isoformat(),
+                        payload.checkout.isoformat(),
+                        payload.room_code,
+                        payload.adults,
+                        payload.children,
+                        payload.conversation_id,
+                        payload.source,
+                    ),
                 )
                 booking_id = cursor.lastrowid
                 connection.commit()
@@ -242,10 +260,16 @@ def create_app() -> FastAPI:
                 raise
         event_url = os.getenv("COPILOTO_EVENTS_URL")
         if event_url:
-            background_tasks.add_task(emit_event, event_url, {
-                "kind": "booking_confirmed", "conversation_id": payload.conversation_id,
-                "booking_id": booking_id, "source": payload.source,
-            })
+            background_tasks.add_task(
+                emit_event,
+                event_url,
+                {
+                    "kind": "booking_confirmed",
+                    "conversation_id": payload.conversation_id,
+                    "booking_id": booking_id,
+                    "source": payload.source,
+                },
+            )
         return {"booking_id": booking_id, **payload.model_dump(), "simulated": True}
 
     @application.get("/api/v1/bookings", dependencies=[Depends(require_staff)])
