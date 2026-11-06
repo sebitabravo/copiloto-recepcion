@@ -79,6 +79,8 @@ def compute_metrics(conn: sqlite3.Connection, start: float, end: float, config) 
         "commercial_started_in_shift": in_shift,
         # La clave sigue al umbral configurado; con 180 s emite la clave histórica exacta.
         f"commercial_answered_within_{sla_s}": compliant,
+        # Alias de compatibilidad: los paneles históricos leen el valor con el umbral original de 180 s.
+        **({} if sla_s == 180 else {"commercial_answered_within_180": compliant}),
         "night_capture_rate_pct": percentage(len(complete_captures & night_conversations), len(night_conversations)),
         "direct_conversion_pct": percentage(converted, len(starts)),
         "queries": queries,

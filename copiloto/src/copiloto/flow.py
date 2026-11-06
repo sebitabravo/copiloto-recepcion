@@ -32,6 +32,7 @@ from copiloto.textutil import (
     MAX_NIGHTS,
     is_local_host,
     money,
+    nights_over_limit,
     normalize,
     parse_count,
     parse_guests,
@@ -191,6 +192,9 @@ class Copiloto:
                 return
             # La conversación volvió a pending (p. ej. se resolvió y el huésped escribió de nuevo)
             state.reset_session()
+            # Sesión de IA nueva: si el huésped volvió tras el tope, el contador agotado haría que
+            # cada mensaje nuevo re-derivara de inmediato y jamás fuera respondido otra vez.
+            ai_sessions.delete(self.db, f"cw:{conversation_id}")
             store.clear_sla(self.db, conversation_id)
             store.save_state(self.db, state, now)
             return await self._restart_session(ctx)
@@ -477,6 +481,14 @@ class Copiloto:
             )
             return
         if stay is None:
+            if nights_over_limit(ctx.text):
+                # '31 noches' se entiende pero excede el tope: el huésped ve el límite, no el
+                # error genérico de fechas (la frase la sugiere el propio bot).
+                await self._say(
+                    ctx,
+                    f"Por ahora la demo acepta estadías de hasta {MAX_NIGHTS} noches. ¿Me indicas fechas más cortas?",
+                )
+                return
             faq = self.hotel.match_faq(ctx.text)
             if faq:
                 await self._answer_faq(ctx, faq)

@@ -78,3 +78,11 @@ def test_retention_env_override_wins_over_the_hotel_yaml(harness, monkeypatch):
     client, app = _demo_client(harness, harness.settings.hotel_data_path)
     assert app.state.settings.retention_days == 7
     assert "7 días" in client.get("/privacidad").text
+
+
+def test_a_caller_supplied_retention_survives_the_env(harness, monkeypatch):
+    """Regresión: create_app re-leía RETENTION_DAYS y pisaba un Settings inyectado con valor propio."""
+    monkeypatch.setenv("RETENTION_DAYS", "7")
+    settings = replace(harness.settings, retention_days=45)
+    app = create_app(settings, chatwoot=FakeChatwoot(), pms=harness.pms, run_workers=False, db=harness.db)
+    assert app.state.settings.retention_days == 45

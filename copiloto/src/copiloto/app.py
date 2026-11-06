@@ -108,12 +108,17 @@ def create_app(
     if settings.env == "production":
         settings.validate_runtime()
     hotel = HotelData.load(settings.hotel_data_path)
-    # Una sola fuente de verdad para la retención: el aviso publicado y la purga usan el mismo valor
-    # (RETENTION_DAYS del entorno si está definido; si no, el que publica data/hotel.yaml).
-    from_env = os.environ.get("RETENTION_DAYS")
-    settings = replace(
-        settings, retention_days=int(from_env) if from_env is not None else int(hotel.privacy["retention_days"])
-    )
+    # Una sola resolución de retención (el aviso publicado y la purga usan el mismo valor): un
+    # Settings inyectado con valor propio gana; si quedó por defecto, manda RETENTION_DAYS del
+    # entorno (ya parseado por Settings.from_env) y el YAML del hotel es el último recurso.
+    retention = settings.retention_days
+    if retention == Settings.retention_days:
+        from_env = os.environ.get("RETENTION_DAYS")
+        try:
+            retention = int(from_env) if from_env is not None else int(hotel.privacy["retention_days"])
+        except (TypeError, ValueError):
+            retention = settings.retention_days
+    settings = replace(settings, retention_days=retention)
     if db is None:
         db = connect(settings.db_path)
         init_db(db)

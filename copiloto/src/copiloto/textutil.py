@@ -64,8 +64,32 @@ def is_local_host(host: str) -> bool:
 
 
 def is_local_url(url: str) -> bool:
-    """Comprobación por subcadena para URLs completas (con puerto y ruta detrás del host)."""
-    return any(host in (url or "") for host in LOCAL_HOSTS)
+    """Una URL completa (o 'host:puerto' sin esquema) es local si su hostname exacto está en la lista.
+
+    Se compara el hostname parseado, no una subcadena: 'https://api.deepseek.com/v1?echo=0.0.0.0'
+    no es local aunque el query contenga un host de la lista.
+    """
+    return _url_hostname(url) in LOCAL_HOSTS
+
+
+def _url_hostname(url: str) -> str | None:
+    """Hostname exacto de una URL completa o de 'host:puerto' sin esquema.
+
+    Acepta IPv6 ('::1') con y sin corchetes; un puerto final solo se separa cuando la autoridad
+    lo admite sin ambigüedad.
+    """
+    text = (url or "").strip()
+    if not text:
+        return None
+    authority = text.split("://", 1)[-1].split("/", 1)[0]
+    if "@" in authority:  # userinfo: queda fuera del hostname
+        authority = authority.rsplit("@", 1)[1]
+    if authority.startswith("["):
+        end = authority.find("]")
+        return authority[1:end].lower() if end != -1 else None
+    if authority.count(":") == 1 or (authority.count(":") > 2 and authority.rsplit(":", 1)[1].isdigit()):
+        authority = authority.rsplit(":", 1)[0]
+    return authority.lower() or None
 
 
 def nights_exceeded(checkin: date, checkout: date) -> bool:
@@ -189,13 +213,27 @@ def _next_weekday(name: str, today: date, after: date | None = None) -> date:
     return base + timedelta(days=delta or (7 if after else 0))
 
 
-def parse_nights(text: str) -> int | None:
-    """'3 noches', 'tres noches', 'una noche' → número de noches (1 a MAX_NIGHTS)."""
+def _nights_value(text: str) -> int | None:
     match = re.search(r"(\d+|una|un|dos|tres|cuatro|cinco|seis|siete)\s+noches?", normalize(text))
     if not match:
         return None
-    nights = _first_number(match.group(1))
+    return _first_number(match.group(1))
+
+
+def parse_nights(text: str) -> int | None:
+    """'3 noches', 'tres noches', 'una noche' → número de noches (1 a MAX_NIGHTS)."""
+    nights = _nights_value(text)
     return nights if nights and 1 <= nights <= MAX_NIGHTS else None
+
+
+def nights_over_limit(text: str) -> bool:
+    """True si el texto pide explícitamente más de MAX_NIGHTS noches ('31 noches').
+
+    Distinto de None en parse_nights: la estadía se entiende, solo excede el tope, y el huésped
+    debe ver el límite en vez del error genérico de fechas.
+    """
+    nights = _nights_value(text)
+    return nights is not None and nights > MAX_NIGHTS
 
 
 def parse_one_date(text: str, today: date) -> date | None:

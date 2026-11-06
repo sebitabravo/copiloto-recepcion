@@ -22,6 +22,7 @@ async def test_faq_reply_latency_under_10s(harness):
     faq_events = harness.events("faq_answered")
     assert len(faq_events) == 1
     import json
+
     payload = json.loads(faq_events[0]["payload"])
     assert payload["faq_id"] == "piscina"
     assert faq_events[0]["ts"] - payload["inbound_ts"] < 10
@@ -32,6 +33,7 @@ async def test_greeting_not_counted_as_resolution(harness):
     await harness.say("hola")
     assert harness.events("faq_answered") == []
     import json
+
     assert json.loads(harness.events("inbound")[0]["payload"])["greeting"] is True
     assert harness.chatwoot.messages[-1]["options"], "debe ofrecer el menú"
 
@@ -71,6 +73,7 @@ async def test_availability_text_is_dated_and_pending(harness):
 
 async def test_prebooking_expires_after_15min_without_touching_pms(harness, settings):
     from copiloto.sla import SlaWorker
+
     await book(harness)
     await harness.say("1")
     calls_before = harness.pms.calls
@@ -98,6 +101,7 @@ async def test_pms_down_falls_back_to_reception(harness):
 
 def json_reason(event):
     import json
+
     return json.loads(event["payload"])["reason"]
 
 
@@ -109,6 +113,7 @@ async def test_out_of_hours_capture_states_human_hours(harness, clock):
     assert closing and "08:00" in closing[0]
     assert "nocturna" in harness.chatwoot.labels[1]
     import json
+
     night = harness.events("night_capture")
     assert len(night) == 1 and json.loads(night[0]["payload"])["complete"] is True
     assert store.get_state(harness.db, 1).sla_started_at is None, "fuera de turno no corre el SLA"
@@ -216,6 +221,7 @@ async def test_sold_out_reply_carries_the_reading_date(harness):
 
 async def test_retention_purge_anonymizes_events_and_drops_identifiers(harness):
     import json
+
     await book(harness)
     await harness.say("1")
     await harness.core.on_booking_confirmed(1, 99)
@@ -285,6 +291,7 @@ async def test_whatsapp_greeting_links_the_privacy_notice_when_the_url_is_public
     from conftest import FakeChatwoot, FakePms, Harness
     from copiloto.events import connect, init_db
     from copiloto.hotel import HotelData
+
     db = connect(":memory:")
     init_db(db)
     public = replace(settings, public_url="https://copiloto.hotelbordeluz.cl")
@@ -325,3 +332,17 @@ async def test_stay_longer_than_30_nights_is_refused_in_the_guided_flow(harness)
     assert any("hasta 30 noches" in t for t in harness.chatwoot.guest_texts())
     assert harness.events("prebooking_created") == []
     assert store.get_state(harness.db, 1).step == "ask_dates"
+
+
+async def test_stay_over_the_night_limit_is_not_reported_as_unparseable(harness):
+    """Regresión: '31 noches' se entiende pero excede el tope; el huésped debía ver el límite
+    (la frase que el propio bot sugiere: '¿cuántas noches serían?'), no el error genérico."""
+    await harness.say("quiero reservar")
+    await harness.say("31 noches")
+    texts = harness.chatwoot.guest_texts()
+    assert "hasta 30 noches" in texts[-1]
+    assert not any("No logré entender las fechas" in t for t in texts)
+    # La misma frase con la fecha de llegada ya anotada (el bot la sugiere así):
+    await harness.say("llego el 15 de marzo")
+    await harness.say("31 noches")
+    assert "hasta 30 noches" in harness.chatwoot.guest_texts()[-1]
