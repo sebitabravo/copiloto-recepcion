@@ -27,7 +27,7 @@ S6. Este equipo es Windows con Git Bash: los scripts del repositorio deben poder
 ## Tasks
 
 | ID | Alcance | Superficie | Specs | Commit |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | T1 | Bugs de lógica del servicio `copiloto` + duplicaciones y muerto | `copiloto/src/`, `copiloto/tests/` | S1 S2 S3 S4 | sí |
 | T2 | UX/UI, accesibilidad y CSS muerto de la landing | `landing/`, `infra/landing/` | S1 S2 S3 S4 | sí |
 | T3 | Bugs de `pms_mock`, `pms_bridge`, `wa_bridge` + tests portables | `pms_mock/`, `pms_bridge/`, `wa_bridge/` | S1 S2 S3 S4 S6 | sí |
@@ -69,3 +69,19 @@ L2 (evidencia, tres auditorías read-only con `path:line`):
     `seed-chatwoot.sh` rompe por conversión MSYS (`:19`); `smoke-docker.sh` y `wa-e2e.sh` igual;
     `preflight.sh` con `/tmp` fijo; CI no corre `pms_bridge`/`wa_bridge` ni su lint;
     `seed.rb` exporta `CHATWOOT_INBOX_ID`/`CHATWOOT_BOT_ID` que nadie lee; `scripts/test-demo-ui.mjs` huérfano.
+
+L3 (revisión estricta, misma sesión):
+    RDD nativo no pudo completarse por un defecto del proveedor, no por permisos: el candidato completo
+    (`main..HEAD`, 3294 líneas) fue rechazado con `lens_context_budget_exceeded`; dividido en 4 slices por
+    commit en worktrees (rev-landing, rev-copiloto, rev-pms, rev-tooling). El slice de landing obtuvo
+    consentimiento humano y 4 lentes, pero el relay devolvió cero texto dos veces:
+    `nan/glm5.3-flash` (32.768 tokens, `stopReason=length`) y `nan/deepseek-v4-flash` (42.263 tokens,
+    `stopReason=length`), ambos con `textChars: 0`. Verificador no disponible: no se reintenta más.
+    Sustituto aplicado: dos revisores ciegos independientes (A/B) sobre `main...HEAD`, 18 hallazgos.
+    Coincidentes y verificados por el padre: `landing/demo.js` pasaba la URL sin reescribir al SDK
+    (`baseUrl`), y `_restart_session` reutilizaba la sesión de IA con el tope agotado. Aceptados además:
+    foco tras respuesta rápida, solapamiento del trace, «propuesta vencida» al confirmar, `voice.js` sin
+    resolver de host, `preflight` con modelo muerto, `make reset` no interactivo, `is_local_url` por
+    subcadena, retención pisando `Settings` inyectado, cabeceras de nginx incompletas y alias de la
+    métrica SLA. Diferidos con motivo: columna `contact_ref` (migración destructiva), cierre de clientes
+    HTTP en `wa_bridge` (preexistente), CORS `127.0.0.1` vs `localhost` (configuración del servidor).
