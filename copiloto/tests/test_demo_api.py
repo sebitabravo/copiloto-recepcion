@@ -46,14 +46,30 @@ def test_demo_booking_is_created_in_the_simulated_pms_with_a_booking_event(ai_se
     avail = call("check_availability", **STAY)
     book = call("create_booking", call_id="c2", guest_name="Camila Rojas", room_code="doble_con_jacuzzi",
                 guest_confirmed=True, **STAY)
-    llm = FakeLlm([avail, say("¿Te sirve?"), book, say("Listo")])
+    llm = FakeLlm([avail, book, say("¿Te sirve?"), book, say("Listo")])
     client = client_for(ai_settings, harness, llm)
-    chat(client, "busca para el 15 al 18 de noviembre, 2 adultos y 1 niño")
-    body = chat(client, "sí, la doble con jacuzzi, soy Camila Rojas").json()
+    proposal = chat(client, "busca para el 15 al 18 de noviembre, 2 adultos y 1 niño, soy Camila Rojas").json()
+    assert any(event["type"] == "booking_proposal" for event in proposal["events"])
+    assert "255.000" in proposal["reply"] and harness.pms.bookings == []
+    body = chat(client, "Sí, confirmo la reserva").json()
     created = [e for e in body["events"] if e["type"] == "booking_created"]
     assert created and created[0]["simulated"] is True and created[0]["total_clp"] == 255000
     assert harness.pms.bookings[0]["conversation_id"] is None
     assert len(harness.events("ai_booking", 0)) == 1
+
+
+def test_external_pms_demo_can_read_but_cannot_offer_or_execute_booking(ai_settings, harness):
+    external = replace(ai_settings, pms_url="https://real-pms.example")
+    book = call("create_booking", guest_name="Camila Rojas", room_code="doble_con_jacuzzi",
+                guest_confirmed=True, **STAY)
+    llm = FakeLlm([call("check_availability", **STAY), book, say("Recepción puede ayudarte.")])
+    client = client_for(external, harness, llm)
+    response = chat(client, "reserva para 2 adultos y 1 niño del 15 al 18 de noviembre")
+    assert response.status_code == 200 and response.json()["mode"] == "ai"
+    assert harness.pms.calls == 1 and harness.pms.bookings == []
+    assert all("create_booking" not in request["tools"] for request in llm.calls)
+    assert not any(event["type"] == "booking_created" for event in response.json()["events"])
+    assert harness.events("ai_booking", 0) == []
 
 
 def test_without_ai_the_demo_answers_in_guided_mode(ai_settings, harness):

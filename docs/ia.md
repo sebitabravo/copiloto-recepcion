@@ -35,12 +35,26 @@ El modelo propone; el código valida y ejecuta. Nada que diga el modelo se toma 
 - **Datos del hotel**: salen de las herramientas, no de la memoria del modelo; lo `pendiente_validar` se dice como
   tal. Si la pregunta es sobre el hotel, el agente consulta `get_hotel_info` **antes** de responder, y una
   respuesta que afirme datos sin ninguna herramienta se reemplaza por un texto seguro (`data_without_tool`).
-- **Reserva**: `create_booking` exige una lectura del PMS de menos de 15 minutos con las mismas fechas y personas,
-  que el tipo de habitación esté en esa lectura, un nombre válido (sin dígitos, correos ni teléfonos), como
-  máximo 2 reservas por sesión y, además del argumento `guest_confirmed` que propone el modelo, que el **último
-  mensaje del huésped** contenga una afirmación explícita: una pregunta o un «no» no cuentan. Es idempotente.
+- **Propuesta antes de reservar**: `create_booking` primero prepara una propuesta, incluso con
+  `guest_confirmed=false`. Exige una lectura vigente del PMS (plazo `PREBOOKING_MINUTES`, 15 minutos por defecto),
+  mismas fechas y personas, una habitación ofrecida con cupos y capacidad suficientes, y nombre y apellido
+  completos aportados por el huésped (sin dígitos, correos ni teléfonos). El servidor muestra nombre, habitación,
+  fechas, noches, adultos, niños y total; la prosa del modelo no puede sustituir ese resumen.
+- **Confirmación posterior**: solo un mensaje en un turno posterior al resumen permite escribir la misma
+  propuesta. Se aceptan respuestas completas y breves como «Sí», «Confirmo la reserva» o «Sí, confirmo la reserva»;
+  «perfecto», preguntas, menciones vagas de reserva o «sí, pero no reserves» no autorizan nada. El argumento
+  `guest_confirmed=true` por sí solo nunca basta. Cambiar habitación, nombre, fechas, personas o precio invalida
+  la autorización; la propuesta y la lectura caducan aunque se refresque una lectura idéntica. Una propuesta
+  produce `booking_proposal`, no `booking_created`, y no convierte la pre-reserva. Máximo 2 reservas por sesión;
+  repetir la misma operación exitosa no duplica la escritura.
+- **Demo pública**: `ToolHooks.extra` exige `sandbox_authorized is True` cuando `sandbox_only=True`, además de
+  una lectura marcada literalmente como simulada. Sin autorización el agente usa capacidades asistidas aunque
+  el modo configurado siga siendo `full`. El canal Chatwoot sin esas banderas mantiene su contrato; solo se
+  rotulan simulados los resultados marcados como tales. Voz siempre funciona en modo asistido.
+- **Derivación**: con callback del canal se ejecuta la derivación existente. Sin callback, la herramienta informa
+  una simulación sin afirmar que avisó a recepción.
 - **Salida**: si el modelo afirma que algo quedó «confirmado» o «reservado» sin que `create_booking` haya
-  respondido ok, el texto se reemplaza y se registra `ai_guardrail`. El resumen de una reserva real lo agrega el
+  devuelto un `booking_id`, el texto se reemplaza y se registra `ai_guardrail`. El resumen de la reserva lo agrega el
   servidor, no el modelo.
 - **Fechas y personas**: se vuelven a validar (fechas futuras, máximo 30 noches, 1 a 4 adultos, 0 a 3 niños).
 - **Inyección de instrucciones**: el mensaje del huésped va como mensaje de usuario, nunca en el prompt del
@@ -65,3 +79,6 @@ con PMS simulado, para mostrar el potencial; con un PMS real debe usarse `assist
 - El cableado se probó contra un servidor falso compatible con OpenAI y con modelos simulados en los tests; la
   calidad de las respuestas con el modelo real depende de él y se verifica con `make ai-smoke`.
 - La IA puede equivocarse al interpretar. Por eso toda cifra y toda reserva pasan por herramientas y validaciones.
+- La deduplicación y la propuesta se guardan en el JSON de `ai_sessions`; no son una clave de idempotencia
+  transaccional del PMS. No garantizan por sí solas exclusión entre procesos ni resolver una respuesta perdida
+  después de que un PMS externo ya haya escrito. El canal debe serializar los turnos de una sesión.

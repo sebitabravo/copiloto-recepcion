@@ -1,4 +1,4 @@
-"""Aviso de privacidad (borrador para revisión del hotel), conforme al diseño de EVA2 y a la Ley 21.719."""
+"""Aviso de privacidad del prototipo, pendiente de revisión del hotel y revisión legal."""
 
 from html import escape
 
@@ -27,21 +27,25 @@ PAGE = """<!doctype html>
 <main>
 <h1>Aviso de privacidad</h1>
 <p class="draft"><strong>Borrador para revisión del hotel.</strong> Prototipo académico INNOVA3 · INACAP.
-No es el sitio oficial de {hotel}. Todos los datos de la demostración son ficticios.</p>
+No es el sitio oficial de {hotel}. Usa solo datos ficticios. Este borrador no constituye una certificación legal.</p>
 
 <h2>Quién es el responsable</h2>
 <p>{hotel}. Contacto para consultas y ejercicio de derechos:
 <a href="mailto:{contact}">{contact}</a>.</p>
 
 <h2>Para qué usamos tus datos (finalidad)</h2>
-<p>Orientar tu consulta, mostrarte información del hotel y, si lo pides, derivar tu solicitud de
-disponibilidad a una persona de recepción. El asistente no confirma reservas: solo las deja
-como pre-información y recepción las valida.</p>
+<p>Orientar tu consulta y mostrar información del hotel. En modo completo, si el servidor habilita la reserva
+autónoma, la demo puede crear una reserva en el PMS simulado después de mostrar una propuesta y recibir tu
+confirmación explícita. Los modos asistido y de voz no crean reservas autónomas. El flujo sin IA responde
+información del hotel, sin consultar disponibilidad.</p>
+<p>La derivación del simulador no notifica a recepción. El widget separado de Chatwoot sí envía la conversación
+a su bandeja cuando está configurado y conectado. Reiniciar el historial no elimina reservas del PMS.</p>
 
 <h2>Qué datos tratamos (datos mínimos)</h2>
 <ul>
 <li>El texto de tus mensajes y el nombre que muestre tu canal de chat.</li>
 <li>Fechas de estadía y cantidad de adultos y niños, si los entregas.</li>
+<li>Nombre ficticio del huésped y habitación elegida para una propuesta de reserva de demostración.</li>
 </ul>
 <p>No pedimos RUT, datos de pago, correo ni teléfono dentro del chat.</p>
 
@@ -62,7 +66,8 @@ escribiendo a <a href="mailto:{contact}">{contact}</a>.</p>
 """
 
 
-AI_OFF = "El asistente funciona sin inteligencia artificial generativa y no envía tus mensajes a terceros."
+AI_OFF = ("El flujo sin IA no envía mensajes a un modelo generativo. El canal separado de recepción usa Chatwoot; "
+          "si usas voz, se aplica también el tratamiento indicado para ese canal.")
 AI_ON = ("El asistente usa un modelo de lenguaje de un tercero ({provider}) para entender tus mensajes: el texto "
          "de cada mensaje y los datos de tu consulta viajan a ese proveedor, que puede estar fuera de Chile. "
          "Por eso no debes escribir datos personales reales: esta demostración usa datos ficticios. Guardamos "

@@ -1825,7 +1825,7 @@ body.is-hidden * {
   section { padding: 52px 0; }
   .topbar { flex-wrap: nowrap; gap: 10px; padding-block: 10px; }
   .brand-tag { display: none; }
-  nav a:not(.nav-cta) { display: none; }
+  .topbar nav a:not(.nav-cta) { display: none; }
   h1 { font-size: clamp(2.4rem, 10vw, 3.2rem); }
   .metrics { margin-top: 30px; padding-top: 20px; gap: 14px 0; }
   .metrics > div { padding-right: 18px; margin-right: 18px; }
@@ -1971,6 +1971,20 @@ details.tech code { display: block; margin-bottom: 6px; color: var(--accent); fo
   margin: 0;
 }
 .composer p { grid-column: 1 / -1; }
+
+/* ---------- Propuesta de reserva ---------- */
+.booking-proposal {
+  margin-top: 16px;
+  padding: 16px;
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.booking-proposal h3 { margin: 0 0 12px; font-size: 1rem; }
+.booking-proposal p { margin: 8px 0; }
+.booking-proposal button { min-height: 44px; white-space: normal; width: 100%; }
 
 /* ---------- Demo de voz ---------- */
 
