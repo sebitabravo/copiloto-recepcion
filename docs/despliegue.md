@@ -12,10 +12,18 @@ Requiere Docker con 4 GB o más. Si Chatwoot no arranca por falta de memoria con
 El stack se define en `infra/docker-compose.yml` con imágenes fijadas: `chatwoot/chatwoot:v4.18.0-ce`,
 `pgvector/pgvector:pg16`, `redis:7-alpine`, `nginx:alpine`. `make up` es idempotente: puedes repetirlo.
 
+Este repo se desarrolla en Windows con Git Bash y los scripts lo tienen en cuenta: desactivan la conversión
+de rutas de MSYS (`MSYS_NO_PATHCONV`) y los comandos de Python usan `uv run python`, así que `make piloto` y
+`make e2e` (que añade `tzdata`) funcionan igual en Windows y Linux.
+
 ## Red
 
 Los puertos se publican solo en `127.0.0.1`. Para mostrar la demo a otros equipos de tu red define
 `BIND_ADDR=0.0.0.0` antes de `make up`; en ese caso protege el panel y las métricas (ver «Servidor»).
+
+Las URLs públicas no se editan a mano en la landing: `scripts/seed-chatwoot.sh` genera `landing/config.js`
+(gitignored) con la URL de Chatwoot, la del copiloto, el token del widget y `privacyUrl`. Si cambias
+`COPILOTO_PUBLIC_URL` o `CHATWOOT_PUBLIC_URL`, vuelve a correr `make seed` para regenerarla.
 
 ## Requisitos medidos
 
@@ -54,7 +62,8 @@ levantarlo. Prueba la restauración antes de depender de ella.
   caracteres. `/health?probe=readiness` revisa la base; el healthcheck de Docker usa la sonda `liveness`.
 - Los webhooks aceptan cuerpos de hasta 256 KB y las páginas de lectura tienen un límite de 60 solicitudes por
   minuto por IP. Si pones un proxy delante, el límite verá la IP del proxy: aplícalo también ahí.
-- CI en `.github/workflows/ci.yml` (tests de ambos servicios y ruff).
+- CI en `.github/workflows/ci.yml` (pytest de `copiloto`, `pms_mock`, `pms_bridge` y `wa_bridge`, ruff sobre
+  los mismos cuatro, y los tests de la UI de la demo con `node --test scripts/test-demo-ui.mjs`).
 
 ## Variables
 
@@ -76,7 +85,10 @@ en `.env.runtime` (gitignored). Nunca las commitees.
 1. Una VM con 4 GB de RAM y Docker. Copia el repo, corre `make up`.
 2. Pon un proxy con HTTPS delante (Caddy o nginx) y ajusta `FRONTEND_URL` en `infra/docker-compose.yml` a la URL pública de Chatwoot.
    Configura también `COPILOTO_PUBLIC_URL` con HTTPS: determina el atributo `Secure` de la cookie del panel.
-   En producción solo se permite HTTP para `localhost` y `127.0.0.1`, para conservar la demo local.
+   `COPILOTO_PUBLIC_URL` y `CHATWOOT_PUBLIC_URL` alimentan la landing: el seed las escribe en `landing/config.js`
+   (URL del copiloto, URL de Chatwoot para el SDK del widget, token y enlace de privacidad `privacyUrl`, que
+   sigue a `COPILOTO_PUBLIC_URL`). En producción solo se permite HTTP para `localhost` y `127.0.0.1`, para
+   conservar la demo local.
 3. `/api/panel/*` exige una sesión firmada o el `PANEL_TOKEN` en el header `X-Panel-Token`.
    Sin clave configurada se rechazan ambos mecanismos, incluso en desarrollo. El acceso manual usa
    `POST /api/panel/login`; la cookie dura 12 horas y es `HttpOnly`, `SameSite=Lax` y `Secure` con HTTPS.

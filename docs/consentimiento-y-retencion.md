@@ -6,7 +6,7 @@ Este documento describe qué datos trata el copiloto, para qué, cuánto tiempo 
 
 | Dato | Dónde | Finalidad | Cuánto se conserva |
 |---|---|---|---|
-| Texto de mensajes escritos | Chatwoot y copiloto | Responder la consulta del huésped | Chatwoot: su política. Copiloto: 90 días (`privacy.retention_days` en `data/hotel.yaml`) |
+| Texto de mensajes escritos | Chatwoot y copiloto | Responder la consulta del huésped | Chatwoot: su política. Copiloto: la variable `RETENTION_DAYS` del entorno; si no está definida, `privacy.retention_days` de `data/hotel.yaml` (90 días por defecto) |
 | Número de WhatsApp (chat_id) | Puente (`wa_bridge`) y Chatwoot | Enviar la respuesta a la misma persona | Puente: mapeo 90 días sin actividad. Chatwoot: su política |
 | **Nota de voz (audio)** | Solo en memoria y en un directorio temporal del contenedor | Transcribirla | **Se borra al terminar la transcripción**, aunque esta falle |
 | Texto transcrito de la nota | Igual que un mensaje escrito | Responder la consulta | Igual que el texto escrito |

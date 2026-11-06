@@ -45,7 +45,7 @@ Huésped ─ widget web / Telegram / WhatsApp
 ## Requisitos
 
 - Docker (OrbStack o Docker Desktop) con al menos **4 GB de RAM**. Chatwoot es lo más pesado.
-- `uv` (para correr los tests y el script e2e). No se usa npm.
+- `uv` (para correr los tests y el script e2e) y `node` para los tests de la UI de la demo. No se usa npm.
 
 ## Levantar
 
@@ -74,7 +74,7 @@ El primer arranque puede tardar varios minutos. Para detener: `make down`. Para 
    (conversión, cumplimiento <180 s y costo por consulta).
 6. Prueba también fuera de turno (`SHIFT_START`/`SHIFT_END` en `.env`) y con el PMS caído
    (`SIMULATE_DOWN=1`): el bot informa el horario real o dice que recepción verificará cupos, sin afirmar
-   disponibilidad.
+   disponibilidad, y la escritura en el PMS simulado responde 503.
 
 ## Capturas
 
@@ -97,7 +97,8 @@ El recorrido completo, las decisiones y lo que falló en el camino están en el
 
 ```bash
 make help   # lista todos los comandos
-make test   # pytest de copiloto y pms_mock
+make test   # pytest de copiloto, pms_mock y los puentes (PMS y WhatsApp)
+make ui-test # tests de la UI de la demo (node --test)
 make e2e    # 4 casos reales contra el stack levantado (FAQ, disponibilidad, fuera de turno, PMS caído)
 make smoke  # construye las imágenes y comprueba que arrancan (también corre en CI)
 make backup # respaldo en caliente de Chatwoot y las bases SQLite en backups/

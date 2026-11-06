@@ -57,6 +57,7 @@ El modelo propone; el código valida y ejecuta. Nada que diga el modelo se toma 
   devuelto un `booking_id`, el texto se reemplaza y se registra `ai_guardrail`. El resumen de la reserva lo agrega el
   servidor, no el modelo.
 - **Fechas y personas**: se vuelven a validar (fechas futuras, máximo 30 noches, 1 a 4 adultos, 0 a 3 niños).
+  El flujo guiado aplica los mismos topes.
 - **Inyección de instrucciones**: el mensaje del huésped va como mensaje de usuario, nunca en el prompt del
   sistema; las herramientas no aceptan nada fuera de su esquema.
 - **Costo**: máximo de tokens por respuesta, historial de 12 mensajes, tope de 60 mensajes por conversación, y en
