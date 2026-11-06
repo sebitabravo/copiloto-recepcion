@@ -16,13 +16,13 @@
 
 <div class="topbar-shell" id="topbar">
   <div class="wrap topbar">
-    <a class="brand" href="#"><span class="brand-mark" aria-hidden="true">B</span>Bordeluz<span class="brand-tag">Copiloto de recepción</span></a>
+    <a class="brand" href="#main"><span class="brand-mark" aria-hidden="true">B</span>Bordeluz<span class="brand-tag">Copiloto de recepción</span></a>
     <nav aria-label="Navegación principal">
       <a href="#demo">Demo</a>
       <a href="#en-vivo">En vivo</a>
       <a href="#capacidades">Qué hace</a>
       <a href="#como-funciona">Cómo funciona</a>
-      <a class="nav-cta" href="#demo">Probar</a>
+      <a class="nav-cta" href="#demo">Probar el simulador</a>
     </nav>
   </div>
   <div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
@@ -30,12 +30,12 @@
 
 <header class="hero-shell">
   <div class="wrap hero">
-    <div class="hero-copy">
+    <div>
       <p class="eyebrow">Demo · Hotel Boutique Bordeluz</p>
       <h1>La recepción que <em>conversa, consulta y reserva.</em></h1>
       <p class="subtitle">Conversa aquí sobre la ubicación y los servicios del hotel. Con IA y permisos habilitados, consulta disponibilidad y revisa una propuesta antes de confirmar una reserva ficticia en el PMS simulado. Este simulador no usa WhatsApp; la bandeja de recepción tiene un canal separado.</p>
       <div class="actions">
-        <a class="button primary" href="#demo">Probar la demo</a>
+        <a class="button primary" href="#demo">Probar el simulador</a>
         <a class="button ghost" href="#como-funciona">Ver cómo funciona <span aria-hidden="true">↗</span></a>
       </div>
       <dl class="metrics">
@@ -87,7 +87,7 @@
     <p id="ai-disclaimer" class="disclaimer" hidden>Demo con IA. Todo es ficticio: no escribas datos personales reales. Las reservas se crean en un PMS simulado.</p>
     <p id="capability" class="small" hidden></p>
     <div id="guided-banner" class="notice" hidden>Modo sin IA: respuestas guiadas sobre información del hotel, sin consultas al PMS ni creación de reservas.</div>
-    <div id="status-error" class="notice error" hidden><span></span><button type="button">Reintentar</button></div>
+    <div id="status-error" class="notice error" role="alert" hidden><span></span><button type="button">Reintentar</button></div>
 
     <div class="demo-stage">
       <div class="demo-grid">
@@ -102,7 +102,7 @@
                 <span class="phone-back" aria-hidden="true">‹</span>
                 <div class="avatar" aria-hidden="true">B</div>
                 <div class="phone-contact">
-                  <strong>Hotel Borde Luz</strong>
+                  <strong>Hotel Bordeluz</strong>
                   <p><span id="status-dot" class="status-dot"></span><span id="connection-label">Preparando la demo</span></p>
                 </div>
                 <span class="phone-call" aria-hidden="true">⋮</span>
@@ -148,7 +148,7 @@
         </aside>
       </div>
       <div class="secondary-chat">
-        <button id="open-chat" class="text-button" type="button">Probar en la bandeja real de recepción</button>
+        <button id="open-chat" class="text-button" type="button">Escribir a recepción</button>
         <p>Canal separado: el widget envía mensajes a la bandeja de recepción (Chatwoot) si está configurado y conectado. No traslada el historial del simulador ni garantiza atención inmediata.</p>
         <p id="chat-status" class="small" role="status" aria-live="polite"></p>
       </div>
@@ -162,7 +162,7 @@
       </div>
       <div class="scenario-buttons">
         <button type="button" data-scenario="info"><span aria-hidden="true">01</span>Consultar la ubicación y servicios</button>
-        <button type="button" data-scenario="booking" disabled><span aria-hidden="true">02</span>Consultar disponibilidad · requiere permisos</button>
+        <button type="button" data-scenario="booking" disabled><span aria-hidden="true">02</span><span class="scenario-label">Consultar disponibilidad · requiere permisos</span></button>
         <button type="button" data-scenario="human"><span aria-hidden="true">03</span>Simular derivación a recepción</button>
         <button type="button" id="cancel-scenario" hidden>Detener demo guiada</button>
       </div>
@@ -187,7 +187,7 @@
       </div>
       <p id="voice-state" class="voice-state" role="status" aria-live="polite"></p>
       <p id="voice-support" class="small" hidden>Este navegador no reconoce voz: usa Chrome o Edge para hablar, o escribe tu mensaje abajo.</p>
-      <ol id="voice-log" class="voice-log" aria-label="Transcripción de la llamada"></ol>
+      <ol id="voice-log" class="voice-log" role="log" aria-live="polite" aria-label="Transcripción de la llamada"></ol>
       <form id="voice-form" class="voice-typed" hidden>
         <label class="sr-only" for="voice-typed-input">Escribir en lugar de hablar</label>
         <input id="voice-typed-input" type="text" maxlength="400" placeholder="O escribe tu mensaje y el asistente responde en voz…" autocomplete="off">
@@ -318,7 +318,7 @@
 <footer>
   <div class="wrap footer-grid">
     <div class="footer-brand">
-      <a class="brand" href="#"><span class="brand-mark" aria-hidden="true">B</span>Bordeluz</a>
+      <a class="brand" href="#main"><span class="brand-mark" aria-hidden="true">B</span>Bordeluz</a>
       <p>Copiloto de recepción con IA · demo de portafolio</p>
     </div>
     <nav class="footer-nav" aria-label="Enlaces del prototipo">
@@ -329,7 +329,7 @@
       <a href="http://localhost:3000" target="_blank" rel="noopener">Bandeja de recepción</a>
       <a href="http://localhost:8200/admin" target="_blank" rel="noopener">PMS simulado</a>
       <a href="http://localhost:8100/metricas" target="_blank" rel="noopener">Métricas</a>
-      <a href="http://localhost:8100/privacidad" target="_blank" rel="noopener">Aviso de privacidad</a>
+      <a id="privacy-link" href="http://localhost:8100/privacidad" target="_blank" rel="noopener">Aviso de privacidad</a>
     </nav>
     <div class="footer-legal"><p><strong>Proyecto de portafolio · INNOVA3, INACAP.</strong> Todos los datos de huéspedes son ficticios. Precios y disponibilidad del PMS son simulados. No es el sitio oficial del hotel ni un canal de reserva real.</p></div>
   </div>

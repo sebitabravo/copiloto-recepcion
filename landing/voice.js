@@ -127,6 +127,12 @@
   async function send(text) {
     const message = text.trim();
     if (!message || busy || !inCall) return;
+    // Mismo límite del simulador: se rechaza en lugar de truncar en silencio.
+    if (message.length > 400) {
+      addLine('Sistema', 'El mensaje debe tener 400 caracteres o menos.', 'system');
+      setState('Mensaje demasiado largo. Acórtalo e intenta de nuevo.');
+      return;
+    }
     const version = callVersion;
     const controller = new AbortController();
     pending = controller;
@@ -135,7 +141,7 @@
     setState('Pensando…');
     updateControls();
     try {
-      const data = await request('/api/demo/voice', {session_id:sessionId(), message:message.slice(0, 400)}, controller);
+      const data = await request('/api/demo/voice', {session_id:sessionId(), message}, controller);
       if (version === callVersion) await speakReply(data, version);
     } catch (error) {
       if (version === callVersion) {
@@ -164,10 +170,19 @@
       addLine('Sistema', reason, 'system');
     });
     recognition.addEventListener('end', () => { listening = false; updateControls(); });
+    try {
+      recognition.start();
+    } catch (_) {
+      // Un arranque fallido no puede dejar la UI clavada en “Escuchando…”.
+      recognition = null;
+      listening = false;
+      setState('No se pudo activar el micrófono. Intenta de nuevo o escribe abajo.');
+      updateControls();
+      return;
+    }
     listening = true;
     setState('Escuchando…');
     updateControls();
-    recognition.start();
   }
   async function startCall() {
     inCall = true;

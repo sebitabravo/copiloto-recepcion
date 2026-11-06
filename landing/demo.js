@@ -2,7 +2,23 @@
   'use strict';
   const get = id => document.getElementById(id);
   const config = window.COPILOTO_CONFIG || {};
-  const baseUrl = (config.copilotoUrl || 'http://localhost:8100').replace(/\/+$/, '');
+  const copilotoUrl = (config.copilotoUrl || 'http://localhost:8100').replace(/\/+$/, '');
+  // Demo por LAN: si la página no corre en localhost pero la config sí apunta ahí,
+  // se reescribe el host al de la página conservando puerto y ruta.
+  function resolveUrl(raw) {
+    const text = String(raw);
+    try {
+      const url = new URL(text);
+      const local = host => host === 'localhost' || host === '127.0.0.1';
+      if (!local(location.hostname) && local(url.hostname)) url.hostname = location.hostname;
+      return url.toString();
+    } catch (_) { return text; }
+  }
+  const baseUrl = resolveUrl(copilotoUrl).replace(/\/+$/, '');
+  // El aviso de privacidad es configurable (window.COPILOTO_CONFIG.privacyUrl);
+  // por defecto vive junto al servicio copiloto.
+  const privacyLink = get('privacy-link');
+  if (privacyLink) privacyLink.href = resolveUrl(config.privacyUrl || `${copilotoUrl}/privacidad`);
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const aiInitialText = 'Hola, soy el asistente de recepción de Hotel Bordeluz (demo con IA). Pregúntame por la ubicación, los servicios o reserva una habitación.';
   const aiInitialReplies = ['¿Cómo llego?', '¿Tienen piscina?', 'Quiero reservar para 2 adultos'];
@@ -110,7 +126,6 @@
   function addMessage(role, text, replies = []) {
     if (role === 'assistant') get('typing').hidden = true;
     const message = create('article', `message ${role}`);
-    message.append(create('span', 'message-label', role === 'user' ? 'TÚ · DEMOSTRACIÓN' : 'COPILOTO'));
     const bubble = create('div', 'bubble');
     bubble.append(create('p', '', text));
     const time = create('span', 'message-time', clockLabel());
@@ -134,18 +149,21 @@
     get('chat-error').querySelector('button').hidden = !retry;
   }
   function clearChatError() { get('chat-error').hidden = true; retryOperation = null; }
+  let cooldownTimer = 0;
   function startCooldown(seconds) {
     const duration = Math.max(1, Math.ceil(Number(seconds) || 30));
     cooldownUntil = Date.now() + duration * 1000;
+    if (!cooldownTimer) cooldownTimer = window.setInterval(updateCooldown, 500);
     updateCooldown();
   }
   function updateCooldown() {
     const seconds = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
     get('rate-status').hidden = seconds === 0;
     get('rate-status').textContent = seconds ? `Pausa de la demo: podrás enviar otro mensaje en ${seconds} s.` : '';
+    // El temporizador solo corre mientras hay pausa activa; de otra forma tick-ea para siempre.
+    if (!seconds && cooldownTimer) { window.clearInterval(cooldownTimer); cooldownTimer = 0; }
     updateControls();
   }
-  window.setInterval(updateCooldown, 500);
 
   async function request(path, body) {
     const controller = new AbortController();
@@ -173,6 +191,7 @@
       return data;
     } catch (error) {
       if (error && error.message && Number.isInteger(error.status)) throw error;
+      if (controller.signal.aborted) throw {status:0, message:'El asistente tardó demasiado en responder. Reintenta en unos momentos.'};
       throw {status:0, message:'No pudimos conectar con el asistente. Revisa que el servidor esté encendido y permita este origen, y reintenta.'};
     } finally { window.clearTimeout(timeout); }
   }
@@ -206,8 +225,9 @@
         'Puede crear reservas en el PMS simulado solo después de mostrar una propuesta y recibir tu confirmación explícita.' :
         'Sin permiso para crear reservas. Puedes consultar información; para contactar a recepción usa el widget de Chatwoot.';
       const bookingScenario = document.querySelector('[data-scenario="booking"]');
+      const bookingLabel = bookingScenario.querySelector('.scenario-label') || bookingScenario;
       bookingScenario.hidden = false;
-      bookingScenario.textContent = autonomousBooking ? 'Consultar disponibilidad · continuar manualmente' : 'Guion de disponibilidad no disponible en este modo';
+      bookingLabel.textContent = autonomousBooking ? 'Consultar disponibilidad · continuar manualmente' : 'Guion de disponibilidad no disponible en este modo';
       setConnectionLabel(aiEnabled ? 'asistente con IA' : 'flujo guiado');
       get('status-dot').classList.add('ready');
       if (!turns) get('messages-left').textContent = `Mensajes restantes: ${data.messages_per_session ?? '—'}`;
@@ -215,6 +235,9 @@
       updateControls();
     } catch (error) {
       autonomousBooking = false;
+      // Sin estado del servidor, la escritura queda habilitada solo con el descargo de IA visible:
+      // la privacidad antes de preguntar no puede desaparecer justo cuando el backend cae.
+      get('ai-disclaimer').hidden = false;
       get('status-error').hidden = false;
       get('status-error').querySelector('span').textContent = error.message;
       get('model-label').textContent = 'Conexión pendiente';
@@ -319,7 +342,7 @@
         create('span', 'stamp', 'demostración'));
     } else if (event.type === 'handoff') {
       card.append(create('h3', '', 'Derivación simulada: no se notificó a recepción'),
-        create('p', '', event.reason || ''), create('p', '', 'Para contactar al equipo, usa el botón «Probar en la bandeja real de recepción» de Chatwoot.'));
+        create('p', '', event.reason || ''), create('p', '', 'Para contactar al equipo, usa el botón «Escribir a recepción» de Chatwoot.'));
     } else if (event.type === 'fallback') {
       card.append(create('h3', '', 'La IA no respondió: se usó el flujo guiado'));
     } else return null;
@@ -327,7 +350,13 @@
   }
   const pause = milliseconds => new Promise(resolve => window.setTimeout(resolve, milliseconds));
   function invalidateProposal() {
-    if (proposalButton) proposalButton.disabled = true;
+    if (proposalButton) {
+      proposalButton.disabled = true;
+      // La propuesta anterior ya no es válida: se marca vencida en lugar de dejar un botón muerto.
+      if (typeof proposalButton.replaceWith === 'function' && proposalButton.isConnected) {
+        proposalButton.replaceWith(create('p', 'proposal-expired', 'Propuesta vencida: solicita una nueva para confirmar.'));
+      }
+    }
     proposalButton = null;
   }
   function showProposal(event) {
@@ -369,7 +398,7 @@
     get('actions-panel').hidden = !get('actions-panel').hidden;
     updateActionsToggle();
   });
-  async function showEvents(events) {
+  async function showEvents(events, version = null) {
     if (!Array.isArray(events) || !events.length) return;
     actionCount += events.filter(event => event && event.type === 'tool_call').length;
     updateActionsToggle();
@@ -382,7 +411,11 @@
       if (!card) continue;
       get('timeline').append(card);
       get('timeline').scrollTop = get('timeline').scrollHeight;
-      if (!reducedMotion.matches) await pause(220);
+      if (!reducedMotion.matches) {
+        await pause(220);
+        // Una demo guiada detenida no sigue animando la traza pendiente.
+        if (version !== null && version !== scenarioVersion) return;
+      }
     }
   }
   async function sendMessage(text, retry = false, guided = false) {
@@ -405,7 +438,10 @@
       get('response-time').textContent = `Respuesta en ${typeof data.usage?.llm_ms === 'number' ?
         (data.usage.llm_ms / 1000).toLocaleString('es-CL', {maximumFractionDigits:2}) : '—'} s`;
       get('messages-left').textContent = `Mensajes restantes: ${data.usage?.messages_left ?? '—'}`;
-      await showEvents(data.events);
+      // La respuesta ya está en pantalla: se libera el composer antes de animar la traza.
+      busy = false;
+      updateControls();
+      await showEvents(data.events, guided ? scenarioVersion : null);
       success = true;
     } catch (error) {
       showChatError(error.message || 'No se pudo enviar el mensaje. Reintenta.', () => sendMessage(message, true));
@@ -413,7 +449,8 @@
       busy = false;
       updateControls();
       scrollToLatest();
-      if (!scenarioRunning && !coolingDown()) input.focus({preventScroll:true});
+      // Solo se devuelve el foco si ya estaba en el composer: no se roba ni reabre el teclado móvil.
+      if (document.activeElement === input) input.focus({preventScroll:true});
     }
     return success;
   }
@@ -532,7 +569,7 @@
 
   // El canal real de Chatwoot se carga solo al usarlo: su SDK pesa más que toda la página.
   const chatStatus = get('chat-status');
-  const chatUnavailable = 'El chat no está disponible: ¿levantaste el stack con make up?';
+  const chatUnavailable = 'El canal de recepción no está disponible en este momento. Vuelve a intentarlo más tarde.';
   let chatwootReady = false;
   let chatOpenRequested = false;
   let chatwootLoad = null;
@@ -543,26 +580,30 @@
       window.$chatwoot.toggle('open');
       chatStatus.textContent = 'Chat de recepción abierto.';
       return true;
-    } catch (_) { return false; }
+    } catch (_) {
+      chatStatus.textContent = 'No se pudo abrir el canal de recepción. Reintenta en un momento.';
+      return false;
+    }
   }
 
   function loadChatwoot() {
     if (chatwootLoad) return chatwootLoad;
     const cfg = window.COPILOTO_CONFIG;
     if (!cfg || !cfg.websiteToken) return Promise.reject(new Error('sin token'));
+    const chatwootBase = resolveUrl(cfg.chatwootUrl || 'http://localhost:3000');
     window.chatwootSettings = { locale: "es", position: "right", type: "expanded_bubble",
-                                launcherTitle: "Habla con recepción", hideMessageBubble: true };
+                                launcherTitle: "Escribir a recepción", hideMessageBubble: true };
     chatwootLoad = new Promise((resolve, reject) => {
       const script = document.createElement("script");
-      script.src = cfg.chatwootUrl + "/packs/js/sdk.js";
+      script.src = chatwootBase + "/packs/js/sdk.js";
       script.async = true;
       script.onload = () => {
         try {
           window.chatwootSDK.run({ websiteToken: cfg.websiteToken, baseUrl: cfg.chatwootUrl });
           resolve();
-        } catch (error) { reject(error); }
+        } catch (error) { chatwootLoad = null; reject(error); }
       };
-      script.onerror = () => reject(new Error('carga fallida'));
+      script.onerror = () => { chatwootLoad = null; reject(new Error('carga fallida')); };
       document.body.appendChild(script);
     });
     return chatwootLoad;
@@ -582,8 +623,17 @@
       await loadChatwoot();
       // Si el SDK avisa que está listo, el evento abre el chat; si no, el próximo clic lo hace.
       if (chatwootReady) { chatOpenRequested = false; openChatwoot(); }
+      else {
+        // Respaldo acotado: si el SDK nunca avisa que está listo, el estado no queda colgado para siempre.
+        window.setTimeout(() => {
+          if (!chatOpenRequested) return;
+          chatOpenRequested = false;
+          if (!openChatwoot()) chatStatus.textContent = 'El canal de recepción tardó en responder. Vuelve a intentarlo.';
+        }, 4000);
+      }
     } catch (_) {
       chatOpenRequested = false;
+      console.warn('Chatwoot no disponible: ¿levantaste el stack con make up?');
       chatStatus.textContent = chatUnavailable;
     }
   });
