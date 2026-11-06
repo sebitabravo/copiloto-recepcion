@@ -296,3 +296,12 @@ async def test_whatsapp_greeting_links_the_privacy_notice_when_the_url_is_public
 async def test_web_widget_greeting_keeps_the_local_link(harness):
     await harness.say("hola")
     assert "/privacidad" in harness.chatwoot.guest_texts()[0]
+
+
+async def test_repeated_gibberish_hands_off_to_a_person_after_three_fallbacks(harness):
+    """Regresión: tres mensajes sin sentido dejaban el menú en bucle sin salida a recepción."""
+    await harness.say("hola")
+    for text in ("asdf", "qwer", "zxcv"):
+        await harness.say(text)
+    assert harness.chatwoot.statuses[1] == "open"
+    assert any("te paso con una persona" in text for text in harness.chatwoot.guest_texts())

@@ -86,10 +86,15 @@ async def test_full_booking_flow_creates_one_booking_and_appends_the_server_summ
                 guest_confirmed=True, **STAY)
     again = call("create_booking", call_id="c3", guest_name="Camila Rojas", room_code="doble_con_jacuzzi",
                  guest_confirmed=True, **STAY)
-    h, _ = make_ai([avail, say("Opciones listas. ¿Te sirve alguna?"), book, again, say("¡Listo, Camila!")])
+    h, _ = make_ai([avail, say("Opciones listas. ¿Te sirve alguna?"), book, say("Resumen"),
+                    book, again, say("¡Listo, Camila!")])
     await h.say("hola")
     await h.say("2 adultos y 1 niño del 15 al 18 de noviembre")
     await h.say("sí, la doble con jacuzzi, soy Camila Rojas")
+    assert h.pms.bookings == []
+    assert store.active_prebooking(h.db, 1)["status"] == "active"
+    assert h.events("ai_booking") == [] and "reserva-ia" not in h.chatwoot.labels.get(1, set())
+    await h.say("Sí, confirmo la reserva")
     assert len(h.pms.bookings) == 1, "el segundo intento es idempotente"
     assert h.pms.bookings[0]["conversation_id"] == 1 and h.pms.bookings[0]["room_code"] == "doble_con_jacuzzi"
     reply = h.chatwoot.guest_texts()[-1]
@@ -144,10 +149,12 @@ async def test_pms_conflict_or_outage_on_booking_never_claims_success(make_ai):
         avail = call("check_availability", **STAY)
         book = call("create_booking", call_id="c2", guest_name="Camila Rojas", room_code="doble_con_jacuzzi",
                     guest_confirmed=True, **STAY)
-        h, _ = make_ai([avail, book, say("Qué bien, tu reserva está lista y reservada")])
+        h, _ = make_ai([avail, book, say("Resumen"), book,
+                        say("Qué bien, tu reserva está lista y reservada")])
         h.pms.book_error = error
         await h.say("hola")
-        await h.say("reserva")
+        await h.say("Soy Camila Rojas, reserva")
+        await h.say("Sí")
         assert h.pms.bookings == []
         assert "Todavía no hay una reserva creada" in h.chatwoot.guest_texts()[-1]
 

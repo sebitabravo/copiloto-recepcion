@@ -10,6 +10,8 @@
   const guidedInitialReplies = ['¿Cómo llego?', '¿Tienen piscina?', '¿Cuál es el horario de check-in?'];
   const pendingInitialText = 'Hola, soy el asistente de recepción de Hotel Bordeluz. Pregúntame por la ubicación o los servicios del hotel.';
   let aiEnabled = null;
+  let autonomousBooking = false;
+  let proposalButton = null;
   const input = get('message-input');
   const messageList = get('messages');
   const sessionKey = 'bordeluz-demo-session';
@@ -63,9 +65,10 @@
     get('send').disabled = blocked || !input.value.trim() || input.value.length > 400;
     get('reset').disabled = busy || scenarioRunning;
     document.querySelectorAll('[data-scenario]').forEach(button => {
-      button.disabled = blocked || (button.dataset.scenario === 'booking' && aiEnabled !== true);
+      button.disabled = blocked || (button.dataset.scenario === 'booking' && !autonomousBooking);
     });
     messageList.querySelectorAll('.quick-replies button').forEach(button => { button.disabled = blocked; });
+    if (proposalButton) proposalButton.disabled = blocked || !autonomousBooking;
     get('char-count').textContent = `${input.value.length}/400`;
     // El indicador de escritura vive dentro del historial para caer al final de la conversación.
     const typing = get('typing');
@@ -93,6 +96,8 @@
     const container = create('div', 'quick-replies');
     replies.slice(0, 4).forEach(text => {
       if (typeof text !== 'string' || !text.trim()) return;
+      // La confirmación solo aparece junto a una propuesta emitida por el servidor.
+      if (/confirm/i.test(text)) return;
       const button = create('button', '', text);
       button.type = 'button';
       button.addEventListener('click', () => sendMessage(text));
@@ -172,7 +177,8 @@
     } finally { window.clearTimeout(timeout); }
   }
   function initialGreeting() {
-    if (aiEnabled === true) return {text:aiInitialText, replies:aiInitialReplies};
+    if (autonomousBooking) return {text:aiInitialText, replies:aiInitialReplies};
+    if (aiEnabled === true) return {text:'Hola, soy el asistente de recepción con IA de Hotel Bordeluz. Puedo orientar tu consulta, pero en esta demo no tengo permiso para crear reservas.', replies:guidedInitialReplies};
     if (aiEnabled === false) return {text:guidedInitialText, replies:guidedInitialReplies};
     return {text:pendingInitialText, replies:guidedInitialReplies};
   }
@@ -191,26 +197,30 @@
     try {
       const data = await request('/api/demo/status');
       aiEnabled = data.ai_enabled === true;
+      autonomousBooking = aiEnabled && data.autonomous_booking === true;
       get('model-label').textContent = aiEnabled ? `Modelo: ${data.model || 'DeepSeek'}` : 'Flujo guiado · sin IA';
       get('ai-disclaimer').hidden = !aiEnabled;
       get('guided-banner').hidden = aiEnabled;
       get('capability').hidden = !aiEnabled;
-      get('capability').textContent = !aiEnabled ? '' : data.autonomous_booking === true ?
-        'La IA puede crear la reserva de demostración por sí sola.' :
-        'La IA no crea reservas: deja la solicitud lista para recepción.';
-      document.querySelector('[data-scenario="booking"]').hidden = !aiEnabled;
+      get('capability').textContent = !aiEnabled ? '' : autonomousBooking ?
+        'Puede crear reservas en el PMS simulado solo después de mostrar una propuesta y recibir tu confirmación explícita.' :
+        'Sin permiso para crear reservas. Puedes consultar información; para contactar a recepción usa el widget de Chatwoot.';
+      const bookingScenario = document.querySelector('[data-scenario="booking"]');
+      bookingScenario.hidden = false;
+      bookingScenario.textContent = autonomousBooking ? 'Consultar disponibilidad · continuar manualmente' : 'Guion de disponibilidad no disponible en este modo';
       setConnectionLabel(aiEnabled ? 'asistente con IA' : 'flujo guiado');
       get('status-dot').classList.add('ready');
       if (!turns) get('messages-left').textContent = `Mensajes restantes: ${data.messages_per_session ?? '—'}`;
       updateInitialGreeting();
       updateControls();
     } catch (error) {
+      autonomousBooking = false;
       get('status-error').hidden = false;
       get('status-error').querySelector('span').textContent = error.message;
       get('model-label').textContent = 'Conexión pendiente';
       setConnectionLabel('sin conexión');
       get('status-dot').classList.remove('ready');
-      // Sin una lectura nueva conservamos el último modo conocido, sin inventar capacidades.
+      // Conservamos el modo informativo, pero deshabilitamos la escritura sin estado reciente.
       updateControls();
     }
   }
@@ -236,13 +246,13 @@
     check_availability: 'PMS simulado',
     get_hotel_info: 'catálogo del hotel',
     create_booking: 'PMS simulado',
-    handoff_to_human: 'bandeja de recepción'
+    handoff_to_human: 'simulación del navegador · sin notificación a Chatwoot'
   };
   const toolTitles = {
     get_hotel_info: 'Consultó la información del hotel',
     check_availability: 'Verificó disponibilidad',
-    create_booking: 'Registró una reserva de demostración',
-    handoff_to_human: 'Pidió ayuda a recepción'
+    create_booking: 'Procesó una solicitud de reserva',
+    handoff_to_human: 'Simuló una solicitud de atención humana'
   };
   const dayMonth = new Intl.DateTimeFormat('es-CL', {day:'numeric', month:'short', timeZone:'UTC'});
   function shortDate(value) {
@@ -274,12 +284,12 @@
     const detail = create('details', 'tech');
     detail.append(create('summary', '', 'Detalle técnico'), create('code', '', event.name || 'tool_call'));
     const argumentsList = create('div', 'arguments');
-    if (event.arguments && typeof event.arguments === 'object') {
-      Object.entries(event.arguments).forEach(([key, value]) => {
-        const formatted = typeof value === 'object' ? JSON.stringify(value) : String(value);
-        argumentsList.append(create('span', '', `${key}: ${formatted}`));
-      });
-    }
+    // Lista permitida de valores escalares: no exponemos credenciales ni objetos anidados.
+    const safeArguments = ['topic', 'checkin', 'checkout', 'adults', 'children', 'room_code', 'guest_name', 'reason'];
+    safeArguments.forEach(key => {
+      const value = event.arguments?.[key];
+      if (typeof value === 'string' || typeof value === 'number') argumentsList.append(create('span', '', `${key}: ${value}`));
+    });
     detail.append(argumentsList, create('p', '', `${event.ms ?? '—'} ms`));
     // De dónde salió el dato: la traza nunca muestra un valor sin origen.
     detail.append(create('span', 'event-source', `fuente: ${toolSources[event.name] || 'servidor de la demo'}`));
@@ -295,7 +305,8 @@
       result.setAttribute('aria-label', event.ok ? 'Acción completada' : 'Acción con error');
       heading.append(icon, create('h3', '', toolTitles[event.name] || event.label || 'Acción del asistente'), result);
       card.append(heading);
-      if (event.summary) card.append(create('p', 'event-summary', event.summary));
+      if (event.summary && event.name !== 'handoff_to_human') card.append(create('p', 'event-summary', event.summary));
+      if (event.name === 'handoff_to_human') card.append(create('p', '', 'No se notificó a recepción. Para contactar al equipo, abre el widget separado de Chatwoot.'));
       if (event.result && event.name === 'check_availability') card.append(availabilityCard(event.result, event.arguments));
       card.append(technicalDetail(event));
     } else if (event.type === 'booking_created') {
@@ -307,13 +318,43 @@
         create('p', 'ticket-total', `${money.format(Number(event.total_clp) || 0)} CLP`),
         create('span', 'stamp', 'demostración'));
     } else if (event.type === 'handoff') {
-      card.append(create('h3', '', 'Se avisa a una persona de recepción (simulado)'), create('p', '', event.reason || ''));
+      card.append(create('h3', '', 'Derivación simulada: no se notificó a recepción'),
+        create('p', '', event.reason || ''), create('p', '', 'Para contactar al equipo, usa el botón «Probar en la bandeja real de recepción» de Chatwoot.'));
     } else if (event.type === 'fallback') {
       card.append(create('h3', '', 'La IA no respondió: se usó el flujo guiado'));
     } else return null;
     return card;
   }
   const pause = milliseconds => new Promise(resolve => window.setTimeout(resolve, milliseconds));
+  function invalidateProposal() {
+    if (proposalButton) proposalButton.disabled = true;
+    proposalButton = null;
+  }
+  function showProposal(event) {
+    invalidateProposal();
+    const card = create('section', 'booking-proposal');
+    card.setAttribute('aria-label', 'Propuesta de reserva del servidor');
+    card.append(create('h3', '', 'Propuesta de reserva · aún no creada'),
+      create('p', '', `Huésped: ${event.guest_name}`),
+      create('p', '', `Habitación: ${event.room_name} (${event.room_code})`),
+      create('p', '', `${event.checkin} → ${event.checkout} · ${event.nights} noches`),
+      create('p', '', `${event.adults} adultos · ${event.children} niños`),
+      create('p', 'ticket-total', `${money.format(Number(event.total_clp) || 0)} CLP`),
+      create('p', '', event.simulated === true ? 'PMS simulado · sin reserva real.' : 'Entorno no simulado: confirmación no disponible en esta demo.'));
+    if (autonomousBooking && event.simulated === true) {
+      const button = create('button', 'button primary', 'Sí, confirmo la reserva');
+      button.type = 'button';
+      button.addEventListener('click', () => {
+        if (button !== proposalButton || button.disabled) return;
+        sendMessage('Sí, confirmo la reserva');
+      });
+      proposalButton = button;
+      card.append(create('p', '', 'Revisa todos los datos. El servidor vuelve a validar la propuesta, su vigencia y disponibilidad al confirmar.'), button);
+    }
+    lastAssistant.append(card);
+    get('assistant-announcement').textContent += ` ${card.textContent}`;
+    scrollToLatest();
+  }
   let actionCount = 0;
   function updateActionsToggle() {
     const panel = get('actions-panel');
@@ -336,6 +377,7 @@
     get('timeline').append(create('p', 'turn-label', `Turno ${turns} · acciones del asistente`));
     for (const event of events) {
       if (!event || typeof event !== 'object') continue;
+      if (event.type === 'booking_proposal') { showProposal(event); continue; }
       const card = eventCard(event);
       if (!card) continue;
       get('timeline').append(card);
@@ -347,6 +389,7 @@
     if (busy || coolingDown() || (scenarioRunning && !guided)) return false;
     const message = String(text).trim();
     if (!message || message.length > 400) return false;
+    invalidateProposal();
     busy = true;
     clearChatError();
     clearSuggestions();
@@ -375,6 +418,7 @@
     return success;
   }
   function clearConversation() {
+    invalidateProposal();
     messageList.replaceChildren();
     messageList.append(create('div', 'chat-date', 'Hoy'));
     get('timeline').replaceChildren();
@@ -427,11 +471,10 @@
     }
   }
   async function runScenario(name) {
-    if (busy || scenarioRunning || coolingDown() || (name === 'booking' && aiEnabled !== true)) return;
+    if (busy || scenarioRunning || coolingDown() || (name === 'booking' && !autonomousBooking)) return;
     const scenarios = {
       info:['¿Cómo llego al hotel?', '¿Tienen piscina y qué otros servicios ofrecen?'],
-      booking:['Quiero reservar una habitación', exampleDates(), '2 adultos y 1 niño', 'La Doble con Jacuzzi',
-        'Me llamo Camila Rojas, confirma la reserva por favor'],
+      booking:['Quiero consultar disponibilidad, sin crear una reserva', exampleDates(), '2 adultos y 1 niño'],
       human:['Quiero hablar con una persona de recepción']
     };
     const messages = scenarios[name];
@@ -452,7 +495,10 @@
         if (!success) { get('scenario-status').textContent = 'Demo guiada pausada por un error. Puedes reintentar el mensaje.'; return; }
         await pause(800);
       }
-      get('scenario-status').textContent = 'Demo guiada terminada. Ahora puedes continuar la conversación.';
+      get('scenario-status').textContent = name === 'booking' ?
+        'Consulta terminada, no se creó una reserva. Ahora elige una opción ofrecida, escribe un nombre ficticio, revisa la propuesta del servidor y confirma manualmente solo si estás de acuerdo.' :
+        name === 'human' ? 'Derivación simulada: no se notificó a recepción. Usa el widget separado de Chatwoot para contactar al equipo.' :
+        'Demo guiada terminada. Ahora puedes continuar la conversación.';
     } finally {
       if (version === scenarioVersion) {
         scenarioRunning = false;
@@ -610,13 +656,13 @@
   const liveEndpoints = {
     health: {
       path: '/health?probe=readiness',
-      describe: (data, ms) => `Servicio ${data.status || 'sin estado'} · ${ms} ms de respuesta`
+      describe: (data, ms) => `Proceso/SQLite: ${data.status || 'sin estado'} · ${ms} ms. No comprueba todas las integraciones.`
     },
     status: {
       path: '/api/demo/status',
       describe: data => data.ai_enabled ?
         `Modelo ${data.model || 'sin nombre'} · ${data.messages_per_session} mensajes por sesión · ` +
-        (data.autonomous_booking ? 'reserva autónoma' : 'reserva asistida') :
+        (data.autonomous_booking ? 'reserva simulada con propuesta y confirmación explícita' : 'sin permiso para crear reservas') :
         'Sin IA configurada: responde el flujo guiado.'
     },
     metrics: {

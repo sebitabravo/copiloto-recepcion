@@ -20,23 +20,32 @@ MAX_BOOKINGS_PER_SESSION = 2
 GUEST_NAME = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ'.\- ]{2,79}$")
 # El «sí» no lo declara el modelo: se comprueba sobre el texto que escribió el huésped.
 CONFIRMATION = re.compile(
-    r"\b(sí|confirmo|confirmado|confirmada|dale|ok|okay|okey|perfecto|listo|reserva)\b", re.IGNORECASE)
-REFUSAL = re.compile(r"^\W*(no|nunca|cancel|mejor no)\b", re.IGNORECASE)
+    r"(?:sí(?:,? confirmo(?: la reserva)?)?|confirmo(?: la reserva)?)[.!]*", re.IGNORECASE)
 
 
 def guest_said_yes(text: object) -> bool:
     """Acepta la confirmación solo si el último mensaje del huésped la contiene sin ser una pregunta ni una negación."""
     clean = str(text or "").strip()
-    if not clean or "?" in clean or REFUSAL.match(clean):
-        return False
-    return bool(CONFIRMATION.search(clean))
+    return bool(CONFIRMATION.fullmatch(clean))
+
+
+def pending_proposal(session: AiSession, now: float, ttl: float) -> dict | None:
+    """Expire server proposals independently of subsequent availability refreshes."""
+    pending = session.state.get("pending_booking")
+    last = session.state.get("last_availability")
+    if pending and (not last or now - pending["ts"] > ttl or now - last["ts"] > ttl):
+        session.state.pop("pending_booking", None)
+        return None
+    return pending
+
+
 TOPICS = ["ubicacion", "habitaciones", "servicios", "politicas", "promociones", "contacto", "faq"]
 
 LABELS = {
     "get_hotel_info": "Consultando información del hotel",
     "check_availability": "Consultando disponibilidad en el PMS",
-    "create_booking": "Creando la reserva en el PMS simulado",
-    "handoff_to_human": "Avisando a una persona de recepción",
+    "create_booking": "Validando propuesta o reserva en el PMS",
+    "handoff_to_human": "Gestionando derivación a recepción",
 }
 
 
@@ -73,7 +82,7 @@ def tool_specs(mode: str) -> list[dict]:
              {"topic": {"type": "string", "enum": TOPICS, "description": "Tema a consultar"},
               "question": {"type": "string", "description": "Solo para topic=faq: la pregunta del huésped"}},
              ["topic"]),
-        spec("check_availability", "Lee la disponibilidad y los precios simulados del PMS para unas fechas y "
+         spec("check_availability", "Lee la disponibilidad y los precios del PMS para unas fechas y "
              "una cantidad de huéspedes. Devuelve opciones con hora de lectura.",
              {"checkin": {"type": "string", "description": "Entrada, formato AAAA-MM-DD"},
               "checkout": {"type": "string", "description": "Salida, formato AAAA-MM-DD"},
@@ -85,8 +94,9 @@ def tool_specs(mode: str) -> list[dict]:
     ]
     if mode == "full":
         specs.insert(2, spec(
-            "create_booking", "Crea la reserva en el PMS simulado. Solo después de check_availability con los "
-            "mismos datos, de repetir el resumen y de recibir un «sí» explícito del huésped.",
+            "create_booking", "Prepara una propuesta validada después de check_availability, incluso con "
+            "guest_confirmed=false. El servidor muestra el resumen. Solo un sí explícito en un turno posterior "
+            "puede crear la misma reserva; una propuesta no es una reserva creada.",
             {"guest_name": {"type": "string", "description": "Nombre y apellido del huésped"},
              "room_code": {"type": "string", "description": "Código de una opción devuelta por check_availability"},
              "checkin": {"type": "string"}, "checkout": {"type": "string"},
@@ -180,18 +190,26 @@ class ToolRunner:
         try:
             reading = await self.pms.availability(checkin, checkout, adults, children)
         except PmsUnavailable:
+            self.session.state.pop("pending_booking", None)
+            self.session.state.pop("last_availability", None)
             self._record("pms_read", {"ok": False, "latency_ms": 0})
             return ToolResult(False, {"error": "pms_no_disponible",
                                       "instruccion": "No afirmes disponibilidad. Dile que recepción verificará cupos "
                                                      "y usa handoff_to_human."}, "El PMS no responde")
         self._record("pms_read", {"ok": True, "latency_ms": int((time.monotonic() - started) * 1000)})
         nights = (checkout - checkin).days
-        options = sorted(reading.offers, key=lambda o: o.nightly_price_clp)[:6]
+        options = sorted((o for o in reading.offers if o.available_units > 0
+                          and o.max_adults >= adults and o.max_children >= children),
+                         key=lambda o: o.nightly_price_clp)[:6]
         info = {"checkin": checkin.isoformat(), "checkout": checkout.isoformat(), "adults": adults,
                 "children": children, "read_at": reading.read_at, "read_label": _read_label(reading.read_at),
                 "simulated": reading.simulated,
                 "options": {o.code: {"name": o.name, "price": o.nightly_price_clp, "units": o.available_units}
                             for o in options}, "ts": self.clock()}
+        previous = self.session.state.get("last_availability")
+        if not previous or any(previous.get(k) != info[k] for k in
+                               ("checkin", "checkout", "adults", "children", "options", "simulated")):
+            self.session.state.pop("pending_booking", None)
         self.session.state["last_availability"] = info
         if self.hooks.on_availability:
             await self.hooks.on_availability(info)
@@ -199,7 +217,8 @@ class ToolRunner:
                 "opciones": [{"codigo": o.code, "nombre": o.name, "m2": o.m2, "cupos": o.available_units,
                               "precio_noche_clp": o.nightly_price_clp, "total_clp": o.nightly_price_clp * nights}
                              for o in options],
-                "nota": "Lectura fechada: puede cambiar. Los precios y cupos son simulados."}
+                "nota": "Lectura fechada: puede cambiar." +
+                        (" Los precios y cupos son simulados." if reading.simulated else "")}
         if not options:
             data["instruccion"] = "No hay cupo para esas fechas y personas. Ofrece otras fechas o handoff_to_human."
         return ToolResult(True, data, f"{len(options)} tipo(s) de habitación disponibles" if options
@@ -222,11 +241,19 @@ class ToolRunner:
     # ---------- reserva ----------
 
     async def _booking(self, args: dict) -> ToolResult:
-        if args.get("guest_confirmed") is not True:
-            return ToolResult(False, {"error": "falta_confirmacion_del_huesped",
-                                      "instruccion": "Repite el resumen y pide un sí explícito."},
-                              "Falta el sí del huésped")
-        name = str(args.get("guest_name") or "").strip()
+        last = self.session.state.get("last_availability")
+        if self.hooks.extra.get("sandbox_only") is True and (
+                self.hooks.extra.get("sandbox_authorized") is not True
+                or not last or last.get("simulated") is not True):
+            self.session.state.pop("pending_booking", None)
+            return ToolResult(False, {"error": "sandbox_no_autorizado"}, "Reserva no autorizada en esta demo")
+        name = " ".join(str(args.get("guest_name") or "").split())
+        pending = pending_proposal(self.session, self.clock(), self.settings.prebooking_minutes * 60)
+        if pending and any(args.get(k) != pending[k] for k in
+                           ("room_code", "checkin", "checkout", "adults", "children")):
+            self.session.state.pop("pending_booking", None)
+        if pending and name.casefold() != pending["guest_name"].casefold():
+            self.session.state.pop("pending_booking", None)
         if not GUEST_NAME.match(name) or len(name.split()) < 2:
             return ToolResult(False, {"error": "nombre_invalido",
                                       "instruccion": "Pide nombre y apellido, solo letras."}, "Nombre inválido")
@@ -235,12 +262,12 @@ class ToolRunner:
         error = self._validate_stay(checkin, checkout, adults, children)
         if error:
             return ToolResult(False, {"error": error}, error)
-        last = self.session.state.get("last_availability")
         room_code = str(args.get("room_code") or "")
         fresh = last and self.clock() - last["ts"] <= self.settings.prebooking_minutes * 60
         same = last and (last["checkin"], last["checkout"], last["adults"], last["children"]) == (
             checkin.isoformat(), checkout.isoformat(), adults, children)
         if not (fresh and same):
+            self.session.state.pop("pending_booking", None)
             return ToolResult(False, {"error": "sin_lectura_vigente",
                                       "instruccion": "Primero llama check_availability con esos mismos datos "
                                                      "y elige una opción de la lista."}, "Falta una lectura vigente")
@@ -252,21 +279,32 @@ class ToolRunner:
         # El nombre tiene que haberlo escrito el huésped: el modelo no puede inventarlo.
         dicho = " ".join(str(m.get("content", "")) for m in self.session.history if m.get("role") == "user")
         dicho = f"{dicho} {self.session.state.get('last_user_text', '')}".lower()
-        if name.split()[0].lower() not in dicho:
+        if not re.search(r"(?<!\w)" + re.escape(name.casefold()) + r"(?!\w)", " ".join(dicho.casefold().split())):
+            self.session.state.pop("pending_booking", None)
             return ToolResult(False, {"error": "nombre_no_aportado",
                                       "instruccion": "Todavía no tienes el nombre del huésped: pídelo antes de "
                                                      "reservar."},
                               "El nombre no lo dio el huésped")
-        # Último filtro antes de escribir: la confirmación debe estar en palabras del huésped.
-        if not guest_said_yes(self.session.state.get("last_user_text")):
-            return ToolResult(False, {"error": "confirmacion_no_verificada",
-                                      "instruccion": "El huésped no confirmó en su último mensaje: repite el "
-                                                     "resumen y pide un sí explícito."},
-                              "El huésped no confirmó explícitamente")
+        option = last["options"][room_code]
+        snapshot = {"guest_name": name, "room_code": room_code, "room_name": option["name"],
+                    "checkin": checkin.isoformat(), "checkout": checkout.isoformat(), "adults": adults,
+                    "children": children, "nights": (checkout - checkin).days,
+                    "total_clp": option["price"] * (checkout - checkin).days,
+                    "simulated": last.get("simulated") is True}
         for made in self.session.state.get("bookings", []):
-            if (made["guest_name"], made["room_code"], made["checkin"], made["checkout"]) == (
-                    name, room_code, checkin.isoformat(), checkout.isoformat()):
+            if made["guest_name"].casefold() == name.casefold() and all(made.get(k) == snapshot[k] for k in
+                    ("room_code", "checkin", "checkout", "adults", "children")):
                 return ToolResult(True, {**made, "ya_existia": True}, f"Reserva #{made['booking_id']} ya creada")
+        pending = self.session.state.get("pending_booking")
+        if not pending or any(pending.get(k) != v for k, v in snapshot.items()):
+            pending = {**snapshot, "ts": self.clock(), "presented_turn": None}
+            self.session.state["pending_booking"] = pending
+        presented = pending.get("presented_turn")
+        if not (args.get("guest_confirmed") is True and guest_said_yes(self.session.state.get("last_user_text"))
+                and presented is not None and presented < self.session.state.get("turn", 0)):
+            return ToolResult(True, {**snapshot, "propuesta": True,
+                                    "instruccion": "Es una propuesta, no una reserva. El servidor pide confirmación."},
+                              "Propuesta pendiente de confirmación", {"type": "booking_proposal", **snapshot})
         if len(self.session.state.get("bookings", [])) >= MAX_BOOKINGS_PER_SESSION:
             return ToolResult(False, {"error": "limite_de_la_demo"}, "Límite de reservas de la demo")
         try:
@@ -286,13 +324,15 @@ class ToolRunner:
         booking = {"booking_id": created["booking_id"], "guest_name": name, "room_code": room_code,
                    "room_name": room.get("name", room_code).removeprefix("Habitación "),
                    "checkin": checkin.isoformat(), "checkout": checkout.isoformat(), "nights": nights,
-                   "adults": adults, "children": children, "total_clp": price * nights}
+                   "adults": adults, "children": children, "total_clp": price * nights,
+                   "simulated": snapshot["simulated"]}
         self.session.state.setdefault("bookings", []).append(booking)
+        self.session.state.pop("pending_booking", None)
         if self.hooks.on_booking:
             await self.hooks.on_booking(booking)
         event = {"type": "booking_created", **{k: booking[k] for k in (
             "booking_id", "room_name", "checkin", "checkout", "nights", "adults", "children", "total_clp")},
-                 "simulated": True}
+                 "simulated": snapshot["simulated"]}
         return ToolResult(True, booking, f"Reserva #{booking['booking_id']} creada", event)
 
     # ---------- traspaso ----------
@@ -302,11 +342,12 @@ class ToolRunner:
         if self.hooks.handoff:
             data = await self.hooks.handoff(reason)
         else:
-            data = {"avisado": True, "simulado": True}
+            data = {"avisado": False, "simulado": True}
         data.setdefault("en_horario", self.hooks.in_shift)
         data.setdefault("horario_recepcion", f"{self.settings.shift_start} a {self.settings.shift_end}")
-        return ToolResult(True, data, "Se avisó a recepción", {"type": "handoff", "reason": reason,
-                                                               "simulated": self.hooks.conversation_id is None})
+        return ToolResult(True, data,
+                          "Se avisó a recepción" if data.get("avisado") else "Derivación simulada: sin aviso",
+                          {"type": "handoff", "reason": reason, "simulated": self.hooks.handoff is None})
 
     def _record(self, kind: str, payload: dict) -> None:
         if self.hooks.record:

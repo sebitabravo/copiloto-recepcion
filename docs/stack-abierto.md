@@ -26,6 +26,7 @@ de terceros**. Este documento lista cada pieza, su licencia y qué queda fuera d
 | **PMS del hotel** | Es el sistema del cliente. Si usa Beds24 (propietario), el hotel ya lo paga; nosotros no. Si usa HotelDruid (AGPLv3), puede correr todo abierto | HotelDruid: AGPLv3, PHP + MySQL/PostgreSQL/SQLite, sin API REST — el puente tendría que leer su base de datos |
 | **Runtime de contenedores** | Docker Desktop y OrbStack son propietarios. OrbStack es gratis para uso personal | Podman o Colima, ambos open source |
 | **Proveedor de WhatsApp** | En producción se usa la Meta Cloud API directa (sin BSP obligatorio) con un número del hotel; Meta cobra por mensaje entregado según categoría y país, y las tarifas vigentes deben confirmarse en su tarjeta de precios | El stack ya opera con Chatwoot por widget web sin costo; WhatsApp queda como costo del canal, no del producto |
+| **Voz de la demo** | ElevenLabs es de pago por uso y opcional: sin `ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID` la demo sigue solo con texto. El reconocimiento de voz lo hace el navegador (Google en Chrome). Ver `docs/voz.md` | Sin voz, o una voz local (Piper) en una etapa futura |
 | **Canal de demo por WhatsApp** | OpenWA (MIT) es un gateway no oficial y WhatsApp puede suspender el número. Solo con un número dedicado, nunca en producción. Ver `docs/whatsapp-demo.md` | Meta Cloud API oficial |
 
 ## Cómo se sostiene la regla

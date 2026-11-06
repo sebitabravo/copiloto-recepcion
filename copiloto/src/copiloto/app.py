@@ -9,9 +9,11 @@ import logging
 import re
 import sqlite3
 import time
+import weakref
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,10 +34,20 @@ from copiloto.hotel import HotelData
 from copiloto.pms import PmsAdapter, build_pms_adapter
 from copiloto.ratelimit import SlidingWindowLimiter
 from copiloto.sla import SlaWorker
+from copiloto.voice import (
+    CharBudget,
+    ElevenLabsClient,
+    PiperClient,
+    TtsUnavailable,
+    greeting_for,
+    guess_language,
+    speakable,
+)
 
 logger = logging.getLogger(__name__)
 STATIC = Path(__file__).parent / "static"
 PURGE_INTERVAL_S = 86400
+AUDIO_CACHE_MAX = 200
 DEMO_SESSION_ID = re.compile(r"^[A-Za-z0-9-]{16,64}$")
 DEMO_MAX_MESSAGE = 400
 
@@ -81,7 +93,8 @@ async def read_capped(request: Request, limit: int) -> bytes:
 
 def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None = None,
                pms: PmsAdapter | None = None, clock=time.time, run_workers: bool = True,
-               db: sqlite3.Connection | None = None, llm_agent: Agent | None = None) -> FastAPI:
+               db: sqlite3.Connection | None = None, llm_agent: Agent | None = None,
+               tts: ElevenLabsClient | None = None, piper: PiperClient | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     if settings.env == "production":
         settings.validate_runtime()
@@ -95,6 +108,23 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     agent = llm_agent or (Agent(LlmClient(settings.llm_base_url, settings.llm_api_key, settings.llm_model,
                                           settings.llm_timeout_s), hotel, pms, settings, clock)
                           if settings.ai_active else None)
+    if tts is None and agent is not None and settings.voice_active:
+        tts = ElevenLabsClient(settings.elevenlabs_api_key, settings.elevenlabs_voice_id, settings.elevenlabs_model,
+                               voice_id_en=settings.elevenlabs_voice_id_en or None)
+    if piper is None and settings.piper_model_path:
+        piper = PiperClient(settings.piper_model_path, settings.piper_config_path or None)
+    # Cadena de voz: ElevenLabs (de pago, con topes) → Piper (local) → texto con voz del navegador
+    voice_providers = []
+    if tts is not None:
+        voice_providers.append(("elevenlabs", tts, "mp3"))
+    if piper is not None:
+        voice_providers.append(("piper", piper, "wav"))
+    voice_budget = CharBudget(settings.voice_chars_per_hour, clock=clock)
+    voice_monthly_budget = CharBudget(settings.voice_chars_per_month, window_s=30 * 86400, clock=clock)
+    greeting_audio: dict[str, tuple[str, str]] = {}
+    audio_cache: OrderedDict[str, tuple[str, str]] = OrderedDict()
+    greeting_lock = asyncio.Lock()
+    session_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
     core = Copiloto(settings, hotel, db, chatwoot, pms, clock, agent)
     sla = SlaWorker(settings, db, chatwoot, clock)
 
@@ -197,17 +227,21 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
 
     def panel_identity(request: Request) -> str | None:
         """Quién mira el panel: sesión firmada por cookie, o el token del panel (app de Chatwoot)."""
+        if not settings.panel_token:
+            return None
         if _token_ok(settings.panel_token, request.headers.get("x-panel-token", "")):
             return "chatwoot"
         payload, _, signature = request.cookies.get(PANEL_COOKIE, "").partition(".")
         if not payload or not signature:
             return None
         expected = hmac.new(settings.panel_token.encode(), payload.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected):
+        if not hmac.compare_digest(signature.encode(), expected.encode()):
             return None
         try:
             data = json.loads(base64.urlsafe_b64decode(payload.encode()))
-            expires = int(data.get("e", 0))
+            if not isinstance(data, dict) or type(data.get("e")) is not int or not isinstance(data.get("n"), str):
+                return None
+            expires = data["e"]
         except (ValueError, TypeError):
             return None
         if expires < clock():
@@ -237,12 +271,15 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
             body = json.loads(await read_capped(request, 4096))
         except ValueError:
             return JSONResponse({"detail": "JSON inválido"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"detail": "JSON inválido"}, status_code=400)
         if not _token_ok(settings.panel_token, str(body.get("password") or "")):
             return JSONResponse({"detail": "Contraseña incorrecta"}, status_code=401)
         name = " ".join(str(body.get("name") or "recepción").split())[:40] or "recepción"
         response = JSONResponse({"name": name})
         response.set_cookie(PANEL_COOKIE, panel_session(name, int(clock()) + PANEL_SESSION_HOURS * 3600),
-                            max_age=PANEL_SESSION_HOURS * 3600, httponly=True, samesite="lax")
+                            max_age=PANEL_SESSION_HOURS * 3600, httponly=True, samesite="lax",
+                            secure=urlsplit(settings.public_url).scheme == "https")
         return response
 
     @app.post("/api/panel/logout", dependencies=limited)
@@ -325,7 +362,8 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
 
     @app.get("/privacidad", response_class=HTMLResponse, dependencies=limited)
     async def privacy_page():
-        return privacy.render(hotel, settings.llm_model if agent is not None else None, settings.llm_base_url)
+        return privacy.render(hotel, settings.llm_model if agent is not None else None, settings.llm_base_url,
+                              voice=tts is not None)
 
     demo_ip_limiter = SlidingWindowLimiter(settings.demo_ip_per_min, clock=clock)
     demo_global_limiter = SlidingWindowLimiter(settings.demo_global_per_hour, 3600, clock=clock)
@@ -359,33 +397,50 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     async def demo_status():
         return {"ai_enabled": agent is not None, "mode": settings.ai_mode if agent is not None else "off",
                 "model": settings.llm_model if agent is not None else None,
-                "autonomous_booking": settings.autonomous_booking and agent is not None,
+                "sandbox": settings.demo_sandbox_authorized,
+                "autonomous_booking": (settings.autonomous_booking and settings.demo_sandbox_authorized
+                                       and agent is not None),
+                # Browser speech remains available without paid TTS credentials.
+                "voice": agent is not None and settings.demo_enabled,
+                "tts": ("elevenlabs" if tts is not None else "piper" if piper is not None else "browser"),
                 "max_message_chars": DEMO_MAX_MESSAGE, "messages_per_session": settings.demo_messages_per_session,
                 "disclaimer": "Demo con IA: no escribas datos personales reales."}
 
-    @app.post("/api/demo/chat")
-    async def demo_chat(request: Request):
+    async def demo_turn(request: Request, voice: bool) -> dict | JSONResponse:
+        """Un turno de la demo, compartido por el chat de texto y la voz."""
         body = await demo_body(request)
         if isinstance(body, JSONResponse):
             return body
         message = body.get("message")
         if not isinstance(message, str) or not message.strip() or len(message) > DEMO_MAX_MESSAGE:
             return demo_error(400, f"El mensaje debe tener entre 1 y {DEMO_MAX_MESSAGE} caracteres")
+        # Texto y voz comparten la sesión: el turno completo (cupo, modelo, guardado) va de a uno por sesión
+        async with demo_session_lock(body["session_id"]):
+            return await locked_demo_turn(body, message.strip(), voice)
+
+    def demo_session_lock(session_id: str) -> asyncio.Lock:
+        # Strong references from holders/waiters keep a shared lock alive; idle entries disappear.
+        lock = session_locks.get(session_id)
+        if lock is None:
+            lock = session_locks[session_id] = asyncio.Lock()
+        return lock
+
+    async def locked_demo_turn(body: dict, message: str, voice: bool) -> dict | JSONResponse:
         session = ai_sessions.load(db, f"demo:{body['session_id']}", clock())
         if session.msg_count >= settings.demo_messages_per_session:
             return demo_error(429, "Límite de mensajes de esta conversación: reiníciala para seguir", 3600)
         wait = demo_global_limiter.check("global")
         if wait is not None:
             return demo_error(429, "La demo alcanzó su límite por hora, vuelve en un rato", int(wait) + 1)
-        message = message.strip()
         session.msg_count += 1
         events: list[dict] = []
         reply, quick, mode, usage = "", [], "guided", {"llm_ms": 0, "tokens": None}
         if agent is not None:
             hooks = ToolHooks(conversation_id=None, in_shift=settings.in_shift(clock()),
-                              record=lambda kind, payload: record_demo_event(kind, payload))
+                              record=lambda kind, payload: record_demo_event(kind, payload),
+                              extra={"sandbox_only": True, "sandbox_authorized": settings.demo_sandbox_authorized})
             try:
-                result = await agent.respond(session, message, hooks)
+                result = await agent.respond(session, message, hooks, voice=voice)
                 reply, quick, mode, events = result.reply or "", result.quick_replies, "ai", result.events
                 usage = {"llm_ms": result.llm_ms, "tokens": result.tokens}
                 record_demo_event("ai_reply", {"latency_ms": result.llm_ms, "tools": result.tools,
@@ -401,16 +456,82 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
             events = [{"type": "fallback", "reason": "ia_no_configurada"}]
             reply, quick = guided_reply(hotel, message)
         ai_sessions.save(db, session, clock())
-        return {"reply": reply, "mode": mode, "events": events, "quick_replies": quick[:4],
-                "usage": {"messages_left": max(settings.demo_messages_per_session - session.msg_count, 0),
-                          **usage}}
+        payload = {"reply": reply, "mode": mode, "events": events, "quick_replies": quick[:4],
+                   "usage": {"messages_left": max(settings.demo_messages_per_session - session.msg_count, 0),
+                             **usage}}
+        if voice:
+            payload["spoken_language"] = guess_language(message)
+        return payload
+
+    @app.post("/api/demo/chat")
+    async def demo_chat(request: Request):
+        return await demo_turn(request, voice=False)
+
+    async def synthesize(text: str, language: str = "es") -> tuple[str | None, str | None, str | None]:
+        """(audio base64, motivo si no hubo, formato). La voz nunca impide que el huésped lea la respuesta."""
+        if not text.strip():
+            return None, None, None
+        if not voice_providers:
+            return None, "voz_no_disponible", None
+        key = hashlib.sha256(f"{language}|{text}".encode()).hexdigest()
+        if key in audio_cache:
+            audio_cache.move_to_end(key)
+            encoded, fmt = audio_cache[key]
+            return encoded, None, fmt
+        size = len(text)
+        error = "voz_no_disponible"
+        for name, provider, fmt in voice_providers:
+            if name == "elevenlabs" and not (voice_budget.fits(size) and voice_monthly_budget.fits(size)):
+                error = "tope_de_voz"
+                continue
+            try:
+                raw = await provider.synthesize(text, language=language)
+            except TtsUnavailable:
+                logger.warning("El proveedor de voz %s no respondió; se prueba el siguiente", name)
+                continue
+            if name == "elevenlabs":
+                voice_budget.take(size)
+                voice_monthly_budget.take(size)
+            encoded = base64.b64encode(raw).decode("ascii")
+            audio_cache[key] = (encoded, fmt)
+            if len(audio_cache) > AUDIO_CACHE_MAX:
+                audio_cache.popitem(last=False)
+            return encoded, None, fmt
+        return None, error, None
+
+    @app.get("/api/demo/voice/greeting", dependencies=limited)
+    async def demo_voice_greeting(lang: str = Query(default="es", pattern="^(es|en)$")):
+        if not settings.demo_enabled:
+            return demo_error(503, "voz_no_disponible")
+        text = speakable(greeting_for(lang, hotel.hotel["name"]), settings.voice_max_chars + 120)
+        async with greeting_lock:  # una sola síntesis en vuelo por idioma: cada saludo se paga una vez
+            if lang not in greeting_audio:
+                audio, error, fmt = await synthesize(text, lang)
+                if audio is None:
+                    return {"text": text, "audio_b64": None, "audio_format": None, "voice_error": error,
+                            "language": lang}
+                greeting_audio[lang] = (audio, fmt)
+        audio, fmt = greeting_audio[lang]
+        return {"text": text, "audio_b64": audio, "audio_format": fmt, "voice_error": None, "language": lang}
+
+    @app.post("/api/demo/voice")
+    async def demo_voice(request: Request):
+        """Turno por voz: se sintetiza solo la respuesta del asistente, nunca texto enviado por el navegador."""
+        turn = await demo_turn(request, voice=True)
+        if isinstance(turn, JSONResponse):
+            return turn
+        language = turn["spoken_language"]
+        spoken = speakable(turn["reply"], settings.voice_max_chars)
+        audio, error, fmt = await synthesize(spoken, language)
+        return {**turn, "spoken": spoken, "audio_b64": audio, "audio_format": fmt, "voice_error": error}
 
     @app.post("/api/demo/reset")
     async def demo_reset(request: Request):
         body = await demo_body(request)
         if isinstance(body, JSONResponse):
             return body
-        ai_sessions.delete(db, f"demo:{body['session_id']}")
+        async with demo_session_lock(body["session_id"]):
+            ai_sessions.delete(db, f"demo:{body['session_id']}")
         return {"status": "ok"}
 
     def record_demo_event(kind: str, payload: dict) -> None:
