@@ -48,19 +48,25 @@ e2e: ## 4 casos reales contra el stack levantado
 
 # Detiene los contenedores y conserva los datos
 down: ## Detiene el stack (conserva los datos; pide confirmación)
-	@read -p "Esto detiene el stack (los datos se conservan). ¿Seguir? [s/N] " ok || true; \
-	  case "$$ok" in \
-	    s) $(COMPOSE) down ;; \
-	    *) echo "Cancelado: el stack sigue levantado." ;; \
-	  esac
+	@if ! read -p "Esto detiene el stack (los datos se conservan). ¿Seguir? [s/N] " ok; then \
+	  echo "Error: confirmación requerida y la entrada está cerrada; el stack sigue levantado." >&2; \
+	  exit 1; \
+	fi; \
+	case "$$ok" in \
+	  s) $(COMPOSE) down ;; \
+	  *) echo "Cancelado: el stack sigue levantado." ;; \
+	esac
 
 # Borra los volúmenes: conversaciones, reservas simuladas y cuentas demo
 reset: ## BORRA volúmenes y datos (pide confirmación)
-	@read -p "ATENCIÓN: borra TODOS los volúmenes (conversaciones, base de Chatwoot, reservas simuladas). ¿Seguir? [s/N] " ok || true; \
-	  case "$$ok" in \
-	    s) $(COMPOSE) down -v && rm -f .env.runtime landing/config.js ;; \
-	    *) echo "Cancelado: los datos se conservan." ;; \
-	  esac
+	@if ! read -p "ATENCIÓN: borra TODOS los volúmenes (conversaciones, base de Chatwoot, reservas simuladas). ¿Seguir? [s/N] " ok; then \
+	  echo "Error: confirmación requerida y la entrada está cerrada; los datos se conservan." >&2; \
+	  exit 1; \
+	fi; \
+	case "$$ok" in \
+	  s) $(COMPOSE) down -v && rm -f .env.runtime landing/config.js ;; \
+	  *) echo "Cancelado: los datos se conservan." ;; \
+	esac
 
 creds: ## Muestra usuarios demo y contraseña locales
 	./scripts/show-credentials.sh

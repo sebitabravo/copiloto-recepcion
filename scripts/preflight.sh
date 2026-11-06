@@ -45,6 +45,7 @@ if ! curl -s -o /dev/null -m 2 "http://localhost:$MODEL_PORT/v1/models"; then
       wait "$model_pid"; status=$?
       printf '  \033[31m✗\033[0m scripts/local-model.sh terminó con código %s · log: %s\n' "$status" "$model_log"
       model_dead=1
+      fail=$((fail + 1))
       break
     fi
     sleep 5
