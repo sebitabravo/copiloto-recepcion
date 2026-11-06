@@ -2,7 +2,7 @@
 COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
 
 .DEFAULT_GOAL := help
-.PHONY: help up down reset env ps logs test seed health e2e creds smoke backup ai-smoke demo model piloto beds24-check wa-up wa-down wa-qr wa-e2e
+.PHONY: help up down reset env ps logs test bridge seed health e2e creds smoke backup ai-smoke demo model ui-test piloto beds24-check wa-up wa-down wa-qr wa-e2e
 
 help: ## Muestra esta ayuda
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z0-9_-]+:.*## / {printf "  \033[1m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -44,16 +44,23 @@ bridge: ## Levanta el puente Beds24 en 8300 (requiere BEDS24_* configurado)
 	cd pms_bridge && uv run uvicorn pms_bridge.main:app --port 8300
 
 e2e: ## 4 casos reales contra el stack levantado
-	uv run --with httpx python scripts/e2e.py
+	uv run --with httpx --with tzdata python scripts/e2e.py
 
 # Detiene los contenedores y conserva los datos
 down: ## Detiene el stack (conserva los datos; pide confirmación)
-	@read -p "Esto detiene el stack (los datos se conservan). ¿Seguir? [s/N] " ok; [ "$$ok" = "s" ] && $(COMPOSE) down
+	@read -p "Esto detiene el stack (los datos se conservan). ¿Seguir? [s/N] " ok || true; \
+	  case "$$ok" in \
+	    s) $(COMPOSE) down ;; \
+	    *) echo "Cancelado: el stack sigue levantado." ;; \
+	  esac
 
 # Borra los volúmenes: conversaciones, reservas simuladas y cuentas demo
 reset: ## BORRA volúmenes y datos (pide confirmación)
-	@read -p "ATENCIÓN: borra TODOS los volúmenes (conversaciones, base de Chatwoot, reservas simuladas). ¿Seguir? [s/N] " ok; \
-	  [ "$$ok" = "s" ] && $(COMPOSE) down -v && rm -f .env.runtime landing/config.js
+	@read -p "ATENCIÓN: borra TODOS los volúmenes (conversaciones, base de Chatwoot, reservas simuladas). ¿Seguir? [s/N] " ok || true; \
+	  case "$$ok" in \
+	    s) $(COMPOSE) down -v && rm -f .env.runtime landing/config.js ;; \
+	    *) echo "Cancelado: los datos se conservan." ;; \
+	  esac
 
 creds: ## Muestra usuarios demo y contraseña locales
 	./scripts/show-credentials.sh
@@ -77,10 +84,14 @@ model: ## Levanta el modelo local (llama.cpp) que usa el copiloto
 	./scripts/local-model.sh
 
 piloto: ## Informe del piloto: métricas contra las metas de la Unidad 2 (DAYS=14)
-	python3 scripts/pilot_report.py --days $${DAYS:-14}
+	uv run python scripts/pilot_report.py --days $${DAYS:-14}
 
 beds24-check: ## Verifica credenciales y lectura de Beds24 antes de conectar el copiloto
-	python3 scripts/beds24_check.py
+	uv run python scripts/beds24_check.py
+
+# Tests de la UI de la demo contra los módulos de landing (corre en CI también; Ubuntu trae Node)
+ui-test: ## Tests de la UI de la demo (node --test)
+	node --test scripts/test-demo-ui.mjs
 
 # Canal de WhatsApp (OpenWA, no oficial). Requiere `make up` previo. Re-siembra para crear el inbox de WhatsApp.
 wa-up: env ## Levanta el canal de WhatsApp de la demo (OpenWA + puente); luego escanea el QR

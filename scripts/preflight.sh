@@ -33,15 +33,28 @@ check "PMS simulado $PMS/health" http_ok "$PMS/health"
 check "Chatwoot $CHATWOOT" http_ok "$CHATWOOT/"
 
 echo "2) Modelo local en el puerto $MODEL_PORT"
+model_dead=0
 if ! curl -s -o /dev/null -m 2 "http://localhost:$MODEL_PORT/v1/models"; then
   echo "  · no está arriba: levantando scripts/local-model.sh"
-  nohup "$ROOT/scripts/local-model.sh" >/tmp/local-model.log 2>&1 &
+  model_log="$(mktemp "${TMPDIR:-/tmp}/local-model.XXXXXX.log")"
+  nohup "$ROOT/scripts/local-model.sh" >"$model_log" 2>&1 &
+  model_pid=$!
   for _ in $(seq 1 $((MODEL_WAIT / 5))); do
     curl -s -o /dev/null -m 2 "http://localhost:$MODEL_PORT/v1/models" && break
+    if ! kill -0 "$model_pid" 2>/dev/null; then
+      wait "$model_pid"; status=$?
+      printf '  \033[31m✗\033[0m scripts/local-model.sh terminó con código %s · log: %s\n' "$status" "$model_log"
+      model_dead=1
+      break
+    fi
     sleep 5
   done
+else
+  model_log="/dev/null"
 fi
-check "servidor del modelo responde" http_ok "http://localhost:$MODEL_PORT/v1/models"
+if [ "$model_dead" = 0 ]; then
+  check "servidor del modelo responde" http_ok "http://localhost:$MODEL_PORT/v1/models"
+fi
 
 echo "3) Copiloto con IA"
 status=$(curl -s -m 5 "$COPILOTO/api/demo/status")
@@ -72,5 +85,5 @@ if [ "$fail" -eq 0 ]; then
   exit 0
 fi
 printf '\033[31m%s comprobación(es) fallaron\033[0m · %s en verde\n' "$fail" "$ok"
-echo "Revisa: make ps · docker compose logs copiloto · /tmp/local-model.log"
+echo "Revisa: make ps · docker compose logs copiloto · log del modelo en ${model_log:-/dev/null}"
 exit 1

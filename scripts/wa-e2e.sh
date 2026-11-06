@@ -6,6 +6,13 @@ cd "$(dirname "$0")/.."
 
 dc() { docker compose -f infra/docker-compose.yml --project-directory . --profile whatsapp "$@"; }
 
+# En Git Bash/MSYS, -v "...:/e2e:ro" se reescribe como ruta de Windows y Docker la rechaza.
+export MSYS_NO_PATHCONV=1
+e2e_mount="$PWD/wa_bridge/e2e"
+if command -v cygpath >/dev/null 2>&1; then
+  e2e_mount="$(cygpath -m "$PWD/wa_bridge/e2e")"
+fi
+
 dc ps --status running --services | grep -qx wa-bridge || { echo "Corre antes: make wa-up" >&2; exit 1; }
 
 # Nunca se pisa una sesión real vinculada: el OpenWA real se detiene unos minutos y vuelve a arrancar
@@ -38,7 +45,7 @@ trap cleanup EXIT
 
 dc stop openwa >/dev/null
 docker run -d --rm --name wa-e2e-fake-openwa --network "$network" --network-alias openwa \
-  -e OPENWA_WEBHOOK_SECRET="$secret" -e OPENWA_API_KEY="$apikey" -v "$PWD/wa_bridge/e2e:/e2e:ro" \
+  -e OPENWA_WEBHOOK_SECRET="$secret" -e OPENWA_API_KEY="$apikey" -v "$e2e_mount:/e2e:ro" \
   --read-only --user 10003 "$image" python /e2e/fake_openwa.py >/dev/null
 
 for _ in $(seq 1 20); do

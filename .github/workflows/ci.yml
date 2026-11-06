@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [copiloto, pms_mock]
+        service: [copiloto, pms_mock, pms_bridge, wa_bridge]
     defaults:
       run:
         working-directory: ${{ matrix.service }}
@@ -27,10 +27,16 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-      - run: uvx ruff@0.17.3 check copiloto pms_mock scripts
+      - run: uvx ruff@0.17.3 check copiloto pms_mock pms_bridge wa_bridge scripts
 
   docker:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: ./scripts/smoke-docker.sh
+
+  ui-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: node --test scripts/test-demo-ui.mjs

@@ -5,6 +5,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# En Git Bash/MSYS, -v "...:/app/data:ro" y --tmpfs /var/... se reescriben como rutas de Windows
+# ("invalid mount path: 'C'"). MSYS_NO_PATHCONV lo desactiva; cygpath -m da la ruta en forma
+# Windows con slashes, que Docker Desktop acepta.
+export MSYS_NO_PATHCONV=1
+data_mount="$PWD/data"
+if command -v cygpath >/dev/null 2>&1; then
+  data_mount="$(cygpath -m "$PWD/data")"
+fi
+
 compose=(docker compose -f infra/docker-compose.yml --project-directory .)
 "${compose[@]}" config --quiet
 
@@ -17,13 +26,13 @@ trap cleanup EXIT
 secret="$(openssl rand -hex 24)"
 docker run -d --name smoke-pms --read-only --tmpfs /tmp --cap-drop ALL \
   -e HOTEL_DATA_PATH=/app/data/hotel.yaml -e PMS_DB_PATH=/var/lib/pms/pms.sqlite -e STAFF_TOKEN="$secret" \
-  -v "$PWD/data:/app/data:ro" --tmpfs /var/lib/pms:uid=10001,mode=700 smoke-pms >/dev/null
+  -v "$data_mount:/app/data:ro" --tmpfs /var/lib/pms:uid=10001,mode=700 smoke-pms >/dev/null
 docker run -d --name smoke-copiloto --read-only --tmpfs /tmp --cap-drop ALL \
   -e COPILOTO_ENV=production -e HOTEL_DATA_PATH=/app/data/hotel.yaml \
   -e COPILOTO_DB_PATH=/var/lib/copiloto/copiloto.sqlite \
   -e WEBHOOK_SECRET="$secret" -e PMS_EVENTS_SECRET="$secret" -e PSEUDONYM_SALT="$secret" \
   -e PANEL_TOKEN="$secret" -e CHATWOOT_BOT_TOKEN="$secret" \
-  -v "$PWD/data:/app/data:ro" --tmpfs /var/lib/copiloto:uid=10001,mode=700 smoke-copiloto >/dev/null
+  -v "$data_mount:/app/data:ro" --tmpfs /var/lib/copiloto:uid=10001,mode=700 smoke-copiloto >/dev/null
 
 check() {
   local name="$1" url="$2"

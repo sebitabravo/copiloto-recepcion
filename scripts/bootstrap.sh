@@ -33,7 +33,12 @@ done <.env.example
 
 # Chatwoot exige mayúscula y símbolo en las contraseñas: se corrige un entorno generado antes
 if ! grep -q '^DEMO_PASSWORD=Demo-.*!$' "$target"; then
-  sed -i '' -E 's/^DEMO_PASSWORD=(.*)$/DEMO_PASSWORD=Demo-\1!/' "$target"
+  # BSD sed exige la forma -i '' ; GNU sed la rechaza. Se detecta el sabor una vez.
+  if sed --version >/dev/null 2>&1; then
+    sed -i -E 's/^DEMO_PASSWORD=(.*)$/DEMO_PASSWORD=Demo-\1!/' "$target"
+  else
+    sed -i '' -E 's/^DEMO_PASSWORD=(.*)$/DEMO_PASSWORD=Demo-\1!/' "$target"
+  fi
 fi
 
 if [ "${created:-0}" = 1 ]; then

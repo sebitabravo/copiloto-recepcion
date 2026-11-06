@@ -14,11 +14,17 @@ import argparse
 import csv
 import json
 import os
+import sys
 import urllib.error
 import urllib.request
 
 FAQ_TARGET_S = 10.0
 COMPLIANCE_TARGET_PCT = 90.0
+
+# Windows con consola cp1252: los símbolos (≥, —) del informe no caben en el codec local.
+reconfigure = getattr(sys.stdout, "reconfigure", None)
+if callable(reconfigure):
+    reconfigure(encoding="utf-8")
 
 
 def fetch(path: str, token: str | None = None) -> dict:
@@ -79,16 +85,29 @@ def main() -> int:
             return "—"
         return f"{round(float(number), digits):g} {unit}".strip()
 
+    faq_median = value("faq_latency_median_s")
+    compliance_pct = value("commercial_response_compliance_pct")
+
     rows = [
-        ("Latencia FAQ (mediana)", fmt(value("faq_latency_median_s"), "s", 2), f"< {FAQ_TARGET_S:g} s",
-         status(None if value("faq_latency_median_s") is None else value("faq_latency_median_s") < FAQ_TARGET_S)),
+        (
+            "Latencia FAQ (mediana)",
+            fmt(faq_median, "s", 2),
+            f"< {FAQ_TARGET_S:g} s",
+            status(None if faq_median is None else faq_median < FAQ_TARGET_S),
+        ),
         ("Latencia FAQ (p95)", fmt(value("faq_latency_p95_s"), "s", 2), "informativo", "—"),
-        ("Cumplimiento comercial <180 s", fmt(value("commercial_response_compliance_pct"), "%"),
-         f"≥ {COMPLIANCE_TARGET_PCT:g} %",
-         status(None if value("commercial_response_compliance_pct") is None
-                else value("commercial_response_compliance_pct") >= COMPLIANCE_TARGET_PCT)),
-        ("Captura nocturna", fmt(value("night_capture_rate_pct"), "%"),
-         f"{metrics.get('counts', {}).get('night_capture', 0)} solicitudes", "—"),
+        (
+            "Cumplimiento comercial <180 s",
+            fmt(compliance_pct, "%"),
+            f"≥ {COMPLIANCE_TARGET_PCT:g} %",
+            status(None if compliance_pct is None else compliance_pct >= COMPLIANCE_TARGET_PCT),
+        ),
+        (
+            "Captura nocturna",
+            fmt(value("night_capture_rate_pct"), "%"),
+            f"{metrics.get('counts', {}).get('night_capture', 0)} solicitudes",
+            "—",
+        ),
         ("Conversión directa", fmt(value("direct_conversion_pct"), "%"), "informativo", "—"),
         ("Costo por consulta", fmt(value("cost_per_query_clp"), "CLP", 0), "informativo", "—"),
         ("Respuestas de IA", str(value("ai_replies")), "informativo", "—"),

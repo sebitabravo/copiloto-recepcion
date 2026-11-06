@@ -1,5 +1,5 @@
 # Seed idempotente del Copiloto de Recepción. Se ejecuta con `rails runner` dentro del contenedor chatwoot.
-# Imprime líneas "RUNTIME_VAR CLAVE=VALOR" que scripts/bootstrap-chatwoot.sh vuelca al archivo runtime.
+# Imprime líneas "RUNTIME_VAR CLAVE=VALOR" que scripts/seed-chatwoot.sh vuelca al archivo .env.runtime.
 
 demo_password = ENV.fetch('DEMO_PASSWORD')
 webhook_secret = ENV.fetch('WEBHOOK_SECRET')
@@ -109,10 +109,8 @@ app.save!
 puts "RUNTIME_VAR CHATWOOT_ACCOUNT_ID=#{account.id}"
 puts "RUNTIME_VAR CHATWOOT_ADMIN_TOKEN=#{admin.access_token.token}"
 puts "RUNTIME_VAR CHATWOOT_BOT_TOKEN=#{bot.access_token.token}"
-puts "RUNTIME_VAR CHATWOOT_INBOX_ID=#{inbox.id}"
 puts "RUNTIME_VAR CHATWOOT_WEBSITE_TOKEN=#{inbox.channel.website_token}"
 puts "RUNTIME_VAR CHATWOOT_TEAM_ID=#{team.id}"
-puts "RUNTIME_VAR CHATWOOT_BOT_ID=#{bot.id}"
 if wa_inbox
   puts "RUNTIME_VAR CHATWOOT_WA_INBOX_IDENTIFIER=#{wa_inbox.channel.identifier}"
   puts "RUNTIME_VAR CHATWOOT_WA_INBOX_SECRET=#{wa_inbox.channel.secret}"

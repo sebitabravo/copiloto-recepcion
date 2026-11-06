@@ -15,7 +15,8 @@ PORT="${LLM_PORT:-11434}"
 CTX="${LLM_CTX:-8192}"
 
 command -v llama-server >/dev/null || {
-  echo "Falta llama-server. Instálalo con: brew install llama.cpp" >&2
+  echo "Falta llama-server: instálalo y asegúrate de que quede en el PATH (llama-server --version)." >&2
+  echo "  macOS (Homebrew): brew install llama.cpp" >&2
   exit 1
 }
 

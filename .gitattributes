@@ -1,0 +1,8 @@
+# Normaliza finales de línea: el repo se edita también desde Windows y un .sh con CRLF
+# deja de ejecutarse. Los binarios no se tocan.
+* text=auto eol=lf
+*.sh text eol=lf
+*.png binary
+*.webp binary
+*.woff2 binary
+*.sqlite binary

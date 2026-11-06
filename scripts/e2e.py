@@ -58,8 +58,9 @@ def safe_error(error):
 
 
 def normalized(text):
-    return "".join(character for character in unicodedata.normalize("NFD", text.casefold())
-                   if not unicodedata.combining(character))
+    return "".join(
+        character for character in unicodedata.normalize("NFD", text.casefold()) if not unicodedata.combining(character)
+    )
 
 
 class Results:
@@ -95,11 +96,24 @@ class Runner:
         environment.pop("SHIFT_END", None)
         environment.update(overrides)
         environment["COMPOSE_PROJECT_NAME"] = "copiloto"
-        command = ["docker", "compose", "-f", "infra/docker-compose.yml", "--project-directory", ".",
-                   "up", "-d", "--force-recreate", service]
+        command = [
+            "docker",
+            "compose",
+            "-f",
+            "infra/docker-compose.yml",
+            "--project-directory",
+            ".",
+            "up",
+            "-d",
+            "--force-recreate",
+            service,
+        ]
         process = subprocess.run(command, cwd=ROOT, env=environment, capture_output=True, timeout=180)
         if process.returncode:
-            raise RuntimeError("Service recreation failed")
+            # Las últimas líneas de stderr dicen qué falló (una variable vacía, un perfil ausente).
+            tail = [line for line in process.stderr.decode("utf-8", "replace").strip().splitlines() if line][-5:]
+            detail = " | ".join(tail)
+            raise RuntimeError("Service recreation failed: " + detail if detail else "Service recreation failed")
         self.wait_health(COPILOTO if service == "copiloto" else PMS)
 
     def wait_health(self, base_url):
@@ -130,9 +144,12 @@ class Runner:
             conversation, messages = self.staff_snapshot(guest.conversation_id)
             labels = conversation.get("labels", [])
             team = ((conversation.get("meta") or {}).get("team") or {}).get("name", "")
-            note = any(message.get("private") is True
-                       and (message.get("content") or "").startswith("Pre-información del copiloto")
-                       and CHECKIN.isoformat() in (message.get("content") or "") for message in messages)
+            note = any(
+                message.get("private") is True
+                and (message.get("content") or "").startswith("Pre-información del copiloto")
+                and CHECKIN.isoformat() in (message.get("content") or "")
+                for message in messages
+            )
             ready = conversation.get("status") == expected_status
             if expected_status == "open":
                 ready = ready and "comercial" in labels and normalized(team) == "recepcion" and note
@@ -141,8 +158,9 @@ class Runner:
             if ready:
                 break
             time.sleep(POLL_SECONDS)
-        self.results.check(case, "conversation status", conversation.get("status") == expected_status,
-                           f"Expected {expected_status}")
+        self.results.check(
+            case, "conversation status", conversation.get("status") == expected_status, f"Expected {expected_status}"
+        )
         if expected_status == "pending":
             return
         self.results.check(case, "commercial label", "comercial" in labels, "Expected comercial")
@@ -159,9 +177,11 @@ class Runner:
 
     def availability(self, case, night=False, opening=None, down=False):
         with closing(Guest(self.runtime)) as guest:
-            for content, expected in (("quiero reservar", "necesito tus fechas"),
-                                      (f"{CHECKIN:%d/%m/%Y} al {CHECKOUT:%d/%m/%Y}", "¿Cuántos adultos"),
-                                      ("2", "¿Viajan niños")):
+            for content, expected in (
+                ("quiero reservar", "necesito tus fechas"),
+                (f"{CHECKIN:%d/%m/%Y} al {CHECKOUT:%d/%m/%Y}", "¿Cuántos adultos"),
+                ("2", "¿Viajan niños"),
+            ):
                 elapsed, _ = guest.send_and_wait(content, expected)
                 self.results.check(case, f"reply to {content}", True, f"Expected response visible in {elapsed:.2f} s")
             if down:
@@ -172,21 +192,42 @@ class Runner:
             else:
                 elapsed, availability = guest.send_and_wait("0", "Disponible según lectura del PMS")
                 pending = "Pendiente de confirmación por recepción" in (availability.get("content") or "")
-                self.results.check(case, "pending confirmation", pending,
-                                   f"Availability visible in {elapsed:.2f} s; human confirmation required")
-                guest.wait_for("¿Cuál te interesa?", set(), time.monotonic() + WAIT_SECONDS,
-                               content_type="input_select")
+                self.results.check(
+                    case,
+                    "pending confirmation",
+                    pending,
+                    f"Availability visible in {elapsed:.2f} s; human confirmation required",
+                )
+                guest.wait_for(
+                    "¿Cuál te interesa?", set(), time.monotonic() + WAIT_SECONDS, content_type="input_select"
+                )
                 closing_text = "fuera del horario de recepción" if night else "Ya pasé tu consulta a recepción"
                 elapsed, closing_message = guest.send_and_wait("1", closing_text)
                 self.results.check(case, "handoff closing", True, f"Closing visible in {elapsed:.2f} s")
                 if night:
-                    self.results.check(case, "opening hour", opening in (closing_message.get("content") or ""),
-                                       f"Expected opening hour {opening}")
+                    self.results.check(
+                        case,
+                        "opening hour",
+                        opening in (closing_message.get("content") or ""),
+                        f"Expected opening hour {opening}",
+                    )
             outgoing = [message for message in guest.messages() if message.get("message_type") == 1]
-            location = next((index for index, message in enumerate(outgoing)
-                             if (message.get("content") or "").startswith("Ubicación:")), None)
-            dates = next((index for index, message in enumerate(outgoing)
-                          if "necesito tus fechas" in (message.get("content") or "")), None)
+            location = next(
+                (
+                    index
+                    for index, message in enumerate(outgoing)
+                    if (message.get("content") or "").startswith("Ubicación:")
+                ),
+                None,
+            )
+            dates = next(
+                (
+                    index
+                    for index, message in enumerate(outgoing)
+                    if "necesito tus fechas" in (message.get("content") or "")
+                ),
+                None,
+            )
             ordered = location is not None and dates is not None and location < dates
             self.results.check(case, "location before dates", ordered, "Guest-visible outgoing message order")
             self.verify_staff(case, guest, night=night)
@@ -195,11 +236,17 @@ class Runner:
         response = self.http.get(COPILOTO + "/metricas/data.json", params={"days": 1})
         response.raise_for_status()
         data = response.json()
-        for key, actual, minimum in (("faq_answered", data.get("counts", {}).get("faq_answered", 0), 1),
-                                     ("handoff", data.get("counts", {}).get("handoff", 0), 3),
-                                     ("queries", data.get("queries", 0), 1)):
-            self.results.check("metrics", key, isinstance(actual, (int, float)) and actual >= minimum,
-                               f"Expected cumulative count >= {minimum}")
+        for key, actual, minimum in (
+            ("faq_answered", data.get("counts", {}).get("faq_answered", 0), 1),
+            ("handoff", data.get("counts", {}).get("handoff", 0), 3),
+            ("queries", data.get("queries", 0), 1),
+        ):
+            self.results.check(
+                "metrics",
+                key,
+                isinstance(actual, (int, float)) and actual >= minimum,
+                f"Expected cumulative count >= {minimum}",
+            )
 
 
 class Guest:
@@ -219,8 +266,9 @@ class Guest:
         self.http.close()
 
     def messages(self, timeout=5.0):
-        response = self.http.get(CHATWOOT + "/api/v1/widget/messages", params=self.params,
-                                 headers=self.headers, timeout=timeout)
+        response = self.http.get(
+            CHATWOOT + "/api/v1/widget/messages", params=self.params, headers=self.headers, timeout=timeout
+        )
         response.raise_for_status()
         return sorted(response.json()["payload"], key=lambda message: message["id"])
 
@@ -244,10 +292,18 @@ class Guest:
     def send_and_wait(self, content, expected, timeout=WAIT_SECONDS):
         previous_ids = {message["id"] for message in self.messages()} if self.conversation_id else set()
         started = time.monotonic()
-        response = self.http.post(CHATWOOT + "/api/v1/widget/messages", params=self.params,
-                                  headers=self.headers, json={"message": {
-                                      "content": content, "timestamp": "2026-10-27T12:00:00-03:00",
-                                      "referer_url": "http://localhost:8080/"}})
+        response = self.http.post(
+            CHATWOOT + "/api/v1/widget/messages",
+            params=self.params,
+            headers=self.headers,
+            json={
+                "message": {
+                    "content": content,
+                    "timestamp": "2026-10-27T12:00:00-03:00",
+                    "referer_url": "http://localhost:8080/",
+                }
+            },
+        )
         response.raise_for_status()
         conversation_id = response.json()["conversation_id"]
         if self.conversation_id is not None and conversation_id != self.conversation_id:
@@ -272,8 +328,7 @@ def main():
         runner = Runner(runtime, results)
         try:
             runner.recreate("pms-mock", {"SIMULATE_DOWN": "0"})
-            runner.recreate("copiloto", {"SHIFT_START": "00:00", "SHIFT_END": "00:00", "SIMULATE_DOWN": "0",
-                                         "AI_MODE": "off"})
+            runner.recreate("copiloto", {"SHIFT_START": "00:00", "SHIFT_END": "00:00", "AI_MODE": "off"})
             results.check("setup", "services ready", True, "PMS available; reception forced in shift")
             run_case(results, "FAQ", runner.faq)
             run_case(results, "availability", lambda: runner.availability("availability"))
@@ -282,15 +337,13 @@ def main():
                 now = datetime.now(ZoneInfo("America/Santiago"))
                 opening = (now + timedelta(hours=2)).strftime("%H:%M")
                 ending = (now + timedelta(hours=3)).strftime("%H:%M")
-                runner.recreate("copiloto", {"SHIFT_START": opening, "SHIFT_END": ending, "SIMULATE_DOWN": "0",
-                                             "AI_MODE": "off"})
+                runner.recreate("copiloto", {"SHIFT_START": opening, "SHIFT_END": ending, "AI_MODE": "off"})
                 runner.availability("out of hours", night=True, opening=opening)
 
             run_case(results, "out of hours", night_case)
 
             def down_case():
-                runner.recreate("copiloto", {
-                    "SHIFT_START": "00:00", "SHIFT_END": "00:00", "SIMULATE_DOWN": "0", "AI_MODE": "off"})
+                runner.recreate("copiloto", {"SHIFT_START": "00:00", "SHIFT_END": "00:00", "AI_MODE": "off"})
                 runner.recreate("pms-mock", {"SIMULATE_DOWN": "1"})
                 runner.availability("PMS down", down=True)
 
