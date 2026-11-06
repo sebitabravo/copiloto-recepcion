@@ -6,12 +6,14 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import re
 import sqlite3
 import time
 import weakref
 from collections import OrderedDict
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
@@ -91,26 +93,52 @@ async def read_capped(request: Request, limit: int) -> bytes:
     return b"".join(chunks)
 
 
-def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None = None,
-               pms: PmsAdapter | None = None, clock=time.time, run_workers: bool = True,
-               db: sqlite3.Connection | None = None, llm_agent: Agent | None = None,
-               tts: ElevenLabsClient | None = None, piper: PiperClient | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    chatwoot: ChatwootClient | None = None,
+    pms: PmsAdapter | None = None,
+    clock=time.time,
+    run_workers: bool = True,
+    db: sqlite3.Connection | None = None,
+    llm_agent: Agent | None = None,
+    tts: ElevenLabsClient | None = None,
+    piper: PiperClient | None = None,
+) -> FastAPI:
     settings = settings or Settings.from_env()
     if settings.env == "production":
         settings.validate_runtime()
     hotel = HotelData.load(settings.hotel_data_path)
+    # Una sola fuente de verdad para la retención: el aviso publicado y la purga usan el mismo valor
+    # (RETENTION_DAYS del entorno si está definido; si no, el que publica data/hotel.yaml).
+    from_env = os.environ.get("RETENTION_DAYS")
+    settings = replace(
+        settings, retention_days=int(from_env) if from_env is not None else int(hotel.privacy["retention_days"])
+    )
     if db is None:
         db = connect(settings.db_path)
         init_db(db)
-    chatwoot = chatwoot or ChatwootClient(settings.chatwoot_url, settings.chatwoot_account_id,
-                                          settings.chatwoot_bot_token, settings.chatwoot_team_id)
+    chatwoot = chatwoot or ChatwootClient(
+        settings.chatwoot_url, settings.chatwoot_account_id, settings.chatwoot_bot_token, settings.chatwoot_team_id
+    )
     pms = pms or build_pms_adapter(settings)
-    agent = llm_agent or (Agent(LlmClient(settings.llm_base_url, settings.llm_api_key, settings.llm_model,
-                                          settings.llm_timeout_s), hotel, pms, settings, clock)
-                          if settings.ai_active else None)
+    agent = llm_agent or (
+        Agent(
+            LlmClient(settings.llm_base_url, settings.llm_api_key, settings.llm_model, settings.llm_timeout_s),
+            hotel,
+            pms,
+            settings,
+            clock,
+        )
+        if settings.ai_active
+        else None
+    )
     if tts is None and agent is not None and settings.voice_active:
-        tts = ElevenLabsClient(settings.elevenlabs_api_key, settings.elevenlabs_voice_id, settings.elevenlabs_model,
-                               voice_id_en=settings.elevenlabs_voice_id_en or None)
+        tts = ElevenLabsClient(
+            settings.elevenlabs_api_key,
+            settings.elevenlabs_voice_id,
+            settings.elevenlabs_model,
+            voice_id_en=settings.elevenlabs_voice_id_en or None,
+        )
     if piper is None and settings.piper_model_path:
         piper = PiperClient(settings.piper_model_path, settings.piper_config_path or None)
     # Cadena de voz: ElevenLabs (de pago, con topes) → Piper (local) → texto con voz del navegador
@@ -147,15 +175,23 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        tasks = [asyncio.create_task(sla.run()), asyncio.create_task(purge_loop()),
-                 asyncio.create_task(demo_purge_loop())] if run_workers else []
+        tasks = (
+            [asyncio.create_task(sla.run()), asyncio.create_task(purge_loop()), asyncio.create_task(demo_purge_loop())]
+            if run_workers
+            else []
+        )
         yield
         for task in tasks:
             task.cancel()
 
     app = FastAPI(title="Copiloto de Recepción", lifespan=lifespan)
-    app.add_middleware(CORSMiddleware, allow_origins=[settings.landing_origin], allow_methods=["GET", "POST"],
-                       allow_headers=["Content-Type"], max_age=600)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[settings.landing_origin],
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+        max_age=600,
+    )
     # Las páginas del panel y las métricas viajan comprimidas.
     app.add_middleware(GZipMiddleware, minimum_size=600)
     app.state.core, app.state.sla, app.state.db, app.state.settings = core, sla, db, settings
@@ -171,10 +207,14 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         framing = chatwoot_origin if request.url.path == "/panel" else "'none'"
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "no-referrer")
-        response.headers.setdefault("Content-Security-Policy", (
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; "
-            f"frame-ancestors {framing}"))
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            (
+                "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; "
+                f"frame-ancestors {framing}"
+            ),
+        )
         return response
 
     @app.get("/health")
@@ -277,9 +317,14 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
             return JSONResponse({"detail": "Contraseña incorrecta"}, status_code=401)
         name = " ".join(str(body.get("name") or "recepción").split())[:40] or "recepción"
         response = JSONResponse({"name": name})
-        response.set_cookie(PANEL_COOKIE, panel_session(name, int(clock()) + PANEL_SESSION_HOURS * 3600),
-                            max_age=PANEL_SESSION_HOURS * 3600, httponly=True, samesite="lax",
-                            secure=urlsplit(settings.public_url).scheme == "https")
+        response.set_cookie(
+            PANEL_COOKIE,
+            panel_session(name, int(clock()) + PANEL_SESSION_HOURS * 3600),
+            max_age=PANEL_SESSION_HOURS * 3600,
+            httponly=True,
+            samesite="lax",
+            secure=urlsplit(settings.public_url).scheme == "https",
+        )
         return response
 
     @app.post("/api/panel/logout", dependencies=limited)
@@ -299,8 +344,12 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     async def panel_queue(request: Request):
         if panel_identity(request) is None:
             raise HTTPException(status_code=401, detail="Sesión del panel requerida")
-        return {"now": clock(), "amber_s": settings.sla_amber_s, "red_s": settings.sla_red_s,
-                "conversations": store.list_conversations(db, clock())}
+        return {
+            "now": clock(),
+            "amber_s": settings.sla_amber_s,
+            "red_s": settings.sla_red_s,
+            "conversations": store.list_conversations(db, clock()),
+        }
 
     @app.get("/api/panel/shift", dependencies=limited)
     async def panel_shift(request: Request, hours: int = Query(default=12, ge=1, le=72)):
@@ -322,16 +371,29 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
             prebooking = {"status": row["status"], "expires_at": row["expires_at"], "room_code": row["room_code"]}
         pms_params = {"guest": state.contact_name or "", "conversation_id": conversation_id}
         if data.get("checkin"):
-            pms_params.update(checkin=data["checkin"], checkout=data["checkout"], adults=data.get("adults", 1),
-                              children=data.get("children", 0))
+            pms_params.update(
+                checkin=data["checkin"],
+                checkout=data["checkout"],
+                adults=data.get("adults", 1),
+                children=data.get("children", 0),
+            )
         if data.get("room_code"):
             pms_params["room_code"] = data["room_code"]
         return {
-            "conversation_id": conversation_id, "contact_name": state.contact_name, "step": state.step,
-            "data": data, "room_name": room["name"] if room else None, "prebooking": prebooking,
-            "sla": {"started_at": state.sla_started_at, "stopped_at": state.sla_stopped_at,
-                    "amber_s": settings.sla_amber_s, "red_s": settings.sla_red_s},
-            "now": clock(), "pms_url": f"{settings.pms_staff_url.rstrip('/')}/admin?{urlencode(pms_params)}",
+            "conversation_id": conversation_id,
+            "contact_name": state.contact_name,
+            "step": state.step,
+            "data": data,
+            "room_name": room["name"] if room else None,
+            "prebooking": prebooking,
+            "sla": {
+                "started_at": state.sla_started_at,
+                "stopped_at": state.sla_stopped_at,
+                "amber_s": settings.sla_amber_s,
+                "red_s": settings.sla_red_s,
+            },
+            "now": clock(),
+            "pms_url": f"{settings.pms_staff_url.rstrip('/')}/admin?{urlencode(pms_params)}",
             "notes": store.list_notes(db, conversation_id),
         }
 
@@ -362,8 +424,13 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
 
     @app.get("/privacidad", response_class=HTMLResponse, dependencies=limited)
     async def privacy_page():
-        return privacy.render(hotel, settings.llm_model if agent is not None else None, settings.llm_base_url,
-                              voice=tts is not None)
+        return privacy.render(
+            hotel,
+            settings.llm_model if agent is not None else None,
+            settings.llm_base_url,
+            voice=tts is not None,
+            retention_days=settings.retention_days,
+        )
 
     demo_ip_limiter = SlidingWindowLimiter(settings.demo_ip_per_min, clock=clock)
     demo_global_limiter = SlidingWindowLimiter(settings.demo_global_per_hour, 3600, clock=clock)
@@ -395,16 +462,23 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
 
     @app.get("/api/demo/status", dependencies=limited)
     async def demo_status():
-        return {"ai_enabled": agent is not None, "mode": settings.ai_mode if agent is not None else "off",
-                "model": settings.llm_model if agent is not None else None,
-                "sandbox": settings.demo_sandbox_authorized,
-                "autonomous_booking": (settings.autonomous_booking and settings.demo_sandbox_authorized
-                                       and agent is not None),
-                # Browser speech remains available without paid TTS credentials.
-                "voice": agent is not None and settings.demo_enabled,
-                "tts": ("elevenlabs" if tts is not None else "piper" if piper is not None else "browser"),
-                "max_message_chars": DEMO_MAX_MESSAGE, "messages_per_session": settings.demo_messages_per_session,
-                "disclaimer": "Demo con IA: no escribas datos personales reales."}
+        # El modo reportado es el que realmente sirve turnos: un agente inyectado sin AI_MODE sirve asistido.
+        served_mode = (settings.ai_mode if settings.ai_mode != "off" else "assisted") if agent is not None else "off"
+        return {
+            "ai_enabled": agent is not None,
+            "mode": served_mode,
+            "model": settings.llm_model if agent is not None else None,
+            "sandbox": settings.demo_sandbox_authorized,
+            "autonomous_booking": (
+                settings.autonomous_booking and settings.demo_sandbox_authorized and agent is not None
+            ),
+            # Browser speech remains available without paid TTS credentials.
+            "voice": agent is not None and settings.demo_enabled,
+            "tts": ("elevenlabs" if tts is not None else "piper" if piper is not None else "browser"),
+            "max_message_chars": DEMO_MAX_MESSAGE,
+            "messages_per_session": settings.demo_messages_per_session,
+            "disclaimer": "Demo con IA: no escribas datos personales reales.",
+        }
 
     async def demo_turn(request: Request, voice: bool) -> dict | JSONResponse:
         """Un turno de la demo, compartido por el chat de texto y la voz."""
@@ -436,15 +510,19 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         events: list[dict] = []
         reply, quick, mode, usage = "", [], "guided", {"llm_ms": 0, "tokens": None}
         if agent is not None:
-            hooks = ToolHooks(conversation_id=None, in_shift=settings.in_shift(clock()),
-                              record=lambda kind, payload: record_demo_event(kind, payload),
-                              extra={"sandbox_only": True, "sandbox_authorized": settings.demo_sandbox_authorized})
+            hooks = ToolHooks(
+                conversation_id=None,
+                in_shift=settings.in_shift(clock()),
+                record=lambda kind, payload: record_demo_event(kind, payload),
+                extra={"sandbox_only": True, "sandbox_authorized": settings.demo_sandbox_authorized},
+            )
             try:
                 result = await agent.respond(session, message, hooks, voice=voice)
                 reply, quick, mode, events = result.reply or "", result.quick_replies, "ai", result.events
                 usage = {"llm_ms": result.llm_ms, "tokens": result.tokens}
-                record_demo_event("ai_reply", {"latency_ms": result.llm_ms, "tools": result.tools,
-                                               "tokens": result.tokens})
+                record_demo_event(
+                    "ai_reply", {"latency_ms": result.llm_ms, "tools": result.tools, "tokens": result.tokens}
+                )
                 for rule in result.guardrails:
                     record_demo_event("ai_guardrail", {"rule": rule})
                 if result.booking:
@@ -456,9 +534,13 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
             events = [{"type": "fallback", "reason": "ia_no_configurada"}]
             reply, quick = guided_reply(hotel, message)
         ai_sessions.save(db, session, clock())
-        payload = {"reply": reply, "mode": mode, "events": events, "quick_replies": quick[:4],
-                   "usage": {"messages_left": max(settings.demo_messages_per_session - session.msg_count, 0),
-                             **usage}}
+        payload = {
+            "reply": reply,
+            "mode": mode,
+            "events": events,
+            "quick_replies": quick[:4],
+            "usage": {"messages_left": max(settings.demo_messages_per_session - session.msg_count, 0), **usage},
+        }
         if voice:
             payload["spoken_language"] = guess_language(message)
         return payload
@@ -508,8 +590,13 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
             if lang not in greeting_audio:
                 audio, error, fmt = await synthesize(text, lang)
                 if audio is None:
-                    return {"text": text, "audio_b64": None, "audio_format": None, "voice_error": error,
-                            "language": lang}
+                    return {
+                        "text": text,
+                        "audio_b64": None,
+                        "audio_format": None,
+                        "voice_error": error,
+                        "language": lang,
+                    }
                 greeting_audio[lang] = (audio, fmt)
         audio, fmt = greeting_audio[lang]
         return {"text": text, "audio_b64": audio, "audio_format": fmt, "voice_error": None, "language": lang}

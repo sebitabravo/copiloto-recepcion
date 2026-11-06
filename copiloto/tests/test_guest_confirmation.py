@@ -14,8 +14,16 @@ def test_only_an_explicit_answer_counts_as_confirmation():
     assert guest_said_yes("Sí, confirmo la reserva")
     assert guest_said_yes("Sí")
     assert guest_said_yes("Confirmo la reserva")
-    for text in ("sí, pero no reserves", "sí, nunca", "perfecto", "quiero una reserva", "¿Sí?",
-                 "sí, la doble con jacuzzi, soy Camila Rojas", "dale, confírmala"):
+    assert guest_said_yes("sí!!")
+    for text in (
+        "sí, pero no reserves",
+        "sí, nunca",
+        "perfecto",
+        "quiero una reserva",
+        "¿Sí?",
+        "sí, la doble con jacuzzi, soy Camila Rojas",
+        "dale, confírmala",
+    ):
         assert not guest_said_yes(text)
     assert not guest_said_yes("¿cuánto sale la doble?")
     assert not guest_said_yes("no, mejor otra")
@@ -23,10 +31,24 @@ def test_only_an_explicit_answer_counts_as_confirmation():
     assert not guest_said_yes(None)
 
 
+def test_confirmation_without_accent_is_accepted():
+    """«Si, confirmo la reserva» y «si» (sin tilde) confirman igual que la versión acentuada."""
+    for text in ("si", "SI", "Si, confirmo la reserva", "Sí, confirmo la reserva."):
+        assert guest_said_yes(text)
+    for text in ("sí, pero no reserves", "quizás", ""):  # lo que se rechazaba sigue rechazado
+        assert not guest_said_yes(text)
+
+
 async def test_booking_is_refused_when_the_guest_only_asked_a_question(make_ai):
     avail = call("check_availability", **STAY)
-    book = call("create_booking", call_id="c2", guest_name="Camila Rojas", room_code="doble_con_jacuzzi",
-                guest_confirmed=True, **STAY)
+    book = call(
+        "create_booking",
+        call_id="c2",
+        guest_name="Camila Rojas",
+        room_code="doble_con_jacuzzi",
+        guest_confirmed=True,
+        **STAY,
+    )
     h, _ = make_ai([avail, say("Te muestro las opciones."), book, say("Te repito el resumen.")])
     await h.say("hola")
     await h.say("2 adultos y 1 niño del 15 al 18 de noviembre")
@@ -37,8 +59,14 @@ async def test_booking_is_refused_when_the_guest_only_asked_a_question(make_ai):
 async def test_booking_is_refused_when_the_model_invents_the_guest_name(make_ai):
     """El huésped nunca dio su nombre: la reserva no puede crearse aunque el modelo diga que sí."""
     avail = call("check_availability", **STAY)
-    book = call("create_booking", call_id="c2", guest_name="Camila Rojas", room_code="doble_con_jacuzzi",
-                guest_confirmed=True, **STAY)
+    book = call(
+        "create_booking",
+        call_id="c2",
+        guest_name="Camila Rojas",
+        room_code="doble_con_jacuzzi",
+        guest_confirmed=True,
+        **STAY,
+    )
     h, _ = make_ai([avail, say("Te muestro las opciones."), book, say("Listo.")])
     await h.say("hola")
     await h.say("2 adultos y 1 niño del 15 al 18 de noviembre")

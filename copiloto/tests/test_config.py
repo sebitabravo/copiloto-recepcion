@@ -2,6 +2,7 @@ from dataclasses import replace
 
 import pytest
 from copiloto.app import create_app
+from copiloto.config import Settings
 from copiloto.store import anonymous_id
 
 
@@ -67,3 +68,21 @@ def test_production_rejects_non_loopback_http_public_url(settings):
                      public_url="http://hotel.example")
     with pytest.raises(ValueError, match="HTTPS"):
         strong.validate_runtime()
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("1", True), ("true", True), ("YES", True), (" on ", True),
+    ("0", False), ("false", False), ("no", False), ("False", False), ("off", False), ("", False),
+])
+def test_demo_enabled_uses_an_explicit_truthy_set(monkeypatch, value, expected):
+    """«False», «off» y «» no activan la demo: solo un conjunto explícito de valores verdaderos."""
+    monkeypatch.setenv("DEMO_ENABLED", value)
+    assert Settings.from_env().demo_enabled is expected
+
+
+def test_prebooking_minutes_is_read_from_the_environment(monkeypatch):
+    """docs/ia.md promete PREBOOKING_MINUTES con 15 por defecto: Settings debe leerla."""
+    monkeypatch.delenv("PREBOOKING_MINUTES", raising=False)
+    assert Settings.from_env().prebooking_minutes == 15
+    monkeypatch.setenv("PREBOOKING_MINUTES", "45")
+    assert Settings.from_env().prebooking_minutes == 45

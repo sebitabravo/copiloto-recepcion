@@ -12,6 +12,11 @@ def _parse_hhmm(value: str) -> time:
     return time(int(hours), int(minutes))
 
 
+# Valores que activan una bandera booleana del entorno; se comparan en minúsculas y sin espacios,
+# igual que la lectura de AI_MODE.
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+
 @dataclass(frozen=True)
 class Settings:
     hotel_data_path: str = "../data/hotel.yaml"
@@ -42,7 +47,7 @@ class Settings:
     shift_end: str = "22:00"
     fixed_monthly_clp: int = 90000
     usage_m_clp: int = 0
-    prebooking_minutes: int = 15
+    prebooking_minutes: int = 15  # lo promete docs/ia.md vía la variable PREBOOKING_MINUTES
     retention_days: int = 90
     sla_amber_s: int = 120
     sla_red_s: int = 180
@@ -112,7 +117,7 @@ class Settings:
             piper_model_path=env.get("PIPER_MODEL_PATH", ""),
             piper_config_path=env.get("PIPER_CONFIG_PATH", ""),
             pms_staff_token=env.get("PMS_STAFF_TOKEN", ""),
-            demo_enabled=env.get("DEMO_ENABLED", "1") not in ("0", "false", "no"),
+            demo_enabled=env.get("DEMO_ENABLED", "1").strip().lower() in _TRUTHY,
             landing_origin=env.get("LANDING_ORIGIN", cls.landing_origin).rstrip("/"),
             panel_token=env.get("PANEL_TOKEN", ""),
             pms_url=env.get("PMS_URL", cls.pms_url),
@@ -127,14 +132,19 @@ class Settings:
             shift_end=env.get("SHIFT_END", cls.shift_end),
             fixed_monthly_clp=int(env.get("FIXED_MONTHLY_CLP", "90000")),
             usage_m_clp=int(env.get("USAGE_M_CLP", "0")),
+            prebooking_minutes=int(env.get("PREBOOKING_MINUTES", cls.prebooking_minutes)),
             retention_days=int(env.get("RETENTION_DAYS", "90")),
         )
 
     def validate_runtime(self) -> None:
         """Falla al arrancar si falta un secreto: sin esto cada webhook respondería 401 sin explicación."""
-        secrets = {"WEBHOOK_SECRET": self.webhook_secret, "PMS_EVENTS_SECRET": self.pms_events_secret,
-                   "PANEL_TOKEN": self.panel_token, "PSEUDONYM_SALT": self.pseudonym_salt,
-                   "CHATWOOT_BOT_TOKEN": self.chatwoot_bot_token}
+        secrets = {
+            "WEBHOOK_SECRET": self.webhook_secret,
+            "PMS_EVENTS_SECRET": self.pms_events_secret,
+            "PANEL_TOKEN": self.panel_token,
+            "PSEUDONYM_SALT": self.pseudonym_salt,
+            "CHATWOOT_BOT_TOKEN": self.chatwoot_bot_token,
+        }
         weak = sorted(name for name, value in secrets.items() if len(value) < 16)
         if self.ai_mode not in ("off", "assisted", "full"):
             raise ValueError("AI_MODE debe ser off, assisted o full")
@@ -144,17 +154,21 @@ class Settings:
             raise ValueError("Secretos ausentes o demasiado cortos (mínimo 16 caracteres): " + ", ".join(weak))
         public = urlsplit(self.public_url)
         if self.env == "production" and not (
-            public.scheme == "https" and public.hostname
-            or public.scheme == "http" and public.hostname in ("localhost", "127.0.0.1")
+            public.scheme == "https"
+            and public.hostname
+            or public.scheme == "http"
+            and public.hostname in ("localhost", "127.0.0.1")
         ):
             raise ValueError("COPILOTO_PUBLIC_URL necesita HTTPS fuera de localhost/127.0.0.1")
 
     @property
     def demo_sandbox_authorized(self) -> bool:
         """Local demo allowlist, not proof that an arbitrary PMS is a sandbox."""
-        return (self.pms_adapter == "http" and self.pms_booking_path == "/api/v1/bookings"
-                and self.pms_url.rstrip("/") in {
-                    "http://pms-mock:8200", "http://localhost:8200", "http://127.0.0.1:8200"})
+        return (
+            self.pms_adapter == "http"
+            and self.pms_booking_path == "/api/v1/bookings"
+            and self.pms_url.rstrip("/") in {"http://pms-mock:8200", "http://localhost:8200", "http://127.0.0.1:8200"}
+        )
 
     @property
     def ai_active(self) -> bool:

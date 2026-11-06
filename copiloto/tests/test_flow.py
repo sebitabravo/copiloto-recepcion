@@ -305,3 +305,23 @@ async def test_repeated_gibberish_hands_off_to_a_person_after_three_fallbacks(ha
         await harness.say(text)
     assert harness.chatwoot.statuses[1] == "open"
     assert any("te paso con una persona" in text for text in harness.chatwoot.guest_texts())
+
+
+async def test_faq_menu_last_option_returns_to_the_menu_without_a_fallback(harness):
+    """Regresión: «10 Volver al menú» caía al fallback y sumaba un strike en vez de volver al menú."""
+    await harness.say("hola")
+    await harness.say("Servicios y preguntas")
+    await harness.say("10")
+    texts = harness.chatwoot.guest_texts()
+    assert not any("No estoy seguro" in t for t in texts), "la opción válida no debe contar como fallback"
+    assert texts[-1].startswith("¿En qué te ayudo?")
+    assert store.get_state(harness.db, 1).data.get("fallbacks") is None
+
+
+async def test_stay_longer_than_30_nights_is_refused_in_the_guided_flow(harness):
+    """El tope de estadía es compartido con el asistente con IA: el flujo guiado también lo aplica."""
+    await harness.say("quiero reservar")
+    await harness.say("01/11 al 15/12")
+    assert any("hasta 30 noches" in t for t in harness.chatwoot.guest_texts())
+    assert harness.events("prebooking_created") == []
+    assert store.get_state(harness.db, 1).step == "ask_dates"

@@ -14,7 +14,7 @@ from copiloto.ai.tools import LABELS, ToolHooks, ToolRunner, pending_proposal, t
 from copiloto.config import Settings
 from copiloto.hotel import HotelData
 from copiloto.pms import PmsAdapter
-from copiloto.textutil import parse_guests, parse_stay
+from copiloto.textutil import money, parse_guests, parse_stay, plural
 
 MAX_STEPS = 5
 MAX_REPLY = 1200
@@ -23,13 +23,18 @@ CONFIRM_CLAIM = re.compile(r"confirmad[oa]s?|reservad[oa]s?|queda(?:ron)? (?:hec
 # Pregunta sobre el hotel: se fuerza la herramienta en el primer paso para que no responda de memoria.
 HOTEL_QUESTION = re.compile(
     r"(d[oó]nde|ubicaci[oó]n|c[oó]mo llego|direcci[oó]n|servicios?|habitaci[oó]n|suite|piscina|tinaja|"
-    r"desayuno|precio|tarifa|cu[aá]nto|disponibilidad|reserv|estacionamiento|wifi)", re.IGNORECASE)
+    r"desayuno|precio|tarifa|cu[aá]nto|disponibilidad|reserv|estacionamiento|wifi)",
+    re.IGNORECASE,
+)
 # Afirmación sobre el hotel sin ninguna herramienta detrás: se descarta.
 HOTEL_CLAIM = re.compile(
     r"estamos|se encuentra|situad|ubicad|direcci[oó]n|\bcalle\b|\bavenida\b|centro de|piscina|tinaja|"
-    r"desayuno|jacuzzi|\$\s?\d", re.IGNORECASE)
-SAFE_NO_DATA = ("No quiero darte un dato sin verificarlo. Déjame confirmarlo en el sistema del hotel: "
-                "¿me repites la pregunta?")
+    r"desayuno|jacuzzi|\$\s?\d",
+    re.IGNORECASE,
+)
+SAFE_NO_DATA = (
+    "No quiero darte un dato sin verificarlo. Déjame confirmarlo en el sistema del hotel: ¿me repites la pregunta?"
+)
 # El modelo a veces narra la llamada en vez de hacerla ("CallCheckAvailability con checkin: ...").
 TOOL_NARRATION = re.compile(r"\bCall[A-Z]\w*|check_availability|create_booking|get_hotel_info|handoff_to_human")
 SAFE_NARRATION = "Déjame revisarlo en el sistema del hotel antes de responderte."
@@ -46,7 +51,9 @@ BOOKING_INTENT = re.compile(r"reserv|disponib|coti[zs]|fecha|noche|adulto|niñ",
 # Pedir una persona es una acción del producto, no una decisión del modelo.
 HANDOFF_INTENT = re.compile(
     r"hablar con (una |alguien )?(persona|humano|recepci|agente)|con un humano|persona real|"
-    r"ati[eé]ndanme|que me (atienda|responda) (alguien|una persona)", re.I)
+    r"ati[eé]ndanme|que me (atienda|responda) (alguien|una persona)",
+    re.I,
+)
 
 
 def topic_hint(text: str) -> str | None:
@@ -54,8 +61,9 @@ def topic_hint(text: str) -> str | None:
         if pattern.search(text):
             return topic
     return None
-SAFE_NO_BOOKING = ("Todavía no hay una reserva creada. Cuando me confirmes los datos con un sí, la dejo "
-                   "registrada.")
+
+
+SAFE_NO_BOOKING = "Todavía no hay una reserva creada. Cuando me confirmes los datos con un sí, la dejo registrada."
 STUCK = "Se me enredó la consulta. ¿Lo intentamos de nuevo o prefieres que te pase con recepción?"
 
 
@@ -72,49 +80,62 @@ class AgentResult:
     quick_replies: list[str] = field(default_factory=list)
 
 
-def _count(value: int, singular: str, plural: str) -> str:
-    return f"{value} {singular if value == 1 else plural}"
-
-
-def _money(value: int) -> str:
-    return "$" + f"{value:,}".replace(",", ".")
-
-
 def _result_card(name: str, outcome) -> dict | None:
     """Resumen estructurado para la tarjeta de la demo web; solo la disponibilidad lo necesita."""
     if name != "check_availability" or not outcome.ok:
         return None
     data = outcome.data
-    return {"lectura": data.get("lectura_pms"), "noches": data.get("noches"),
-            "opciones": [{key: option[key] for key in ("nombre", "cupos", "precio_noche_clp", "total_clp")}
-                         for option in data.get("opciones", [])]}
+    return {
+        "lectura": data.get("lectura_pms"),
+        "noches": data.get("noches"),
+        "opciones": [
+            {key: option[key] for key in ("nombre", "cupos", "precio_noche_clp", "total_clp")}
+            for option in data.get("opciones", [])
+        ],
+    }
 
 
 class Agent:
-    def __init__(self, llm: LlmClient, hotel: HotelData, pms: PmsAdapter, settings: Settings,
-                 clock: Callable[[], float] = time.time):
+    def __init__(
+        self,
+        llm: LlmClient,
+        hotel: HotelData,
+        pms: PmsAdapter,
+        settings: Settings,
+        clock: Callable[[], float] = time.time,
+    ):
         self.llm, self.hotel, self.pms, self.settings, self.clock = llm, hotel, pms, settings, clock
 
     def _system(self, session: AiSession, settings: Settings) -> str:
         today = settings.local(self.clock()).date()
         mode = "full" if settings.autonomous_booking else "assisted"
-        prompt = build_system_prompt(today.isoformat(), WEEKDAYS[today.weekday()], mode,
-                                     self.hotel.hotel["name"], voice=bool(session.state.get("voice")))
+        prompt = build_system_prompt(
+            today.isoformat(),
+            WEEKDAYS[today.weekday()],
+            mode,
+            self.hotel.hotel["name"],
+            voice=bool(session.state.get("voice")),
+        )
         last = session.state.get("last_availability")
         notes = []
         if last:
-            options = "; ".join(f"{code} = {info['name']} (${info['price']}/noche, {info['units']} cupos)"
-                                for code, info in last["options"].items())
-            notes.append(f"Última lectura del PMS ({last['read_label']}): entrada {last['checkin']}, salida "
-                         f"{last['checkout']}, {last['adults']} adultos, {last['children']} niños. "
-                         f"Opciones: {options}.")
+            options = "; ".join(
+                f"{code} = {info['name']} (${info['price']}/noche, {info['units']} cupos)"
+                for code, info in last["options"].items()
+            )
+            notes.append(
+                f"Última lectura del PMS ({last['read_label']}): entrada {last['checkin']}, salida "
+                f"{last['checkout']}, {last['adults']} adultos, {last['children']} niños. "
+                f"Opciones: {options}."
+            )
         for made in session.state.get("bookings", []):
-            notes.append(f"Ya creaste la reserva #{made['booking_id']} ({made['room_name']}, {made['checkin']} a "
-                         f"{made['checkout']}) a nombre de {made['guest_name']}.")
+            notes.append(
+                f"Ya creaste la reserva #{made['booking_id']} ({made['room_name']}, {made['checkin']} a "
+                f"{made['checkout']}) a nombre de {made['guest_name']}."
+            )
         return prompt + ("\n\nESTADO DE LA SESIÓN\n" + "\n".join(notes) if notes else "")
 
-    async def respond(self, session: AiSession, user_text: str, hooks: ToolHooks,
-                      voice: bool = False) -> AgentResult:
+    async def respond(self, session: AiSession, user_text: str, hooks: ToolHooks, voice: bool = False) -> AgentResult:
         deadline = time.monotonic() + self.settings.ai_turn_timeout_s
         # Por voz el reconocimiento puede errar nombres y fechas: nunca se reserva solo, sea cual sea el modo global
         denied = hooks.extra.get("sandbox_only") is True and hooks.extra.get("sandbox_authorized") is not True
@@ -127,8 +148,11 @@ class Agent:
         # Las herramientas no confían en el modelo: el «sí» del huésped se verifica sobre su propio texto.
         session.state["last_user_text"] = user_text
         specs = tool_specs("full" if settings.autonomous_booking else "assisted")
-        messages = [{"role": "system", "content": self._system(session, settings)}, *session.history,
-                    {"role": "user", "content": user_text}]
+        messages = [
+            {"role": "system", "content": self._system(session, settings)},
+            *session.history,
+            {"role": "user", "content": user_text},
+        ]
         result = AgentResult(None)
         text: str | None = None
         # Una pregunta sobre el hotel obliga a consultar una herramienta antes de responder.
@@ -145,20 +169,39 @@ class Agent:
             result.tools.append("get_hotel_info")
             if outcome.ok:
                 session.state["data_seen"] = True
-            result.events.append({
-                "type": "tool_call", "name": "get_hotel_info", "label": LABELS["get_hotel_info"],
-                "arguments": arguments, "summary": outcome.summary,
-                "ms": int((time.monotonic() - tool_started) * 1000), "ok": outcome.ok})
-            messages.append({"role": "system", "content": "Datos verificados del hotel (herramienta "
-                             "get_hotel_info): " + json.dumps(outcome.data, ensure_ascii=False)})
+            result.events.append(
+                {
+                    "type": "tool_call",
+                    "name": "get_hotel_info",
+                    "label": LABELS["get_hotel_info"],
+                    "arguments": arguments,
+                    "summary": outcome.summary,
+                    "ms": int((time.monotonic() - tool_started) * 1000),
+                    "ok": outcome.ok,
+                }
+            )
+            messages.append(
+                {
+                    "role": "system",
+                    "content": "Datos verificados del hotel (herramienta "
+                    "get_hotel_info): " + json.dumps(outcome.data, ensure_ascii=False),
+                }
+            )
         if HANDOFF_INTENT.search(user_text):
             tool_started = time.monotonic()
             outcome = await runner.run("handoff_to_human", {"reason": "Solicitud del huésped"})
             result.tools.append("handoff_to_human")
-            result.events.append({
-                "type": "tool_call", "name": "handoff_to_human", "label": LABELS["handoff_to_human"],
-                "arguments": {}, "summary": outcome.summary,
-                "ms": int((time.monotonic() - tool_started) * 1000), "ok": outcome.ok})
+            result.events.append(
+                {
+                    "type": "tool_call",
+                    "name": "handoff_to_human",
+                    "label": LABELS["handoff_to_human"],
+                    "arguments": {},
+                    "summary": outcome.summary,
+                    "ms": int((time.monotonic() - tool_started) * 1000),
+                    "ok": outcome.ok,
+                }
+            )
             if outcome.event:
                 result.events.append(outcome.event)
             if outcome.ok:
@@ -168,8 +211,9 @@ class Agent:
                     # porque si fallara el menú pisaría una derivación ya hecha.
                     result.handed_off = True
                     return self._finish(session, user_text, result, None)
-            messages.append({"role": "system", "content": "Aviso a recepción: "
-                             + json.dumps(outcome.data, ensure_ascii=False)})
+            messages.append(
+                {"role": "system", "content": "Aviso a recepción: " + json.dumps(outcome.data, ensure_ascii=False)}
+            )
         for step in range(MAX_STEPS):
             started = time.monotonic()
             if deadline <= started:
@@ -192,19 +236,35 @@ class Agent:
                     adults, children = parse_guests(user_text)
                     if stay and adults:
                         tool_started = time.monotonic()
-                        arguments = {"checkin": stay[0].isoformat(), "checkout": stay[1].isoformat(),
-                                     "adults": adults, "children": children or 0}
+                        arguments = {
+                            "checkin": stay[0].isoformat(),
+                            "checkout": stay[1].isoformat(),
+                            "adults": adults,
+                            "children": children or 0,
+                        }
                         outcome = await runner.run("check_availability", arguments)
                         result.tools.append("check_availability")
                         if outcome.ok:
                             session.state["data_seen"] = True
-                        result.events.append({
-                            "type": "tool_call", "name": "check_availability",
-                            "label": LABELS["check_availability"], "arguments": arguments,
-                            "summary": outcome.summary, "result": _result_card("check_availability", outcome),
-                            "ms": int((time.monotonic() - tool_started) * 1000), "ok": outcome.ok})
-                        messages.append({"role": "system", "content": "Disponibilidad leída del PMS: "
-                                         + json.dumps(outcome.data, ensure_ascii=False)})
+                        result.events.append(
+                            {
+                                "type": "tool_call",
+                                "name": "check_availability",
+                                "label": LABELS["check_availability"],
+                                "arguments": arguments,
+                                "summary": outcome.summary,
+                                "result": _result_card("check_availability", outcome),
+                                "ms": int((time.monotonic() - tool_started) * 1000),
+                                "ok": outcome.ok,
+                            }
+                        )
+                        messages.append(
+                            {
+                                "role": "system",
+                                "content": "Disponibilidad leída del PMS: "
+                                + json.dumps(outcome.data, ensure_ascii=False),
+                            }
+                        )
                         continue
                 break
             messages.append(reply.message)
@@ -215,19 +275,30 @@ class Agent:
                 result.tools.append(call.name)
                 if outcome.ok:
                     session.state["data_seen"] = True
-                result.events.append({
-                    "type": "tool_call", "name": call.name, "label": LABELS.get(call.name, call.name),
-                    "arguments": {k: v for k, v in args.items() if k != "guest_confirmed"},
-                    "summary": outcome.summary, "result": _result_card(call.name, outcome),
-                    "ms": int((time.monotonic() - tool_started) * 1000), "ok": outcome.ok})
+                result.events.append(
+                    {
+                        "type": "tool_call",
+                        "name": call.name,
+                        "label": LABELS.get(call.name, call.name),
+                        "arguments": {k: v for k, v in args.items() if k != "guest_confirmed"},
+                        "summary": outcome.summary,
+                        "result": _result_card(call.name, outcome),
+                        "ms": int((time.monotonic() - tool_started) * 1000),
+                        "ok": outcome.ok,
+                    }
+                )
                 if outcome.event:
                     result.events.append(outcome.event)
                 if outcome.event and outcome.event.get("type") == "booking_created":
                     result.booking = outcome.data
                 payload = json.dumps(outcome.data, ensure_ascii=False)[:MAX_TOOL_PAYLOAD]
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": payload})
-                if (call.name == "handoff_to_human" and outcome.ok and hooks.conversation_id is not None
-                        and hooks.handoff is not None):
+                if (
+                    call.name == "handoff_to_human"
+                    and outcome.ok
+                    and hooks.conversation_id is not None
+                    and hooks.handoff is not None
+                ):
                     result.handed_off = True
             if result.handed_off:
                 return self._finish(session, user_text, result, None)
@@ -255,11 +326,13 @@ class Agent:
         # Present new proposals authoritatively without replacing unrelated later hotel answers.
         if pending and proposal_requested and not result.booking and not session.state.get("voice"):
             b = pending
-            reply = (f"Propuesta de reserva para {b['guest_name']}: {b['room_name']} ({b['room_code']}), "
-                     f"{b['checkin']} a {b['checkout']} ({_count(b['nights'], 'noche', 'noches')}), "
-                     f"{_count(b['adults'], 'adulto', 'adultos')} y {_count(b['children'], 'niño', 'niños')}, "
-                     f"total {_money(b['total_clp'])}. Todavía no hay una reserva creada. "
-                     "¿Confirmas estos datos? Responde «Sí, confirmo la reserva» para continuar.")
+            reply = (
+                f"Propuesta de reserva para {b['guest_name']}: {b['room_name']} ({b['room_code']}), "
+                f"{b['checkin']} a {b['checkout']} ({plural(b['nights'], 'noche', 'noches')}), "
+                f"{plural(b['adults'], 'adulto', 'adultos')} y {plural(b['children'], 'niño', 'niños')}, "
+                f"total {money(b['total_clp'])}. Todavía no hay una reserva creada. "
+                "¿Confirmas estos datos? Responde «Sí, confirmo la reserva» para continuar."
+            )
             if b["simulated"]:
                 reply += " Propuesta de demostración en el PMS simulado; no es una reserva real."
             pending["presented_turn"] = session.state["turn"]
@@ -267,10 +340,12 @@ class Agent:
             b = result.booking
             heading = "Reserva de demostración" if b.get("simulated") else "Reserva"
             destination = "PMS simulado" if b.get("simulated") else "PMS"
-            reply += (f"\n\n{heading} #{b['booking_id']} creada en el {destination}: {b['room_name']}, "
-                      f"{b['checkin']} a {b['checkout']} ({_count(b['nights'], 'noche', 'noches')}), "
-                      f"{_count(b['adults'], 'adulto', 'adultos')} y {_count(b['children'], 'niño', 'niños')}, "
-                       f"total {_money(b['total_clp'])}.")
+            reply += (
+                f"\n\n{heading} #{b['booking_id']} creada en el {destination}: {b['room_name']}, "
+                f"{b['checkin']} a {b['checkout']} ({plural(b['nights'], 'noche', 'noches')}), "
+                f"{plural(b['adults'], 'adulto', 'adultos')} y {plural(b['children'], 'niño', 'niños')}, "
+                f"total {money(b['total_clp'])}."
+            )
             if b.get("simulated"):
                 reply += " Es una demostración: no es una reserva real."
         result.reply = reply

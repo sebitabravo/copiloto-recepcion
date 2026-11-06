@@ -1,21 +1,95 @@
-"""Utilidades de texto en español: normalización, fechas de estadía y cantidad de huéspedes."""
+"""Utilidades de texto en español: normalización, fechas de estadía y cantidad de huéspedes.
+
+Aquí viven también las reglas de estadía y capacidad compartidas por el flujo guiado y el asistente
+con IA, y los formatos de presentación (dinero, plurales, hora de lectura del PMS).
+"""
 
 import re
 import unicodedata
 from datetime import date, timedelta
 
+# Reglas de estadía compartidas: el menú guiado y las herramientas de la IA aplican los mismos topes.
+MAX_NIGHTS = 30
+MAX_ADULTS = 4
+MAX_CHILDREN = 3
+
+# Hosts que cuentan como infraestructura local del hotel: unión de todas las comprobaciones que antes
+# vivían repetidas en flow.py y privacy.py.
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "host.docker.internal", "0.0.0.0"})
+
 MONTHS = {
-    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6, "julio": 7,
-    "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "setiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
 }
-WORD_NUMBERS = {"un": 1, "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6,
-                "cero": 0, "ningun": 0, "ninguno": 0, "ninguna": 0}
+WORD_NUMBERS = {
+    "un": 1,
+    "uno": 1,
+    "una": 1,
+    "dos": 2,
+    "tres": 3,
+    "cuatro": 4,
+    "cinco": 5,
+    "seis": 6,
+    "cero": 0,
+    "ningun": 0,
+    "ninguno": 0,
+    "ninguna": 0,
+}
+
+
+def strip_accents(text: str) -> str:
+    """NFD + descarte de combining: «sí» y «si» quedan idénticos para las comprobaciones."""
+    return "".join(char for char in unicodedata.normalize("NFD", text) if not unicodedata.combining(char))
 
 
 def normalize(text: str) -> str:
-    stripped = unicodedata.normalize("NFKD", text.lower())
-    plain = "".join(char for char in stripped if not unicodedata.combining(char))
-    return re.sub(r"\s+", " ", plain).strip()
+    stripped = strip_accents(text.lower())
+    return re.sub(r"\s+", " ", stripped).strip()
+
+
+def is_local_host(host: str) -> bool:
+    """Un hostname explícito (por ejemplo el de COPILOTO_PUBLIC_URL) es local si está en la lista."""
+    return (host or "").lower() in LOCAL_HOSTS
+
+
+def is_local_url(url: str) -> bool:
+    """Comprobación por subcadena para URLs completas (con puerto y ruta detrás del host)."""
+    return any(host in (url or "") for host in LOCAL_HOSTS)
+
+
+def nights_exceeded(checkin: date, checkout: date) -> bool:
+    return (checkout - checkin).days > MAX_NIGHTS
+
+
+def guests_out_of_range(adults: int | None, children: int | None) -> bool:
+    return adults is None or children is None or not 1 <= adults <= MAX_ADULTS or not 0 <= children <= MAX_CHILDREN
+
+
+def money(value: int) -> str:
+    return "$" + f"{value:,}".replace(",", ".")
+
+
+def plural(count: int, singular: str, plural_form: str) -> str:
+    return f"{count} {singular if count == 1 else plural_form}"
+
+
+def read_label(read_at: str) -> str:
+    """'2026-10-27T17:39:54-03:00' → '27-10-2026 17:39'."""
+    if len(read_at) < 16:
+        return read_at
+    year, month, day = read_at[:10].split("-")
+    return f"{day}-{month}-{year} {read_at[11:16]}"
 
 
 def contains_word(text: str, term: str) -> bool:
@@ -116,12 +190,12 @@ def _next_weekday(name: str, today: date, after: date | None = None) -> date:
 
 
 def parse_nights(text: str) -> int | None:
-    """'3 noches', 'tres noches', 'una noche' → número de noches (1 a 30)."""
+    """'3 noches', 'tres noches', 'una noche' → número de noches (1 a MAX_NIGHTS)."""
     match = re.search(r"(\d+|una|un|dos|tres|cuatro|cinco|seis|siete)\s+noches?", normalize(text))
     if not match:
         return None
     nights = _first_number(match.group(1))
-    return nights if nights and 1 <= nights <= 30 else None
+    return nights if nights and 1 <= nights <= MAX_NIGHTS else None
 
 
 def parse_one_date(text: str, today: date) -> date | None:

@@ -32,6 +32,12 @@ def test_status_reports_ai_configuration(ai_settings, harness):
     assert off["ai_enabled"] is False and off["mode"] == "off" and off["model"] is None
 
 
+def test_status_reports_assisted_when_an_agent_serves_without_ai_mode(settings, harness):
+    body = client_for(settings, harness, FakeLlm([])).get("/api/demo/status").json()
+    assert body["ai_enabled"] is True
+    assert body["mode"] == "assisted", "un agente inyectado sin AI_MODE sirve turnos asistidos"
+
+
 def test_chat_runs_the_agent_and_returns_the_contract(ai_settings, harness):
     llm = FakeLlm([call("check_availability", **STAY), say("Hay opciones desde $75.000 por noche.")])
     body = chat(client_for(ai_settings, harness, llm), "2 adultos y 1 niño del 15 al 18 de noviembre").json()

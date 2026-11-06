@@ -195,3 +195,11 @@ def test_ai_metrics_count_replies_tools_latency_and_bookings(conn):
 def test_ai_metrics_are_empty_without_ai_events(conn):
     result = compute(conn)
     assert result["ai_replies"] == 0 and result["ai_latency_median_s"] is None and result["ai_tools"] == {}
+
+
+def test_compliance_key_follows_the_configured_threshold(conn):
+    add(conn, 1, "commercial_started", in_shift=True)
+    add(conn, 1, "human_first_reply", 200, user_id=1)
+    result = compute(conn, {"sla_red_s": 240})
+    assert result["commercial_answered_within_240"] == 1
+    assert "commercial_answered_within_180" not in result

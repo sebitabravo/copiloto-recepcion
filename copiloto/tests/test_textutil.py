@@ -50,3 +50,39 @@ def test_weekday_ranges():
     assert parse_weekday_range("del viernes al domingo", TODAY) == (date(2026, 10, 30), date(2026, 11, 1))
     assert parse_weekday_range("sábado a lunes", TODAY) == (date(2026, 10, 31), date(2026, 11, 2))
     assert parse_weekday_range("el viernes", TODAY) is None
+
+
+from copiloto.textutil import (  # noqa: E402
+    MAX_ADULTS,
+    MAX_CHILDREN,
+    MAX_NIGHTS,
+    guests_out_of_range,
+    is_local_host,
+    is_local_url,
+    money,
+    nights_exceeded,
+    plural,
+    read_label,
+)
+
+
+def test_shared_presentation_helpers():
+    assert money(255000) == "$255.000"
+    assert plural(1, "noche", "noches") == "1 noche" and plural(3, "noche", "noches") == "3 noches"
+    assert read_label("2026-10-27T17:39:54-03:00") == "27-10-2026 17:39"
+    assert read_label("corto") == "corto"
+
+
+def test_local_host_detection_is_the_union_of_both_previous_checks():
+    for host in ("localhost", "127.0.0.1", "::1", "host.docker.internal", "0.0.0.0"):
+        assert is_local_host(host) and is_local_url(f"http://{host}:11434/v1")
+    assert not is_local_host("hotelbordeluz.cl")
+    assert not is_local_url("https://api.deepseek.com")
+
+
+def test_stay_rules_are_shared_constants():
+    assert MAX_NIGHTS == 30 and MAX_ADULTS == 4 and MAX_CHILDREN == 3
+    assert nights_exceeded(date(2026, 11, 1), date(2026, 12, 15))
+    assert not nights_exceeded(date(2026, 11, 1), date(2026, 11, 15))
+    assert guests_out_of_range(0, 1) and guests_out_of_range(2, 4) and guests_out_of_range(None, 0)
+    assert not guests_out_of_range(2, 3)

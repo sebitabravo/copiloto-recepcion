@@ -2,13 +2,14 @@
 
 Todas las métricas (`metrics.py`) salen de la tabla `events`. Convenciones de `payload` (JSON):
 
-- inbound:            {"text": str, "greeting": bool}
+- inbound:            {"greeting": bool}
 - faq_answered:       {"faq_id": str, "inbound_ts": float}   # ts - inbound_ts = latencia de la FAQ
 - location_shown:     {}
 - commercial_started: {"in_shift": bool}                     # in_shift=False es una consulta nocturna
 - night_capture:      {"complete": bool}                     # complete=True si hay fechas y huéspedes
 - pms_read:           {"ok": bool, "latency_ms": int}
-- handoff:            {"reason": "commercial" | "night" | "pms_down" | "human_requested"}
+- handoff:            {"reason": "commercial" | "pms_down" | "human_requested"
+                       | "no_entendi_tres_veces" | "error" | "ai_handoff"}
 - human_first_reply:  {"user_id": int}
 - prebooking_created: {"prebooking_id": int}
 - prebooking_expired: {"prebooking_id": int}
@@ -24,11 +25,24 @@ import json
 import sqlite3
 from collections.abc import Iterable
 
-EVENT_KINDS = frozenset({
-    "inbound", "faq_answered", "location_shown", "commercial_started", "pms_read", "handoff",
-    "human_first_reply", "night_capture", "prebooking_created", "prebooking_expired",
-    "booking_confirmed", "ai_reply", "ai_booking", "ai_guardrail",
-})
+EVENT_KINDS = frozenset(
+    {
+        "inbound",
+        "faq_answered",
+        "location_shown",
+        "commercial_started",
+        "pms_read",
+        "handoff",
+        "human_first_reply",
+        "night_capture",
+        "prebooking_created",
+        "prebooking_expired",
+        "booking_confirmed",
+        "ai_reply",
+        "ai_booking",
+        "ai_guardrail",
+    }
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -106,8 +120,9 @@ def init_db(connection: sqlite3.Connection) -> None:
     connection.executescript(SCHEMA)
 
 
-def record_event(connection: sqlite3.Connection, conversation_id: int, kind: str, ts: float,
-                 payload: dict | None = None) -> int:
+def record_event(
+    connection: sqlite3.Connection, conversation_id: int, kind: str, ts: float, payload: dict | None = None
+) -> int:
     if kind not in EVENT_KINDS:
         raise ValueError(f"Unknown event kind: {kind}")
     cursor = connection.execute(
@@ -125,8 +140,9 @@ def mark_processed(connection: sqlite3.Connection, message_id: str, ts: float) -
     return cursor.rowcount == 1
 
 
-def events_between(connection: sqlite3.Connection, start: float, end: float,
-                   kinds: Iterable[str] | None = None) -> list[sqlite3.Row]:
+def events_between(
+    connection: sqlite3.Connection, start: float, end: float, kinds: Iterable[str] | None = None
+) -> list[sqlite3.Row]:
     sql = "SELECT * FROM events WHERE ts >= ? AND ts < ?"
     params: list = [start, end]
     if kinds:

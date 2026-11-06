@@ -77,7 +77,8 @@ def compute_metrics(conn: sqlite3.Connection, start: float, end: float, config) 
         "faq_latency_p95_s": latencies[math.ceil(0.95 * len(latencies)) - 1] if latencies else None,
         "commercial_response_compliance_pct": percentage(compliant, in_shift),
         "commercial_started_in_shift": in_shift,
-        "commercial_answered_within_180": compliant,
+        # La clave sigue al umbral configurado; con 180 s emite la clave histórica exacta.
+        f"commercial_answered_within_{sla_s}": compliant,
         "night_capture_rate_pct": percentage(len(complete_captures & night_conversations), len(night_conversations)),
         "direct_conversion_pct": percentage(converted, len(starts)),
         "queries": queries,

@@ -248,6 +248,18 @@ async def test_conversation_cap_hands_off_to_a_person(make_ai):
     assert h.chatwoot.statuses[1] == "open"
 
 
+async def test_conversation_cap_persists_the_counter_before_handing_off(make_ai):
+    from copiloto.flow import AI_CONVERSATION_CAP
+    h, _ = make_ai([say("ok")] * 2)
+    await h.say("hola")
+    session = ai_sessions.load(h.db, "cw:1", h.clock())
+    session.msg_count = AI_CONVERSATION_CAP
+    ai_sessions.save(h.db, session, h.clock())
+    await h.say("una más")
+    assert ai_sessions.load(h.db, "cw:1", h.clock()).msg_count == AI_CONVERSATION_CAP + 1, (
+        "el contador del tope debe quedar guardado aunque el turno termine en traspaso")
+
+
 async def test_history_is_bounded_and_system_prompt_carries_session_state(make_ai):
     h, llm = make_ai([call("check_availability", **STAY), say("a")] + [say("b")] * 8)
     await h.say("hola")

@@ -3,6 +3,7 @@
 from html import escape
 
 from copiloto.hotel import HotelData
+from copiloto.textutil import is_local_url
 
 PAGE = """<!doctype html>
 <html lang="es">
@@ -66,35 +67,43 @@ escribiendo a <a href="mailto:{contact}">{contact}</a>.</p>
 """
 
 
-AI_OFF = ("El flujo sin IA no envía mensajes a un modelo generativo. El canal separado de recepción usa Chatwoot; "
-          "si usas voz, se aplica también el tratamiento indicado para ese canal.")
-AI_ON = ("El asistente usa un modelo de lenguaje de un tercero ({provider}) para entender tus mensajes: el texto "
-         "de cada mensaje y los datos de tu consulta viajan a ese proveedor, que puede estar fuera de Chile. "
-         "Por eso no debes escribir datos personales reales: esta demostración usa datos ficticios. Guardamos "
-         "un historial acotado de la conversación solo para que el asistente mantenga el hilo, y se borra con la "
-         "retención.")
+AI_OFF = (
+    "El flujo sin IA no envía mensajes a un modelo generativo. El canal separado de recepción usa Chatwoot; "
+    "si usas voz, se aplica también el tratamiento indicado para ese canal."
+)
+AI_ON = (
+    "El asistente usa un modelo de lenguaje de un tercero ({provider}) para entender tus mensajes: el texto "
+    "de cada mensaje y los datos de tu consulta viajan a ese proveedor, que puede estar fuera de Chile. "
+    "Por eso no debes escribir datos personales reales: esta demostración usa datos ficticios. Guardamos "
+    "un historial acotado de la conversación solo para que el asistente mantenga el hilo, y se borra con la "
+    "retención."
+)
 
 
-AI_LOCAL = ("El asistente usa un modelo de lenguaje que se ejecuta en la misma infraestructura del hotel "
-            "({provider}): por este tratamiento, tus mensajes no se envían a proveedores externos. Aun así, esta "
-            "demostración usa datos ficticios: no escribas datos personales reales. Guardamos un historial acotado "
-            "de la conversación solo para que el asistente mantenga el hilo, y se borra con la retención.")
+AI_LOCAL = (
+    "El asistente usa un modelo de lenguaje que se ejecuta en la misma infraestructura del hotel "
+    "({provider}): por este tratamiento, tus mensajes no se envían a proveedores externos. Aun así, esta "
+    "demostración usa datos ficticios: no escribas datos personales reales. Guardamos un historial acotado "
+    "de la conversación solo para que el asistente mantenga el hilo, y se borra con la retención."
+)
 
-VOICE_ON = ("Si usas la demo de voz, el audio de tu micrófono lo transcribe el navegador (en Chrome, con el servicio "
-            "de reconocimiento de voz de Google) y el texto de cada respuesta se envía a ElevenLabs para generar "
-            "la voz. No guardamos el audio.")
-
-LOCAL_HOSTS = ("localhost", "127.0.0.1", "host.docker.internal", "0.0.0.0")
-
-
-def _is_local(base_url: str) -> bool:
-    return any(host in (base_url or "") for host in LOCAL_HOSTS)
+VOICE_ON = (
+    "Si usas la demo de voz, el audio de tu micrófono lo transcribe el navegador (en Chrome, con el servicio "
+    "de reconocimiento de voz de Google) y el texto de cada respuesta se envía a ElevenLabs para generar "
+    "la voz. No guardamos el audio."
+)
 
 
-def render(hotel: HotelData, ai_provider: str | None = None, ai_base_url: str = "", voice: bool = False) -> str:
+def render(
+    hotel: HotelData,
+    ai_provider: str | None = None,
+    ai_base_url: str = "",
+    voice: bool = False,
+    retention_days: int | None = None,
+) -> str:
     if not ai_provider:
         paragraph = AI_OFF
-    elif _is_local(ai_base_url):
+    elif is_local_url(ai_base_url):
         paragraph = AI_LOCAL.format(provider=ai_provider)
     else:
         paragraph = AI_ON.format(provider=ai_provider)
@@ -104,5 +113,6 @@ def render(hotel: HotelData, ai_provider: str | None = None, ai_base_url: str = 
         ai_paragraph=escape(paragraph),
         hotel=escape(hotel.hotel["name"]),
         contact=escape(hotel.privacy["responsible_contact"]),
-        retention=int(hotel.privacy["retention_days"]),
+        # La retención publicada es la misma que aplica la purga (una sola fuente de verdad).
+        retention=int(retention_days if retention_days is not None else hotel.privacy["retention_days"]),
     )
