@@ -4,7 +4,12 @@
   const panel = get('voice-demo');
   if (!panel) return;
   const config = window.COPILOTO_CONFIG || {};
-  const baseUrl = (config.copilotoUrl || 'http://localhost:8100').replace(/\/+$/, '');
+  const copilotoUrl = config.copilotoUrl || 'http://localhost:8100';
+  // demo.js carga antes y expone el resolutor de la demo: en una visita por LAN reescribe
+  // localhost al host de la página (con su protocolo) para que el panel de voz no apunte al
+  // propio equipo del visitante. Sin resolutor disponible, la URL cruda es el respaldo.
+  const resolver = window.resolveDemoUrl || (value => String(value));
+  const baseUrl = resolver(copilotoUrl).replace(/\/+$/, '');
   const sessionKey = 'bordeluz-demo-session';
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const log = get('voice-log');

@@ -42,7 +42,8 @@ class Element {
   removeAttribute(key) { delete this.attributes[key]; }
   addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn); }
   async emit(name) { if (this.disabled) return; for (const fn of this.listeners[name] || []) await fn({preventDefault() {}}); }
-  focus() {}
+  focus() { this.focusCalls = (this.focusCalls || 0) + 1; }
+  contains(node) { return this === node || this.children.some(child => child.contains(node)); }
   matches(selector) { return selector.startsWith('.') ? this.className.split(' ').includes(selector.slice(1)) : this.tagName === selector; }
   querySelectorAll(selector) {
     const parts = selector.split(' ');
@@ -53,7 +54,7 @@ class Element {
   querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
 }
 
-async function app(status = {}, responses = []) {
+async function app(status = {}, responses = [], options = {}) {
   const ids = new Map([...html.matchAll(/id="([^"]+)"/g)].map(([, id]) => [id, new Element()]));
   const get = id => ids.get(id);
   get('actions-panel').hidden = true;
@@ -68,12 +69,16 @@ async function app(status = {}, responses = []) {
   };
   // Skip decorative scrolling only; chat and all scenario handlers execute unchanged.
   ids.delete('topbar'); ids.delete('hero-stage');
+  const pendingTimers = [];
   const window = {
-    COPILOTO_CONFIG: {}, matchMedia: () => ({matches: true}), crypto: {randomUUID: () => '12345678-1234-1234-1234-123456789012'},
+    COPILOTO_CONFIG: options.config || {}, matchMedia: () => ({matches: !options.animate}), crypto: {randomUUID: () => '12345678-1234-1234-1234-123456789012'},
     sessionStorage: {getItem() {}, setItem() {}}, addEventListener() {},
-    setInterval() {}, setTimeout(fn, ms) { if (ms < 90000) queueMicrotask(fn); return 1; }, clearTimeout() {}
+    setInterval() {}, clearTimeout() {},
+    setTimeout: options.manualTimers ? (fn, ms) => { if (ms < 90000) pendingTimers.push(fn); return 1; }
+      : (fn, ms) => { if (ms < 90000) queueMicrotask(fn); return 1; }
   };
-  vm.runInNewContext(source, {window, document, Intl, Date, Uint8Array, AbortController,
+  vm.runInNewContext(source, {window, document, Intl, Date, Uint8Array, AbortController, URL,
+    location: options.location || {hostname: 'localhost', protocol: 'http:'},
     fetch: async (url, options) => {
       requests.push(url);
       const body = options.body && JSON.parse(options.body);
@@ -83,7 +88,9 @@ async function app(status = {}, responses = []) {
     }});
   const settle = async () => { for (let i = 0; i < 100; i++) await Promise.resolve(); };
   await settle();
-  return {get, scenarios, sent, requests, settle, scripts: () => document.body.querySelectorAll('script'),
+  return {get, scenarios, sent, requests, settle, document, window,
+    flushTimers: () => { while (pendingTimers.length) pendingTimers.shift()(); },
+    scripts: () => document.body.querySelectorAll('script'),
     async send(text) { get('message-input').value = text; await get('chat-form').emit('submit'); await settle(); }};
 }
 
@@ -172,4 +179,85 @@ test('existing availability results, booking tickets and optional trace remain u
   assert.equal(ui.get('actions-panel').hidden, false);
   assert.match(ui.get('toggle-actions').textContent, /Ocultar acciones/);
   assert.equal(ui.scripts().length, 0, 'Chatwoot SDK stays unloaded during simulator use');
+});
+
+test('chatwoot sdk gets the resolved base url, normalized without a trailing slash', async () => {
+  const runArgs = [];
+  const ui = await app({}, [], {config: {websiteToken: 'tok', chatwootUrl: 'http://localhost:3000'},
+    location: {hostname: '192.168.1.50', protocol: 'https:'}});
+  const clicking = ui.get('open-chat').emit('click');
+  await ui.settle();
+  const script = ui.scripts()[0];
+  assert.equal(script.src, 'https://192.168.1.50:3000/packs/js/sdk.js');
+  ui.window.chatwootSDK = {run: args => runArgs.push({...args})};
+  script.onload();
+  await clicking;
+  assert.deepEqual(runArgs, [{websiteToken: 'tok', baseUrl: 'https://192.168.1.50:3000'}]);
+});
+
+test('focus returns to the composer when a keyboard-activated quick reply had it', async () => {
+  const ui = await app({}, [{reply: 'Hola', quick_replies: []}]);
+  const quickReply = ui.get('messages').querySelectorAll('button')[0];
+  ui.document.activeElement = quickReply;
+  await ui.send('hola');
+  assert.equal(ui.get('message-input').focusCalls, 1);
+  // Si el foco estaba fuera de la conversación, no se roba.
+  const other = await app({}, [{reply: 'Hola', quick_replies: []}]);
+  other.document.activeElement = other.get('open-chat');
+  await other.send('hola');
+  assert.equal(other.get('message-input').focusCalls, undefined);
+});
+
+test('the composer stays usable while the trace animates, but a second turn waits', async () => {
+  const ui = await app({}, [
+    {reply: 'primera', events: [{type: 'tool_call', name: 'get_hotel_info', ok: true, arguments: {}}]},
+    {reply: 'segunda', events: [], quick_replies: []}
+  ], {animate: true, manualTimers: true});
+  await ui.send('uno');
+  assert.equal(ui.get('message-input').disabled, false, 'la traza no bloquea el composer');
+  await ui.send('dos');
+  assert.deepEqual(ui.sent, ['uno'], 'no puede arrancar un turno simultáneo durante la traza');
+  ui.flushTimers();
+  await ui.settle();
+  assert.equal(ui.get('send').disabled, false, 'la traza terminó y se puede enviar de nuevo');
+  await ui.send('dos');
+  assert.deepEqual(ui.sent, ['uno', 'dos']);
+});
+
+test('confirming a proposal does not mark it expired', async () => {
+  const proposal = {type: 'booking_proposal', guest_name: 'Huésped Ficticio', room_name: 'Suite Jardín', room_code: 'suite',
+    checkin: '2027-03-15', checkout: '2027-03-18', nights: 3, adults: 2, children: 1, total_clp: 240000, simulated: true};
+  const ui = await app({}, [
+    {reply: 'Revisa la propuesta.', events: [proposal], quick_replies: []},
+    {reply: 'Reserva creada.', events: [{type: 'booking_created', booking_id: 9, room_name: 'Suite Jardín',
+      checkin: '2027-03-15', checkout: '2027-03-18', nights: 3, adults: 2, children: 1, total_clp: 240000}], quick_replies: []}
+  ]);
+  await ui.send('Mi nombre es Huésped Ficticio');
+  const confirmButtons = () => ui.get('messages').querySelectorAll('button')
+    .filter(el => el.textContent === 'Sí, confirmo la reserva');
+  assert.equal(confirmButtons().length, 1);
+  await confirmButtons()[0].emit('click');
+  await ui.settle();
+  assert.doesNotMatch(ui.get('messages').textContent, /Propuesta vencida/);
+  assert.equal(confirmButtons().length, 0, 'el botón se consume con la confirmación');
+});
+
+test('voice panel reuses the demo url resolver so a LAN visit reaches the copiloto', async () => {
+  const voice = readFileSync(new URL('../landing/voice.js', import.meta.url), 'utf8');
+
+  async function voiceRequests(resolver) {
+    const requests = [];
+    const ids = new Map([...html.matchAll(/id="([^"]+)"/g)].map(([, id]) => [id, new Element()]));
+    const window = {COPILOTO_CONFIG: {copilotoUrl: 'http://localhost:8100'},
+      sessionStorage: {getItem() {}, setItem() {}}, ...(resolver ? {resolveDemoUrl: resolver} : {})};
+    vm.runInNewContext(voice, {window, document: {getElementById: id => ids.get(id)},
+      fetch: async url => { requests.push(url); return {ok: true, json: async () => ({voice: false})}; }});
+    for (let i = 0; i < 100; i++) await Promise.resolve();
+    return requests[0];
+  }
+
+  assert.equal(await voiceRequests(value => String(value).replace('localhost', '192.168.1.50')),
+    'http://192.168.1.50:8100/api/demo/status');
+  // Sin resolutor disponible (demo.js no cargó), la URL cruda sigue siendo el respaldo.
+  assert.equal(await voiceRequests(null), 'http://localhost:8100/api/demo/status');
 });

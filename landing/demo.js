@@ -10,10 +10,17 @@
     try {
       const url = new URL(text);
       const local = host => host === 'localhost' || host === '127.0.0.1';
-      if (!local(location.hostname) && local(url.hostname)) url.hostname = location.hostname;
+      if (!local(location.hostname) && local(url.hostname)) {
+        url.hostname = location.hostname;
+        // Una página servida por https no puede llamar por http (contenido mixto activo): se
+        // refleja el protocolo de la página conservando el puerto.
+        url.protocol = location.protocol;
+      }
       return url.toString();
     } catch (_) { return text; }
   }
+  // voice.js carga después y reutiliza este resolutor: misma reescritura de host en la demo por LAN.
+  window.resolveDemoUrl = resolveUrl;
   const baseUrl = resolveUrl(copilotoUrl).replace(/\/+$/, '');
   // El aviso de privacidad es configurable (window.COPILOTO_CONFIG.privacyUrl);
   // por defecto vive junto al servicio copiloto.
@@ -36,6 +43,7 @@
   const clockLabel = () => timeFormat.format(new Date());
   let sessionId = readSession();
   let busy = false;
+  let tracing = false;
   let scenarioRunning = false;
   let scenarioVersion = 0;
   let cooldownUntil = 0;
@@ -43,6 +51,7 @@
   let lastAssistant = null;
   let pinned = true;
   let turns = 0;
+  const CONFIRMATION_TEXT = 'Sí, confirmo la reserva';
 
   function setConnectionLabel(text) {
     const label = get('connection-label');
@@ -76,8 +85,10 @@
   }
   function coolingDown() { return Date.now() < cooldownUntil; }
   function updateControls() {
-    const blocked = busy || scenarioRunning || coolingDown();
-    input.disabled = blocked;
+    const blocked = busy || tracing || scenarioRunning || coolingDown();
+    // La traza animando no bloquea el composer: el huésped puede escribir su próximo turno;
+    // solo se impide un turno simultáneo (envío, botones y sugerencias).
+    input.disabled = busy;
     get('send').disabled = blocked || !input.value.trim() || input.value.length > 400;
     get('reset').disabled = busy || scenarioRunning;
     document.querySelectorAll('[data-scenario]').forEach(button => {
@@ -359,6 +370,11 @@
     }
     proposalButton = null;
   }
+  function consumeProposal() {
+    // La confirmación ya fue enviada: el botón se retira sin anunciar la propuesta como vencida.
+    if (proposalButton) proposalButton.remove();
+    proposalButton = null;
+  }
   function showProposal(event) {
     invalidateProposal();
     const card = create('section', 'booking-proposal');
@@ -375,7 +391,7 @@
       button.type = 'button';
       button.addEventListener('click', () => {
         if (button !== proposalButton || button.disabled) return;
-        sendMessage('Sí, confirmo la reserva');
+        sendMessage(CONFIRMATION_TEXT);
       });
       proposalButton = button;
       card.append(create('p', '', 'Revisa todos los datos. El servidor vuelve a validar la propuesta, su vigencia y disponibilidad al confirmar.'), button);
@@ -419,14 +435,22 @@
     }
   }
   async function sendMessage(text, retry = false, guided = false) {
-    if (busy || coolingDown() || (scenarioRunning && !guided)) return false;
+    if (busy || tracing || coolingDown() || (scenarioRunning && !guided)) return false;
     const message = String(text).trim();
     if (!message || message.length > 400) return false;
-    invalidateProposal();
+    // La confirmación de la propia propuesta no la vence: la tarjeta debe seguir en pantalla
+    // mientras la reserva se crea; cualquier otro turno sí invalida la propuesta anterior.
+    const confirmingProposal = !retry && message === CONFIRMATION_TEXT;
+    if (!confirmingProposal) invalidateProposal();
+    // ¿El foco estaba en la conversación? Un botón de respuesta rápida activado por teclado se
+    // desmonta con clearSuggestions y el foco caería al body: se captura antes de limpiar.
+    const chatHadFocus = document.activeElement === input ||
+      Boolean(document.activeElement && messageList.contains && messageList.contains(document.activeElement));
     busy = true;
     clearChatError();
     clearSuggestions();
     if (!retry) addMessage('user', message);
+    if (confirmingProposal) consumeProposal();
     input.value = '';
     updateControls();
     let success = false;
@@ -440,6 +464,8 @@
       get('messages-left').textContent = `Mensajes restantes: ${data.usage?.messages_left ?? '—'}`;
       // La respuesta ya está en pantalla: se libera el composer antes de animar la traza.
       busy = false;
+      // La traza anima con su propia señal: impide un turno simultáneo sin bloquear el composer.
+      tracing = true;
       updateControls();
       await showEvents(data.events, guided ? scenarioVersion : null);
       success = true;
@@ -447,10 +473,11 @@
       showChatError(error.message || 'No se pudo enviar el mensaje. Reintenta.', () => sendMessage(message, true));
     } finally {
       busy = false;
+      tracing = false;
       updateControls();
       scrollToLatest();
-      // Solo se devuelve el foco si ya estaba en el composer: no se roba ni reabre el teclado móvil.
-      if (document.activeElement === input) input.focus({preventScroll:true});
+      // Se devuelve el foco al composer solo si estaba en la conversación: no se roba ni reabre el teclado móvil.
+      if (chatHadFocus) input.focus({preventScroll:true});
     }
     return success;
   }
@@ -590,7 +617,7 @@
     if (chatwootLoad) return chatwootLoad;
     const cfg = window.COPILOTO_CONFIG;
     if (!cfg || !cfg.websiteToken) return Promise.reject(new Error('sin token'));
-    const chatwootBase = resolveUrl(cfg.chatwootUrl || 'http://localhost:3000');
+    const chatwootBase = resolveUrl(cfg.chatwootUrl || 'http://localhost:3000').replace(/\/+$/, '');
     window.chatwootSettings = { locale: "es", position: "right", type: "expanded_bubble",
                                 launcherTitle: "Escribir a recepción", hideMessageBubble: true };
     chatwootLoad = new Promise((resolve, reject) => {
@@ -599,7 +626,7 @@
       script.async = true;
       script.onload = () => {
         try {
-          window.chatwootSDK.run({ websiteToken: cfg.websiteToken, baseUrl: cfg.chatwootUrl });
+          window.chatwootSDK.run({ websiteToken: cfg.websiteToken, baseUrl: chatwootBase });
           resolve();
         } catch (error) { chatwootLoad = null; reject(error); }
       };
