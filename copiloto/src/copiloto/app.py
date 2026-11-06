@@ -13,7 +13,7 @@ import weakref
 from collections import OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -227,17 +227,21 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
 
     def panel_identity(request: Request) -> str | None:
         """Quién mira el panel: sesión firmada por cookie, o el token del panel (app de Chatwoot)."""
+        if not settings.panel_token:
+            return None
         if _token_ok(settings.panel_token, request.headers.get("x-panel-token", "")):
             return "chatwoot"
         payload, _, signature = request.cookies.get(PANEL_COOKIE, "").partition(".")
         if not payload or not signature:
             return None
         expected = hmac.new(settings.panel_token.encode(), payload.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected):
+        if not hmac.compare_digest(signature.encode(), expected.encode()):
             return None
         try:
             data = json.loads(base64.urlsafe_b64decode(payload.encode()))
-            expires = int(data.get("e", 0))
+            if not isinstance(data, dict) or type(data.get("e")) is not int or not isinstance(data.get("n"), str):
+                return None
+            expires = data["e"]
         except (ValueError, TypeError):
             return None
         if expires < clock():
@@ -267,12 +271,15 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
             body = json.loads(await read_capped(request, 4096))
         except ValueError:
             return JSONResponse({"detail": "JSON inválido"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"detail": "JSON inválido"}, status_code=400)
         if not _token_ok(settings.panel_token, str(body.get("password") or "")):
             return JSONResponse({"detail": "Contraseña incorrecta"}, status_code=401)
         name = " ".join(str(body.get("name") or "recepción").split())[:40] or "recepción"
         response = JSONResponse({"name": name})
         response.set_cookie(PANEL_COOKIE, panel_session(name, int(clock()) + PANEL_SESSION_HOURS * 3600),
-                            max_age=PANEL_SESSION_HOURS * 3600, httponly=True, samesite="lax")
+                            max_age=PANEL_SESSION_HOURS * 3600, httponly=True, samesite="lax",
+                            secure=urlsplit(settings.public_url).scheme == "https")
         return response
 
     @app.post("/api/panel/logout", dependencies=limited)
@@ -390,8 +397,10 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
     async def demo_status():
         return {"ai_enabled": agent is not None, "mode": settings.ai_mode if agent is not None else "off",
                 "model": settings.llm_model if agent is not None else None,
-                "autonomous_booking": settings.autonomous_booking and agent is not None,
-                # La voz existe siempre que haya IA: sin ElevenLabs la responde el navegador (gratis)
+                "sandbox": settings.demo_sandbox_authorized,
+                "autonomous_booking": (settings.autonomous_booking and settings.demo_sandbox_authorized
+                                       and agent is not None),
+                # Browser speech remains available without paid TTS credentials.
                 "voice": agent is not None and settings.demo_enabled,
                 "tts": ("elevenlabs" if tts is not None else "piper" if piper is not None else "browser"),
                 "max_message_chars": DEMO_MAX_MESSAGE, "messages_per_session": settings.demo_messages_per_session,
@@ -406,11 +415,15 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         if not isinstance(message, str) or not message.strip() or len(message) > DEMO_MAX_MESSAGE:
             return demo_error(400, f"El mensaje debe tener entre 1 y {DEMO_MAX_MESSAGE} caracteres")
         # Texto y voz comparten la sesión: el turno completo (cupo, modelo, guardado) va de a uno por sesión
-        lock = session_locks.get(body["session_id"])
-        if lock is None:
-            lock = session_locks[body["session_id"]] = asyncio.Lock()
-        async with lock:
+        async with demo_session_lock(body["session_id"]):
             return await locked_demo_turn(body, message.strip(), voice)
+
+    def demo_session_lock(session_id: str) -> asyncio.Lock:
+        # Strong references from holders/waiters keep a shared lock alive; idle entries disappear.
+        lock = session_locks.get(session_id)
+        if lock is None:
+            lock = session_locks[session_id] = asyncio.Lock()
+        return lock
 
     async def locked_demo_turn(body: dict, message: str, voice: bool) -> dict | JSONResponse:
         session = ai_sessions.load(db, f"demo:{body['session_id']}", clock())
@@ -424,7 +437,8 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         reply, quick, mode, usage = "", [], "guided", {"llm_ms": 0, "tokens": None}
         if agent is not None:
             hooks = ToolHooks(conversation_id=None, in_shift=settings.in_shift(clock()),
-                              record=lambda kind, payload: record_demo_event(kind, payload))
+                              record=lambda kind, payload: record_demo_event(kind, payload),
+                              extra={"sandbox_only": True, "sandbox_authorized": settings.demo_sandbox_authorized})
             try:
                 result = await agent.respond(session, message, hooks, voice=voice)
                 reply, quick, mode, events = result.reply or "", result.quick_replies, "ai", result.events
@@ -516,7 +530,8 @@ def create_app(settings: Settings | None = None, chatwoot: ChatwootClient | None
         body = await demo_body(request)
         if isinstance(body, JSONResponse):
             return body
-        ai_sessions.delete(db, f"demo:{body['session_id']}")
+        async with demo_session_lock(body["session_id"]):
+            ai_sessions.delete(db, f"demo:{body['session_id']}")
         return {"status": "ok"}
 
     def record_demo_event(kind: str, payload: dict) -> None:

@@ -33,16 +33,17 @@
     <div class="hero-copy">
       <p class="eyebrow">Demo · Hotel Boutique Bordeluz</p>
       <h1>La recepción que <em>conversa, consulta y reserva.</em></h1>
-      <p class="subtitle">El huésped escribe por WhatsApp. El copiloto responde la ubicación y los servicios, verifica disponibilidad con el PMS y deja la reserva registrada, siempre marcada como demostración. Aquí puedes conversar con él y ver cada herramienta que usa.</p>
+      <p class="subtitle">Conversa aquí sobre la ubicación y los servicios del hotel. Con IA y permisos habilitados, consulta disponibilidad y revisa una propuesta antes de confirmar una reserva ficticia en el PMS simulado. Este simulador no usa WhatsApp; la bandeja de recepción tiene un canal separado.</p>
       <div class="actions">
         <a class="button primary" href="#demo">Probar la demo</a>
         <a class="button ghost" href="#como-funciona">Ver cómo funciona <span aria-hidden="true">↗</span></a>
       </div>
       <dl class="metrics">
-        <div><dt>4 herramientas</dt><dd>consultadas en vivo</dd></div>
-        <div><dt>1 reserva</dt><dd>de punta a punta</dd></div>
+        <div><dt>4 herramientas</dt><dd>según modo y permisos</dd></div>
+        <div><dt>1 reserva</dt><dd>ejemplo ilustrativo, no métrica</dd></div>
         <div><dt>100% ficticio</dt><dd>datos de demostración</dd></div>
       </dl>
+      <p class="small">La conversación, el tiempo y el comprobante de la ilustración son ejemplos, no resultados medidos.</p>
     </div>
 
     <div class="stage" id="hero-stage" aria-hidden="true">
@@ -60,7 +61,7 @@
           <div class="hero-composer"><span>Escribe tu mensaje…</span><b>↑</b></div>
         </div>
         <div class="chip chip-a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 21V9l8-6 8 6v12M9 21v-7h6v7M3 21h18"/></svg>get_hotel_info<em>✓</em></div>
-        <div class="ticket-float"><strong>Reserva #8213</strong><span>Doble con Jacuzzi · 3 noches</span><em>$186.000</em></div>
+        <div class="ticket-float"><strong>Ejemplo · reserva #8213</strong><span>Doble con Jacuzzi · 3 noches</span><em>$186.000</em></div>
       </div>
     </div>
   </div>
@@ -85,7 +86,7 @@
     <p class="section-intro">Simulador de conversación tipo WhatsApp: escribe como un huésped y el asistente responde desde el servidor real de la demo. No está conectado a un número de WhatsApp; el canal conectado a la bandeja de recepción está debajo del simulador.</p>
     <p id="ai-disclaimer" class="disclaimer" hidden>Demo con IA. Todo es ficticio: no escribas datos personales reales. Las reservas se crean en un PMS simulado.</p>
     <p id="capability" class="small" hidden></p>
-    <div id="guided-banner" class="notice" hidden>La IA no está configurada en este servidor: el asistente responde con el flujo guiado (sin IA).</div>
+    <div id="guided-banner" class="notice" hidden>Modo sin IA: respuestas guiadas sobre información del hotel, sin consultas al PMS ni creación de reservas.</div>
     <div id="status-error" class="notice error" hidden><span></span><button type="button">Reintentar</button></div>
 
     <div class="demo-stage">
@@ -121,8 +122,9 @@
           <p class="device-caption">Simulador tipo WhatsApp · la conversación corre contra el servidor de la demo, sin pasar por WhatsApp.</p>
           <div class="demo-toolbar">
             <button id="toggle-actions" class="text-button" type="button" aria-expanded="false" aria-controls="actions-panel">Ver acciones del asistente</button>
-            <button id="reset" class="text-button" type="button">↻ Reiniciar conversación</button>
+            <button id="reset" class="text-button" type="button" aria-describedby="reset-help">↻ Reiniciar historial</button>
           </div>
+          <p id="reset-help" class="small">Reinicia solo el historial de esta conversación; no elimina reservas del PMS ni conversaciones de Chatwoot.</p>
         </div>
 
         <aside id="actions-panel" class="thinking card" aria-labelledby="thinking-title" hidden>
@@ -138,7 +140,7 @@
               <li><b>Consulta la información del hotel</b><em>ubicación y servicios</em></li>
               <li><b>Verifica disponibilidad</b><em>fechas y tarifa</em></li>
               <li><b>Registra una reserva de demostración</b><em>en el PMS simulado</em></li>
-              <li><b>Pide ayuda a recepción</b><em>derivación a una persona</em></li>
+              <li><b>Simula una derivación</b><em>sin notificar a recepción</em></li>
             </ul>
             <p class="ghost-note">Cada turno agrega una tarjeta por acción; una reserva creada agrega su comprobante.</p>
           </div>
@@ -147,7 +149,7 @@
       </div>
       <div class="secondary-chat">
         <button id="open-chat" class="text-button" type="button">Probar en la bandeja real de recepción</button>
-        <p>Canal conectado: esta conversación sí llega a la bandeja de recepción (Chatwoot), aparte del simulador.</p>
+        <p>Canal separado: el widget envía mensajes a la bandeja de recepción (Chatwoot) si está configurado y conectado. No traslada el historial del simulador ni garantiza atención inmediata.</p>
         <p id="chat-status" class="small" role="status" aria-live="polite"></p>
       </div>
     </div>
@@ -156,12 +158,12 @@
       <div>
         <p class="eyebrow">Guion</p>
         <h3>Ver una demo guiada</h3>
-        <p>Los mensajes se envían uno a uno al asistente real de esta demo. Puedes detenerla cuando quieras.</p>
+        <p>Los guiones envían consultas al servidor de la demo, sin confirmar reservas. El de disponibilidad se detiene para que elijas una opción, escribas un nombre ficticio y revises la propuesta manualmente. Puedes detenerlos cuando quieras.</p>
       </div>
       <div class="scenario-buttons">
         <button type="button" data-scenario="info"><span aria-hidden="true">01</span>Consultar la ubicación y servicios</button>
-        <button type="button" data-scenario="booking" hidden><span aria-hidden="true">02</span>Reservar de punta a punta</button>
-        <button type="button" data-scenario="human"><span aria-hidden="true">03</span>Hablar con una persona</button>
+        <button type="button" data-scenario="booking" disabled><span aria-hidden="true">02</span>Consultar disponibilidad · requiere permisos</button>
+        <button type="button" data-scenario="human"><span aria-hidden="true">03</span>Simular derivación a recepción</button>
         <button type="button" id="cancel-scenario" hidden>Detener demo guiada</button>
       </div>
       <p id="scenario-status" role="status" aria-live="polite"></p>
@@ -209,21 +211,21 @@
       <article class="live-card" data-live="health">
         <div class="live-card-top"><span class="live-card-num">01</span><span class="live-dot" aria-hidden="true"></span></div>
         <h3>Estado del copiloto</h3>
-        <p>Comprueba que el servicio y su base de datos respondan antes de atender.</p>
+        <p>Comprueba el proceso y SQLite. No verifica la conexión con IA, PMS, Chatwoot, WhatsApp ni voz.</p>
         <button type="button" class="live-button">Consultar estado <span aria-hidden="true">→</span></button>
         <p class="live-result" role="status" aria-live="polite">Aún no consultado.</p>
       </article>
       <article class="live-card" data-live="status">
         <div class="live-card-top"><span class="live-card-num">02</span><span class="live-dot" aria-hidden="true"></span></div>
         <h3>Modelo y límites</h3>
-        <p>Qué modelo responde, si puede reservar solo y cuántos mensajes permite por sesión.</p>
+        <p>Modelo configurado, permiso efectivo para crear reservas simuladas y límite de mensajes por sesión.</p>
         <button type="button" class="live-button">Ver configuración <span aria-hidden="true">→</span></button>
         <p class="live-result" role="status" aria-live="polite">Aún no consultado.</p>
       </article>
       <article class="live-card" data-live="metrics">
         <div class="live-card-top"><span class="live-card-num">03</span><span class="live-dot" aria-hidden="true"></span></div>
-        <h3>Actividad simulada</h3>
-        <p>Respuestas de IA, reservas creadas y herramientas ejecutadas en los últimos días.</p>
+        <h3>Actividad registrada de la demo</h3>
+        <p>Contadores reales registrados en los últimos siete días: respuestas de IA, reservas de demostración y herramientas ejecutadas. No son métricas de huéspedes reales.</p>
         <button type="button" class="live-button">Leer métricas <span aria-hidden="true">→</span></button>
         <p class="live-result" role="status" aria-live="polite">Aún no consultado.</p>
       </article>
@@ -237,7 +239,7 @@
         <h2 id="cap-title">Cuatro acciones concretas</h2>
       </div>
     </div>
-    <p class="section-intro">El asistente consulta herramientas concretas para responder con datos del hotel y del PMS simulado. Eso reduce el riesgo de errores, pero no lo elimina: por eso recepción revisa antes de confirmar.</p>
+    <p class="section-intro">Las herramientas aportan datos del hotel y del PMS; reducen errores, pero la IA aún puede equivocarse. Revisa la propuesta antes de confirmar. La creación autónoma solo está disponible con permisos efectivos en el entorno simulado; en modo asistido y voz no se crean reservas autónomas.</p>
     <ul class="capabilities">
       <li class="capability">
         <span class="cap-index" aria-hidden="true">01</span>
@@ -257,14 +259,14 @@
         <span class="cap-index" aria-hidden="true">03</span>
         <span class="capability-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 3h14v18H5zM8 8h8m-8 5 3 3 5-6"/></svg></span>
         <h3>Crea la reserva</h3>
-        <p>Escribe la reserva en el PMS simulado y devuelve el número.</p>
+        <p>Con permisos habilitados, escribe en el PMS simulado después de mostrar la propuesta y recibir confirmación explícita.</p>
         <code>create_booking</code>
       </li>
       <li class="capability">
         <span class="cap-index" aria-hidden="true">04</span>
         <span class="capability-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 20v-2a6 6 0 0 1 12 0v2M10 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8 0 3 3-3 3m-2-3h5"/></svg></span>
         <h3>Deriva a recepción</h3>
-        <p>Cierra el caso con una persona cuando hace falta criterio humano.</p>
+        <p>Aquí simula la derivación, sin avisar al equipo. Para contactar a recepción, usa el widget separado de Chatwoot.</p>
         <code>handoff_to_human</code>
       </li>
     </ul>

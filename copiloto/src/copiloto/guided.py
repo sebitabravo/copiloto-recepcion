@@ -29,8 +29,10 @@ def guided_reply(hotel: HotelData, text: str) -> tuple[str, list[str]]:
         return (f"I don't have that information published. For details, contact reception: {_contact(hotel)}.",
                 ["¿Cómo llego?", "¿Tienen piscina?"])
     if any(term in plain for term in BOOKING_TERMS):
-        # Sin IA no se cotiza: se indica a quién escribir, sin mencionar la configuración del servidor
-        return (f"Para revisar disponibilidad y precios, escribe a recepción: {_contact(hotel)}.",
+        return ("Este flujo guiado no crea reservas ni consulta disponibilidad. "
+                f"Para revisar disponibilidad y precios, escribe a recepción: {_contact(hotel)}. "
+                "También puedes usar el widget separado de Chatwoot con el botón "
+                "«Probar en la bandeja real de recepción»; este simulador no notifica al equipo.",
                 ["¿Cómo llego?", "¿Tienen piscina?"])
     if plain in GREETINGS or any(plain.startswith(greeting + " ") for greeting in GREETINGS):
         return ("Puedo contarte sobre la ubicación, los servicios y las políticas del hotel. "

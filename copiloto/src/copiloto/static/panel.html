@@ -91,7 +91,11 @@
   const app = document.getElementById("app");
   const params = new URLSearchParams(location.search);
   let conversationId = params.get("conversation_id");
-  const panelToken = params.get("token") || "";
+  let bootstrapToken = params.get("token") || "";
+  if (params.has("token")) {
+    params.delete("token");
+    history.replaceState(null, "", location.pathname + (params.size ? `?${params}` : "") + location.hash);
+  }
   let snapshot = null;
   let skew = 0;
 
@@ -175,7 +179,7 @@
     app.querySelector(".back")?.addEventListener("click", () => {
       conversationId = null;
       snapshot = null;
-      history.replaceState(null, "", `?token=${encodeURIComponent(panelToken)}`);
+      history.replaceState(null, "", location.pathname);
       refresh();
     });
 
@@ -266,7 +270,7 @@
   };
 
   async function fetchJson(path, options = {}) {
-    const response = await fetch(path, { ...options, headers: { "X-Panel-Token": panelToken, ...(options.headers || {}) } });
+    const response = await fetch(path, { credentials: "same-origin", ...options });
     if (!response.ok) throw new Error(response.status);
     return response.json();
   }
@@ -309,6 +313,15 @@
 
   async function boot() {
     try {
+      if (bootstrapToken) {
+        const exchange = fetchJson("/api/panel/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "chatwoot", password: bootstrapToken }),
+        });
+        bootstrapToken = "";
+        await exchange;
+      }
       const session = await fetchJson("/api/panel/session");
       currentUser = session.name;
       refresh();
@@ -417,7 +430,7 @@
       button.append(name, state, meta);
       button.addEventListener("click", () => {
         conversationId = item.conversation_id;
-        history.replaceState(null, "", `?conversation_id=${item.conversation_id}&token=${encodeURIComponent(panelToken)}`);
+        history.replaceState(null, "", `?conversation_id=${encodeURIComponent(item.conversation_id)}`);
         refresh();
       });
       list.append(button);
@@ -426,12 +439,10 @@
   }
 
   async function refresh() {
+    if (!currentUser) return;
     if (!conversationId) return refreshQueue();
     try {
-      const response = await fetch(`/api/panel/${encodeURIComponent(conversationId)}`,
-                                   { headers: { "X-Panel-Token": panelToken } });
-      if (!response.ok) throw new Error(response.status);
-      snapshot = await response.json();
+      snapshot = await fetchJson(`/api/panel/${encodeURIComponent(conversationId)}`);
       skew = snapshot.now - Date.now() / 1000;
       if (document.getElementById("timer-card")) updateDetail();
       else render();

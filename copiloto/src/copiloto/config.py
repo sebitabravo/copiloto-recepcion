@@ -3,6 +3,7 @@
 import os
 from dataclasses import dataclass
 from datetime import datetime, time
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 
@@ -141,6 +142,19 @@ class Settings:
             raise ValueError("AI_MODE=full necesita PMS_STAFF_TOKEN para crear reservas en el PMS")
         if weak:
             raise ValueError("Secretos ausentes o demasiado cortos (mínimo 16 caracteres): " + ", ".join(weak))
+        public = urlsplit(self.public_url)
+        if self.env == "production" and not (
+            public.scheme == "https" and public.hostname
+            or public.scheme == "http" and public.hostname in ("localhost", "127.0.0.1")
+        ):
+            raise ValueError("COPILOTO_PUBLIC_URL necesita HTTPS fuera de localhost/127.0.0.1")
+
+    @property
+    def demo_sandbox_authorized(self) -> bool:
+        """Local demo allowlist, not proof that an arbitrary PMS is a sandbox."""
+        return (self.pms_adapter == "http" and self.pms_booking_path == "/api/v1/bookings"
+                and self.pms_url.rstrip("/") in {
+                    "http://pms-mock:8200", "http://localhost:8200", "http://127.0.0.1:8200"})
 
     @property
     def ai_active(self) -> bool:
