@@ -147,7 +147,7 @@ test('reset only clears chat history and preserves independent voice controls', 
   assert.equal(ui.get('messages').querySelectorAll('.user').length, 0);
   assert.match(html, /historial.*PMS/);
   for (const id of ['voice-demo', 'voice-start', 'voice-talk', 'voice-hangup', 'voice-form', 'voice-typed-input', 'voice-log']) assert.ok(ui.get(id), id);
-  assert.match(html, /src="voice.js" defer/);
+  assert.match(html, /src="voice\.js(?:\?v=[^"]+)?" defer/);
   assert.match(css, /\.voice-controls/);
   assert.doesNotMatch(css, /\n\s*nav a:not\(\.nav-cta\)/);
 });

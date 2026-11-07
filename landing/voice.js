@@ -211,6 +211,9 @@
     busy = true;
     setState('Conectando…');
     updateControls();
+    // El botón que tenía el foco se ocultó: se lleva el foco a colgar para no perderlo en el body.
+    const hangupButton = get('voice-hangup');
+    if (hangupButton) hangupButton.focus();
     try {
       const data = await request(`/api/demo/voice/greeting?lang=${currentLang()}`, undefined, controller);
       if (version === callVersion) {
@@ -237,6 +240,8 @@
     stopAudio();
     setState('Llamada terminada.');
     updateControls();
+    const startButton = get('voice-start');
+    if (startButton) startButton.focus();
   }
 
   get('voice-start').addEventListener('click', startCall);

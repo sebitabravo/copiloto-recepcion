@@ -17,7 +17,7 @@ Métricas de carga (portada / consola):
 | First Contentful Paint | 1,2 s | 1,2 s | < 2,0 s |
 | Largest Contentful Paint | 1,7 s | 2,0 s | < 2,5 s |
 | Total Blocking Time | 0 ms | 90 ms | < 200 ms |
-| Cumulative Layout Shift | 0 | 0,006 | < 0,1 |
+| Cumulative Layout Shift | 0 | 0,047 | < 0,1 |
 | Speed Index | 1,2 s | 1,2 s | < 2,5 s |
 
 Medición posterior al rediseño del simulador (piel WhatsApp y llamada dentro del teléfono); la
