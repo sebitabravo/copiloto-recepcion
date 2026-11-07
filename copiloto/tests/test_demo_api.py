@@ -231,3 +231,24 @@ def test_settings_enable_ai_only_with_a_key_and_full_needs_the_pms_token(ai_sett
     with pytest.raises(ValueError, match="PMS_STAFF_TOKEN"):
         replace(ai_settings, pms_staff_token="", webhook_secret="w" * 32, pms_events_secret="p" * 32,
                 panel_token="t" * 32, pseudonym_salt="s" * 32, chatwoot_bot_token="b" * 32).validate_runtime()
+
+
+def test_demo_ai_turn_trace_records_request_model_prompt_and_outcome(ai_settings, harness):
+    from copiloto.ai.prompts import PROMPT_VERSION
+
+    client = client_for(ai_settings, harness, FakeLlm([say("Si prefieres, te lo cuento: es sector Molco.")]))
+    chat(client, "¿cómo llego?")
+    payload = json.loads(harness.events("ai_reply", 0)[0]["payload"])
+    assert payload["outcome"] == "answered"
+    assert payload["request_id"] == f"demo:{SESSION}:1"
+    assert payload["model"] == "qwen2.5-7b-instruct" and payload["prompt_version"] == PROMPT_VERSION
+    assert "cómo llego" not in json.dumps(payload), "la traza no guarda texto del huésped"
+
+
+def test_demo_llm_outage_records_an_ai_fallback_event_with_closed_reason(ai_settings, harness):
+    client = client_for(ai_settings, harness, FakeLlm([LlmUnavailable("http 503")]))
+    assert chat(client, "¿cómo llego?").json()["mode"] == "guided"
+    fallback = json.loads(harness.events("ai_fallback", 0)[0]["payload"])
+    assert fallback["reason"] == "unavailable"
+    reply = json.loads(harness.events("ai_reply", 0)[0]["payload"])
+    assert reply["outcome"] == "fallback" and reply["request_id"] == f"demo:{SESSION}:1"

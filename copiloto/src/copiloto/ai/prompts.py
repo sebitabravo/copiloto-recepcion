@@ -1,4 +1,10 @@
-"""Prompt del sistema del asistente. Todo dato del hotel sale de las herramientas, no de la memoria del modelo."""
+"""Prompt del sistema del asistente. Todo dato del hotel sale de las herramientas, no de la memoria del modelo.
+
+`PROMPT_VERSION` se registra en cada evento `ai_reply` para poder comparar la conducta del modelo entre
+cambios del prompt; debe cambiar en la misma confirmación que altere el texto del sistema.
+"""
+
+PROMPT_VERSION = "2026-11.1"
 
 WEEKDAYS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 

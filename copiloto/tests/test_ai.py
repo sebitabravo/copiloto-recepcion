@@ -373,3 +373,50 @@ async def test_booking_a_room_that_is_not_among_the_offers_explains_the_alternat
     )
     assert not result.ok and result.data["error"] == "habitacion_no_ofrecida"
     assert result.data["opciones_vigentes"] == ["doble_sin_vista"] and h.pms.bookings == []
+
+
+async def test_ai_reply_trace_records_request_model_prompt_and_outcome(make_ai):
+    from copiloto.ai.prompts import PROMPT_VERSION
+
+    h, _ = make_ai([call("check_availability", **STAY), say("Tengo estas opciones desde $75.000 por noche.")])
+    await h.say("hola")
+    await h.say("2 adultos y un niño del 15 al 18 de noviembre")
+    payload = ai_events(h)[0]
+    assert payload["outcome"] == "answered"
+    assert payload["request_id"] == "cw:1:1", "request_id determinista de conversación y turno, sin PII"
+    assert payload["model"] == "qwen2.5-7b-instruct"
+    assert payload["prompt_version"] == PROMPT_VERSION
+    assert "niño del 15" not in json.dumps(payload), "la traza por turno nunca guarda texto del huésped"
+
+
+async def test_a_handoff_turn_is_traced_with_outcome_handoff(make_ai):
+    h, llm = make_ai([])
+    await h.say("hola")
+    await h.say("quiero hablar con una persona")
+    assert llm.calls == []
+    assert ai_events(h)[0]["outcome"] == "handoff"
+
+
+async def test_llm_outage_traces_outcome_fallback_and_an_event_with_closed_reason(make_ai):
+    from copiloto.ai.llm import LlmUnavailable
+
+    h, _ = make_ai([LlmUnavailable("http 503")])
+    await h.say("hola")
+    await h.say("quiero reservar")
+    fallbacks = [json.loads(e["payload"]) for e in h.events("ai_fallback")]
+    assert [f["reason"] for f in fallbacks] == ["unavailable"]
+    assert ai_events(h)[0]["outcome"] == "fallback"
+
+
+async def test_a_turn_over_the_deadline_traces_reason_timeout(make_ai, ai_settings):
+    import asyncio
+
+    class SlowLlm:
+        async def chat(self, *args, **kwargs):
+            await asyncio.sleep(5)
+
+    h, _ = make_ai([], replace(ai_settings, ai_turn_timeout_s=0.1))
+    h.core.agent.llm = SlowLlm()
+    await h.say("hola")
+    await h.say("quiero reservar")
+    assert [json.loads(e["payload"])["reason"] for e in h.events("ai_fallback")] == ["timeout"]

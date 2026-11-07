@@ -19,7 +19,8 @@ from urllib.parse import urlparse
 from copiloto import store
 from copiloto.ai import sessions as ai_sessions
 from copiloto.ai.agent import Agent
-from copiloto.ai.llm import LlmUnavailable
+from copiloto.ai.llm import LlmTimeout, LlmUnavailable
+from copiloto.ai.prompts import PROMPT_VERSION
 from copiloto.ai.tools import ToolHooks
 from copiloto.chatwoot import ChatwootClient
 from copiloto.config import Settings
@@ -810,22 +811,39 @@ class Copiloto:
             await self._handoff(ctx, "human_requested")
             return
         hooks = self._ai_hooks(ctx)
+        request_id = f"cw:{ctx.conversation_id}:{session.msg_count}"
+
+        def trace(outcome: str, result=None) -> None:
+            """Traza por turno del asistente; nunca guarda texto del huésped, fracase o no."""
+            record_event(
+                self.db,
+                ctx.conversation_id,
+                "ai_reply",
+                self.clock(),
+                {
+                    "latency_ms": result.llm_ms if result else 0,
+                    "tools": result.tools if result else [],
+                    "tokens": result.tokens if result else None,
+                    "request_id": request_id,
+                    "model": self.settings.llm_model,
+                    "prompt_version": PROMPT_VERSION,
+                    "outcome": outcome,
+                },
+            )
+
         try:
             result = await self.agent.respond(session, ctx.text, hooks)
-        except LlmUnavailable:
+        except LlmUnavailable as exc:
+            reason = "timeout" if isinstance(exc, LlmTimeout) else "unavailable"
             state.step = "menu"
             ai_sessions.save(self.db, session, ctx.now)
+            trace("fallback")
+            record_event(self.db, ctx.conversation_id, "ai_fallback", self.clock(), {"reason": reason})
             await self._say(ctx, "Mi asistente inteligente no está disponible ahora, así que sigo con el menú guiado.")
             await self._send_menu(ctx)
             return
         ai_sessions.save(self.db, session, ctx.now)
-        record_event(
-            self.db,
-            ctx.conversation_id,
-            "ai_reply",
-            self.clock(),
-            {"latency_ms": result.llm_ms, "tools": result.tools, "tokens": result.tokens},
-        )
+        trace("handoff" if result.handed_off or result.reply is None else "answered", result)
         for rule in result.guardrails:
             record_event(self.db, ctx.conversation_id, "ai_guardrail", self.clock(), {"rule": rule})
         if result.handed_off or result.reply is None:

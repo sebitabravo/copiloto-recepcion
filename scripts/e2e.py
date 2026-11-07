@@ -233,7 +233,30 @@ class Runner:
             self.verify_staff(case, guest, night=night)
 
     def metrics(self):
-        response = self.http.get(COPILOTO + "/metricas/data.json", params={"days": 1})
+        # /metricas exige sesión del panel: PANEL_TOKEN del entorno o la cookie de la sesión de demo.
+        token = os.environ.get("PANEL_TOKEN", "")
+        headers = {"X-Panel-Token": token} if token else {}
+        if not token:
+            session = self.http.post(COPILOTO + "/api/demo/session", content=b"")
+            if session.status_code != 204:
+                self.results.check(
+                    "metrics",
+                    "panel access",
+                    False,
+                    f"POST /api/demo/session returned HTTP {session.status_code}; "
+                    "define PANEL_TOKEN or enable the demo mode (DEMO_ENABLED=1)",
+                )
+                return
+        response = self.http.get(COPILOTO + "/metricas/data.json", params={"days": 1}, headers=headers)
+        if response.status_code == 401:
+            self.results.check(
+                "metrics",
+                "panel access",
+                False,
+                "/metricas requires credentials: define PANEL_TOKEN or enable the demo mode "
+                "(DEMO_ENABLED=1) so POST /api/demo/session yields the signed cookie",
+            )
+            return
         response.raise_for_status()
         data = response.json()
         for key, actual, minimum in (

@@ -184,3 +184,38 @@ setImmediate(() => {
     result = subprocess.run(["node", "-e", "const SCRIPT=" + json.dumps(script) + ";const VALID=" +
                              json.dumps(valid) + ";" + harness_js], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
+
+
+def test_metricas_requires_credentials(settings, harness):
+    """El panel de métricas muestra datos operativos: sin sesión ni token responde 401 (sin 403)."""
+    client = make_client(settings, harness)
+    assert client.get("/metricas").status_code == 401
+    assert client.get("/metricas/data.json").status_code == 401
+
+
+def test_metricas_accepts_panel_token(settings, harness):
+    client = make_client(settings, harness)
+    assert client.get("/metricas", headers={"X-Panel-Token": "panel-secret"}).status_code == 200
+    assert client.get("/metricas/data.json", headers={"X-Panel-Token": "panel-secret"}).status_code == 200
+    assert "cost_per_query_clp" in client.get("/metricas/data.json", headers={"X-Panel-Token": "panel-secret"}).json()
+
+
+def test_metricas_accepts_the_login_cookie(settings, harness):
+    client = make_client(settings, harness)
+    login(client)
+    assert client.get("/metricas").status_code == 200
+    assert client.get("/metricas/data.json").status_code == 200
+
+
+def test_metricas_accepts_the_demo_session_cookie(settings, harness):
+    """Los scripts locales obtienen acceso con POST /api/demo/session (demo activa) y reutilizan la cookie."""
+    client = make_client(settings, harness)
+    assert client.post("/api/demo/session").status_code == 204
+    assert client.get("/metricas").status_code == 200
+    assert client.get("/metricas/data.json").status_code == 200
+
+
+def test_metricas_without_signing_key_fails_closed(settings, harness):
+    client = make_client(replace(settings, panel_token=""), harness)
+    assert client.get("/metricas", headers={"X-Panel-Token": ""}).status_code == 401
+    assert client.get("/metricas/data.json", headers={"X-Panel-Token": ""}).status_code == 401

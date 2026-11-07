@@ -7,7 +7,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
-from copiloto.ai.llm import LlmClient, LlmUnavailable, parse_arguments
+from copiloto.ai.llm import LlmClient, LlmTimeout, parse_arguments
 from copiloto.ai.prompts import WEEKDAYS, build_system_prompt
 from copiloto.ai.sessions import AiSession
 from copiloto.ai.tools import LABELS, ToolHooks, ToolRunner, pending_proposal, tool_specs
@@ -217,13 +217,13 @@ class Agent:
         for step in range(MAX_STEPS):
             started = time.monotonic()
             if deadline <= started:
-                raise LlmUnavailable("plazo del turno agotado")
+                raise LlmTimeout("plazo del turno agotado")
             # No se usa tool_choice="required": llama.cpp lo ignora y el modelo tiende a narrar la llamada.
             try:
                 async with asyncio.timeout(max(deadline - started, 0)):
                     reply = await self.llm.chat(messages, specs, max_tokens=self.settings.llm_max_tokens)
             except TimeoutError:
-                raise LlmUnavailable("plazo del turno agotado") from None
+                raise LlmTimeout("plazo del turno agotado") from None
             result.llm_ms += int((time.monotonic() - started) * 1000)
             if reply.tokens is not None:
                 result.tokens = (result.tokens or 0) + reply.tokens

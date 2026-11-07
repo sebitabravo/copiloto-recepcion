@@ -14,7 +14,12 @@ Todas las métricas (`metrics.py`) salen de la tabla `events`. Convenciones de `
 - prebooking_created: {"prebooking_id": int}
 - prebooking_expired: {"prebooking_id": int}
 - booking_confirmed:  {"booking_id": int, "source": "personal" | "ia"}
-- ai_reply:           {"latency_ms": int, "tools": [str], "tokens": int | None}   # nunca guarda texto
+- ai_reply:           {"latency_ms": int, "tools": [str], "tokens": int | None,
+                       "request_id": str, "model": str, "prompt_version": str,
+                       "outcome": "answered" | "fallback" | "handoff" | "error"}
+                       # request_id determinista (conversación + turno, sin PII); nunca guarda texto
+- ai_fallback:        {"reason": "timeout" | "unavailable" | "invalid_output" | "guardrail"}
+                       # el turno se degradó al flujo guiado; siempre con un ai_reply outcome=fallback par
 - ai_booking:         {"booking_id": int}
 - ai_guardrail:       {"rule": str}      # la salida de la IA se corrigió (p. ej. confirmación sin reserva)
 
@@ -39,6 +44,7 @@ EVENT_KINDS = frozenset(
         "prebooking_expired",
         "booking_confirmed",
         "ai_reply",
+        "ai_fallback",
         "ai_booking",
         "ai_guardrail",
     }

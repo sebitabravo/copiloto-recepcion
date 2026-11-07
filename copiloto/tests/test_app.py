@@ -69,6 +69,7 @@ def test_panel_endpoints_and_static_pages(settings, harness):
     data = client.get("/api/panel/5", headers={"X-Panel-Token": settings.panel_token}).json()
     assert data["sla"]["red_s"] == 180 and data["prebooking"] is None
     assert "Aviso de privacidad" in client.get("/privacidad").text
+    client.post("/api/panel/login", json={"password": settings.panel_token})
     assert client.get("/metricas").status_code == 200
     assert "cost_per_query_clp" in client.get("/metricas/data.json?days=7").json()
     assert client.get("/health").json() == {"status": "ok"}

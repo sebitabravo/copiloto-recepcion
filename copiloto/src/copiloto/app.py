@@ -25,7 +25,8 @@ from starlette.middleware.gzip import GZipMiddleware
 from copiloto import privacy, store
 from copiloto.ai import sessions as ai_sessions
 from copiloto.ai.agent import Agent
-from copiloto.ai.llm import LlmClient, LlmUnavailable
+from copiloto.ai.llm import LlmClient, LlmTimeout, LlmUnavailable
+from copiloto.ai.prompts import PROMPT_VERSION
 from copiloto.ai.tools import ToolHooks
 from copiloto.chatwoot import ChatwootClient
 from copiloto.config import Settings, int_env
@@ -442,11 +443,16 @@ def create_app(
             return JSONResponse({"detail": "La nota está vacía"}, status_code=400)
 
     @app.get("/metricas", response_class=HTMLResponse, dependencies=limited)
-    async def metrics_page():
+    async def metrics_page(request: Request):
+        # Invariante 8: las métricas exponen el operación del piloto; sin sesión ni token, 401 (nunca 403).
+        if panel_identity(request) is None:
+            raise HTTPException(status_code=401, detail="Sesión del panel requerida")
         return (STATIC / "metricas.html").read_text(encoding="utf-8")
 
     @app.get("/metricas/data.json", dependencies=limited)
-    async def metrics_data(days: int = Query(default=7, ge=1, le=366)):
+    async def metrics_data(request: Request, days: int = Query(default=7, ge=1, le=366)):
+        if panel_identity(request) is None:
+            raise HTTPException(status_code=401, detail="Sesión del panel requerida")
         from copiloto.metrics import compute_metrics
 
         end = clock()
@@ -539,6 +545,23 @@ def create_app(
         session.msg_count += 1
         events: list[dict] = []
         reply, quick, mode, usage = "", [], "guided", {"llm_ms": 0, "tokens": None}
+        request_id = f"demo:{body['session_id']}:{session.msg_count}"
+
+        def trace(outcome: str, latency_ms: int = 0, tools: list | None = None, tokens: int | None = None) -> None:
+            """Traza por turno de la demo: sin texto del huésped, siempre etiquetada con su resultado."""
+            record_demo_event(
+                "ai_reply",
+                {
+                    "latency_ms": latency_ms,
+                    "tools": tools or [],
+                    "tokens": tokens,
+                    "request_id": request_id,
+                    "model": settings.llm_model,
+                    "prompt_version": PROMPT_VERSION,
+                    "outcome": outcome,
+                },
+            )
+
         if agent is not None:
             hooks = ToolHooks(
                 conversation_id=None,
@@ -550,14 +573,20 @@ def create_app(
                 result = await agent.respond(session, message, hooks, voice=voice)
                 reply, quick, mode, events = result.reply or "", result.quick_replies, "ai", result.events
                 usage = {"llm_ms": result.llm_ms, "tokens": result.tokens}
-                record_demo_event(
-                    "ai_reply", {"latency_ms": result.llm_ms, "tools": result.tools, "tokens": result.tokens}
+                trace(
+                    "handoff" if getattr(result, "handed_off", False) or result.reply is None else "answered",
+                    result.llm_ms,
+                    result.tools,
+                    result.tokens,
                 )
                 for rule in result.guardrails:
                     record_demo_event("ai_guardrail", {"rule": rule})
                 if result.booking:
                     record_demo_event("ai_booking", {"booking_id": result.booking["booking_id"]})
-            except LlmUnavailable:
+            except LlmUnavailable as exc:
+                reason = "timeout" if isinstance(exc, LlmTimeout) else "unavailable"
+                trace("fallback")
+                record_demo_event("ai_fallback", {"reason": reason})
                 events = [{"type": "fallback", "reason": "ia_no_disponible"}]
                 reply, quick = guided_reply(hotel, message)
         else:

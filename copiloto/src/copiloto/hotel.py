@@ -1,11 +1,37 @@
 """Datos del hotel (data/hotel.yaml) con acceso tipado y reconocimiento de FAQ por palabras clave."""
 
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 import yaml
 
 from copiloto.textutil import contains_word, normalize
+
+REVIEW_KEY = "revisar_antes_de"
+
+# Temas que sirve get_hotel_info y el bloque del que salen. Los bloques lista (rooms, services, faqs)
+# vencen si cualquiera de sus ítems venció: se falla cerrado, sin entregar la parte vigente.
+TOPIC_BLOCKS = {
+    "ubicacion": "location",
+    "habitaciones": "rooms",
+    "servicios": "services",
+    "politicas": "policies",
+    "promociones": "promotions",
+    "contacto": "hotel",
+    "faq": "faqs",
+}
+
+
+def _review_date(value) -> date | None:
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value.strip())
+        except ValueError:
+            return None
+    return None
 
 
 @dataclass(frozen=True)
@@ -48,6 +74,25 @@ class HotelData:
 
     def room(self, code: str) -> dict | None:
         return self._rooms_by_code.get(code)
+
+    def expired_on(self, topic: str, today: date) -> date | None:
+        """Fecha de revisión vencida del bloque que sirve `topic` (o de cualquier ítem suyo).
+
+        Devuelve None si el bloque no declara la fecha (datos antiguos: no se endurecen retroactivamente)
+        o si sigue vigente. La herramienta del asistente usa esto para fallar cerrado (invariante 5).
+        """
+        block = self.raw.get(TOPIC_BLOCKS.get(topic, ""))
+        if isinstance(block, dict):
+            expiry = _review_date(block.get(REVIEW_KEY))
+            return expiry if expiry and expiry < today else None
+        if isinstance(block, list):
+            past = [
+                d
+                for item in block
+                if isinstance(item, dict) and (d := _review_date(item.get(REVIEW_KEY))) and d < today
+            ]
+            return max(past) if past else None
+        return None
 
     def match_faq(self, text: str) -> Faq | None:
         """Devuelve la FAQ con más palabras clave presentes; en empate, la de la palabra más larga."""

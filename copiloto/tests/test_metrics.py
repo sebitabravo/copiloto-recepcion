@@ -210,3 +210,21 @@ def test_compliance_key_follows_the_configured_threshold(conn):
     result = compute(conn, {"sla_red_s": 240})
     assert result["commercial_answered_within_240"] == 1
     assert result["commercial_answered_within_180"] == 1, "la clave histórica se conserva como alias de compatibilidad"
+
+
+def test_ai_fallbacks_count_and_rate(conn):
+    add(conn, 1, "ai_reply", 1, latency_ms=1000, tools=[], request_id="cw:1:1", outcome="answered")
+    add(conn, 1, "ai_reply", 2, latency_ms=0, tools=[], request_id="cw:1:2", outcome="fallback")
+    add(conn, 1, "ai_fallback", 2, reason="timeout")
+    result = compute(conn)
+    assert result["ai_fallbacks"] == 1
+    assert result["ai_fallback_rate_pct"] == 50
+    assert result["ai_replies"] == 2
+    assert result["ai_latency_median_s"] == 1.0, "los turnos degradados no contaminan la latencia"
+
+
+def test_ai_fallbacks_without_replies_give_rate_none_and_legacy_traces_count(conn):
+    add(conn, 1, "ai_reply", 1, latency_ms=1000, tools=["check_availability"], tokens=300)
+    result = compute(conn)
+    assert result["ai_fallbacks"] == 0
+    assert result["ai_fallback_rate_pct"] == 0

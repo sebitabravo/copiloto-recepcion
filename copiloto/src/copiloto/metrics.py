@@ -39,7 +39,8 @@ def compute_metrics(conn: sqlite3.Connection, start: float, end: float, config) 
         elif kind == "inbound" and payload.get("greeting") is False:
             queries += 1
         elif kind == "ai_reply":
-            ai_latencies.append(payload.get("latency_ms", 0) / 1000)
+            if payload.get("outcome") != "fallback":
+                ai_latencies.append(payload.get("latency_ms", 0) / 1000)
             ai_tokens += payload.get("tokens") or 0
             for tool in payload.get("tools", []):
                 ai_tools[tool] = ai_tools.get(tool, 0) + 1
@@ -88,6 +89,9 @@ def compute_metrics(conn: sqlite3.Connection, start: float, end: float, config) 
         "fixed_monthly_clp": fixed_monthly_clp,
         "usage_m_clp": usage_m_clp,
         "ai_replies": counts["ai_reply"],
+        "ai_fallbacks": counts["ai_fallback"],
+        # Turnos de IA (respondidos o degradados) que terminaron en el menú guiado.
+        "ai_fallback_rate_pct": percentage(counts["ai_fallback"], counts["ai_reply"]),
         "ai_latency_median_s": median(ai_latencies) if ai_latencies else None,
         "ai_bookings": counts["ai_booking"],
         "ai_guardrail_hits": counts["ai_guardrail"],

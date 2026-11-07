@@ -17,6 +17,10 @@ class LlmUnavailable(Exception):
     """El LLM no respondió o devolvió algo inutilizable; el asistente debe degradar al flujo guiado."""
 
 
+class LlmTimeout(LlmUnavailable):
+    """El turno del agente excedió su plazo total; la traza lo distingue de una indisponibilidad."""
+
+
 @dataclass(frozen=True)
 class ToolCall:
     id: str

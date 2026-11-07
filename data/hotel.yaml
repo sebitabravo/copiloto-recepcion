@@ -11,6 +11,7 @@ hotel:
   capacity_guests: 70
   source: https://www.hotelbordeluz.cl/contacto
   status: verificado
+  revisar_antes_de: 2027-06-30
   conflicts:
     - field: address.km
       detail: "El sitio oficial dice Km 12.5; algunos agregadores dicen Km 2.5."
@@ -33,6 +34,7 @@ location:
     - {place: "Aeropuerto", distance: "98 km"}
   source: https://www.hotelbordeluz.cl/contacto
   status: verificado
+  revisar_antes_de: 2027-06-30
 
 shift:
   # Horario del turno humano de recepción. Configurable por entorno (SHIFT_START / SHIFT_END).
@@ -53,6 +55,7 @@ photos:
   rooms_url: https://www.hotelbordeluz.cl/habitaciones
   source: https://www.hotelbordeluz.cl/galeria
   status: verificado
+  revisar_antes_de: 2027-06-30
 
 policies:
   checkin: "15:00"
@@ -67,10 +70,12 @@ policies:
   payment_cards: "American Express, Visa y Mastercard."
   source: https://files-public-web.s3-us-west-2.amazonaws.com/24678/pos/117cc77f899be528dca9d6571de64472c9f0be20.pdf
   status: verificado
+  revisar_antes_de: 2027-06-30
 
 promotions:
   source: https://www.hotelbordeluz.cl/promociones
   status: verificado
+  revisar_antes_de: 2027-06-30
   items:
     - name: "3 días 2 noches para dos + 1 día Termas Trancura"
       price_clp: 99500
@@ -89,12 +94,14 @@ faqs:
     answer_en: "We have a heated pool, open all year and included in your stay."
     source: https://www.hotelbordeluz.cl/servicios
     status: verificado
+    revisar_antes_de: 2027-06-30
   - id: tinajas
     label: Tinajas calientes
     keywords: [tinaja, tinajas, jacuzzi, hidromasaje, agua caliente]
     answer: "Contamos con tinajas de agua caliente, para usar de día o de noche. Tienen un valor adicional que te confirma recepción."
     source: https://www.hotelbordeluz.cl/servicios
     status: verificado
+    revisar_antes_de: 2027-06-30
   - id: desayuno
     label: Desayuno
     keywords: [desayuno, desayunar, buffet, buffete, comida, comedor, breakfast]
@@ -102,6 +109,7 @@ faqs:
     answer_en: "All rooms include continental breakfast (buffet in high season), served in a dining room with a lake view."
     source: https://www.hotelbordeluz.cl/servicios
     status: verificado
+    revisar_antes_de: 2027-06-30
   - id: checkin
     label: Horarios de check-in y check-out
     keywords: [check-in, checkin, check in, check-out, checkout, check out, horario de ingreso, hora de llegada, hora de salida, a que hora]
@@ -109,30 +117,35 @@ faqs:
     answer_en: "Check-in is from 15:00 and check-out is until 12:00. Early check-in or late check-out depend on availability and have a cost."
     source: términos y condiciones (PDF del sitio)
     status: verificado
+    revisar_antes_de: 2027-06-30
   - id: cancelacion
     label: Cancelación
     keywords: [cancelar, cancelacion, cancelación, anular, penalidad, reembolso, devolucion]
     answer: "En temporada baja no hay penalidad si cancelas con 7 días o más; en temporada alta (15 dic - 1 mar), con 15 días o más. Después se cobran noches de penalidad. Recepción te detalla tu caso."
     source: términos y condiciones (PDF del sitio)
     status: verificado
+    revisar_antes_de: 2027-06-30
   - id: ninos
     label: Niños y camas adicionales
     keywords: [niño, niños, nino, ninos, bebe, bebé, cuna, cama adicional, hijos, familia]
     answer: "Menores de 2 años se alojan gratis en cuna y menores de 6 años gratis en las camas existentes, con desayuno. Un niño mayor o adulto extra en cama adicional cuesta $25.000 por noche. Las camas adicionales se piden y las confirma el hotel."
     source: términos y condiciones (PDF del sitio)
     status: verificado
+    revisar_antes_de: 2027-06-30
   - id: pago
     label: Pago y garantía
     keywords: [pago, pagar, tarjeta, abono, garantia, garantía, deposito, depósito, transferencia]
     answer: "La reserva se confirma con un abono del 50% y los datos de una tarjeta de crédito en garantía. Aceptamos American Express, Visa y Mastercard."
     source: términos y condiciones (PDF del sitio)
     status: verificado
+    revisar_antes_de: 2027-06-30
   - id: estadia_minima
     label: Estadía mínima
     keywords: [estadia minima, estadía mínima, minimo de noches, mínimo de noches, minimo noches]
     answer: "En temporada alta (segunda quincena de diciembre, enero, febrero y mitad de marzo) la estadía mínima es de 3 noches."
     source: términos y condiciones (PDF del sitio)
     status: verificado
+    revisar_antes_de: 2027-06-30
   - id: estacionamiento
     label: Estacionamiento
     keywords: [estacionamiento, parking, auto, vehiculo, vehículo, aparcar]
@@ -140,6 +153,7 @@ faqs:
     answer_en: "The rooms come with parking."
     source: https://www.hotelbordeluz.cl/habitaciones
     status: verificado
+    revisar_antes_de: 2027-06-30
   - id: wifi
     label: WiFi y climatización
     keywords: [wifi, wi-fi, internet, aire acondicionado, calefaccion, calefacción]
@@ -147,18 +161,21 @@ faqs:
     answer_en: "The rooms have WiFi, air conditioning and heating, a private en-suite bathroom and a TV."
     source: https://www.hotelbordeluz.cl/habitaciones
     status: verificado
+    revisar_antes_de: 2027-06-30
   - id: promociones
     label: Promociones
     keywords: [promocion, promoción, promociones, oferta, ofertas, paquete, termas, descuento]
     answer: "Hoy publicamos: 3 días 2 noches para dos + 1 día de Termas Trancura ($99.500), con Termas Montevivo ($94.500) y la Escapada Romántica ($140.000, hasta el 30-dic-2026). Recepción confirma vigencia y cupos."
     source: https://www.hotelbordeluz.cl/promociones
     status: verificado
+    revisar_antes_de: 2027-06-30
   - id: restaurante
     label: Restaurante
     keywords: [restaurante, restaurant, almuerzo, cena, domingo]
     answer: "Hay restaurante a pasos del hotel. Los días y horarios de atención los confirma recepción."
     source: https://www.hotelbordeluz.cl/contacto
     status: pendiente_validar
+    revisar_antes_de: 2027-06-30
     status_note: "Una reseña de 2025 indica restaurante cerrado los domingos; no confirmado por el hotel."
   - id: mascotas
     label: Mascotas
@@ -166,20 +183,22 @@ faqs:
     answer: "La política de mascotas no está publicada en nuestro sitio. Recepción te confirma si es posible."
     source: "No publicado en el sitio ni en los términos"
     status: pendiente_validar
+    revisar_antes_de: 2027-06-30
   - id: recepcion_horario
     label: Horario de recepción
     keywords: [recepcion 24, recepción 24, horario de recepcion, horario de recepción, atienden de noche]
     answer: "El equipo de recepción responde mensajes en su horario de turno. Si escribes fuera de horario, dejamos tu consulta registrada para que la vean al comenzar."
     source: "Conflicto: agregadores dicen recepción 24 h; entrevista E1 indica consultas nocturnas sin respuesta"
     status: pendiente_validar
+    revisar_antes_de: 2027-06-30
 
 services:
-  - {name: "Tinajas de agua caliente", note: "valor adicional"}
-  - {name: "Piscina temperada", note: "todo el año"}
-  - {name: "Desayuno continental", note: "buffet en temporada alta"}
-  - {name: "Comedor con vista al lago", note: ""}
-  - {name: "Estacionamiento", note: ""}
-  - {name: "WiFi", note: ""}
+  - {name: "Tinajas de agua caliente", note: "valor adicional", revisar_antes_de: 2027-06-30}
+  - {name: "Piscina temperada", note: "todo el año", revisar_antes_de: 2027-06-30}
+  - {name: "Desayuno continental", note: "buffet en temporada alta", revisar_antes_de: 2027-06-30}
+  - {name: "Comedor con vista al lago", note: "", revisar_antes_de: 2027-06-30}
+  - {name: "Estacionamiento", note: "", revisar_antes_de: 2027-06-30}
+  - {name: "WiFi", note: "", revisar_antes_de: 2027-06-30}
 
 rooms:
 - code: single_doble_vista_jardin
@@ -201,6 +220,7 @@ rooms:
     continental (buffet en temporada alta) y acceso a piscina temperada. Tinajas calientes disponibles
     con valor adicional. Reserva directo y disfruta tu pausa.
   source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  revisar_antes_de: 2027-06-30
   status: verificado
 - code: doble_terraza_vista_lago
   name: Habitación Doble Terraza Vista Lago
@@ -224,6 +244,7 @@ rooms:
     continental (buffet en temporada alta) y acceso a piscina temperada. Tinajas calientes disponibles
     con valor adicional. Reserva directo y disfruta el descanso boutique.
   source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  revisar_antes_de: 2027-06-30
   status: pendiente_validar
   status_note: El sitio publica 1 adulto + 1 niño para una habitación doble; confirmar capacidad real
     con recepción.
@@ -244,6 +265,7 @@ rooms:
     desayuno continental (buffet en temporada alta). Tinajas calientes disponibles con valor adicional.
     Reserva ahora y vive una estadía relajante.
   source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  revisar_antes_de: 2027-06-30
   status: verificado
 - code: doble_con_jacuzzi
   name: Habitación Doble con Jacuzzi
@@ -265,6 +287,7 @@ rooms:
     continental (buffet en temporada alta) y acceso a piscina temperada. Tinajas calientes con valor adicional.
     Reserva directo y vive una experiencia única.
   source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  revisar_antes_de: 2027-06-30
   status: verificado
 - code: triple_vista_interior_estacionamiento
   name: Habitación Triple Vista Interior Estacionamiento
@@ -282,6 +305,7 @@ rooms:
     continental (buffet en temporada alta) y acceso a piscina temperada. Tinajas con valor adicional.
     Reserva directo y descansa sin preocupaciones.
   source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  revisar_antes_de: 2027-06-30
   status: verificado
 - code: triple_vista_parcial_lago
   name: Habitación Triple Vista Parcial Lago
@@ -299,6 +323,7 @@ rooms:
     continental (buffet en temporada alta) y acceso a piscina temperada. Tinajas calientes con valor adicional.
     Reserva directo y asegura tu estadía.
   source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  revisar_antes_de: 2027-06-30
   status: verificado
 - code: triple_con_terraza_vista_al_lago
   name: Habitación Triple con terraza Vista al Lago
@@ -316,6 +341,7 @@ rooms:
     temporada alta) y acceso a piscina temperada. Tinajas calientes disponibles con valor adicional. Reserva
     ahora y disfruta la experiencia.
   source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  revisar_antes_de: 2027-06-30
   status: verificado
 - code: cuadruple_terraza_vista_al_lago
   name: Habitación Cuádruple Terraza Vista al Lago
@@ -335,6 +361,7 @@ rooms:
     alta) y acceso a piscina temperada. Tinajas calientes disponibles con valor adicional. Reserva directo
     y crea recuerdos.
   source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  revisar_antes_de: 2027-06-30
   status: verificado
 - code: cuadruple_vista_interior_estacionamiento
   name: Habitación Cuádruple Vista Interior Estacionamiento
@@ -354,6 +381,7 @@ rooms:
     (buffet en temporada alta) y acceso a piscina temperada. Tinajas calientes disponibles con valor adicional.
     Reserva directo y aprovecha tu estadía.
   source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  revisar_antes_de: 2027-06-30
   status: verificado
 - code: cuadruple_vista_parcial_lago
   name: Habitación Cuádruple Vista Parcial Lago
@@ -373,6 +401,7 @@ rooms:
     continental (buffet en temporada alta) y acceso a piscina temperada. Tinajas con valor adicional.
     Reserva ahora y disfruta en familia.
   source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  revisar_antes_de: 2027-06-30
   status: verificado
 - code: triple_con_vista_estacionamiento_entrada
   name: Habitación Triple Con Vista Estacionamiento Entrada Exterior
@@ -391,6 +420,7 @@ rooms:
     y acceso exterior independiente. Incluye desayuno continental y buffet en temporada alta, piscina
     temperada y cercanía a la playa a solo 35 metros. Tinajas calientes disponibles con valor adicional.
   source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  revisar_antes_de: 2027-06-30
   status: verificado
 - code: doble_sin_vista
   name: Habitación Doble Sin Vista
@@ -416,4 +446,5 @@ rooms:
     Incluye desayuno continental y buffet en temporada alta, acceso a piscina temperada y playa a solo
     35 metros. Tinajas calientes disponibles con valor adicional.
   source: https://www.hotelbordeluz.cl/habitaciones (scrapeado 2026-10-27)
+  revisar_antes_de: 2027-06-30
   status: verificado

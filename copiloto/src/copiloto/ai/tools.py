@@ -162,6 +162,17 @@ def _int(value: object) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
+def _as_text(value):
+    """El YAML carga fechas sin comillas como date: el payload para el modelo debe ser JSON plano."""
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {k: _as_text(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_as_text(v) for v in value]
+    return value
+
+
 class ToolRunner:
     def __init__(
         self,
@@ -194,6 +205,21 @@ class ToolRunner:
     async def _hotel_info(self, args: dict) -> ToolResult:
         topic = args.get("topic")
         hotel = self.hotel
+        # Invariante 5: un bloque con la fecha de revisión vencida no se entrega. El camino de «sin respuesta"
+        # es el ya conocido por el modelo: no inveta, ofrece derivar a recepción.
+        expired = hotel.expired_on(topic, self.today())
+        if expired is not None:
+            return ToolResult(
+                True,
+                {
+                    "sin_respuesta": True,
+                    "motivo": "datos_vencidos",
+                    "revisar_antes_de": expired.isoformat(),
+                    "instruccion": "Ese dato venció y hay que revisarlo con el hotel: no lo entregues y "
+                    "ofrece derivar a recepción.",
+                },
+                f"Información vencida desde {expired.isoformat()}: no verificada",
+            )
         if topic == "ubicacion":
             self.session.state["seen_location"] = True
             loc = hotel.location
@@ -225,7 +251,7 @@ class ToolRunner:
         elif topic == "servicios":
             data = {"servicios": hotel.raw["services"]}
         elif topic == "politicas":
-            data = {k: v for k, v in hotel.policies.items() if k not in ("source", "status")}
+            data = {k: v for k, v in hotel.policies.items() if k not in ("source", "status", "revisar_antes_de")}
         elif topic == "promociones":
             data = {"promociones": hotel.raw["promotions"]["items"], "nota": "Vigencia y cupos los confirma recepción."}
         elif topic == "contacto":
@@ -242,7 +268,7 @@ class ToolRunner:
                 }
         else:
             return ToolResult(False, {"error": "tema_invalido", "temas": TOPICS}, "Tema no reconocido")
-        return ToolResult(True, data, f"Información: {topic}")
+        return ToolResult(True, _as_text(data), f"Información: {topic}")
 
     # ---------- disponibilidad ----------
 
