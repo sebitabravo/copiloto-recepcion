@@ -17,6 +17,14 @@ def _parse_hhmm(value: str) -> time:
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 
+def int_env(env: dict[str, str], name: str, default: int) -> int:
+    """Entero opcional del entorno. Ausente o en blanco cuenta como «sin configurar»: el compose pasa
+    `${VAR:-}` para que las perillas documentadas existan aunque el .env no las defina, y un valor
+    vacío antes rompía int(""). No muta el entorno; app.py resuelve su respaldo con este mismo helper."""
+    raw = (env.get(name) or "").strip()
+    return int(raw) if raw else default
+
+
 @dataclass(frozen=True)
 class Settings:
     hotel_data_path: str = "../data/hotel.yaml"
@@ -132,8 +140,8 @@ class Settings:
             shift_end=env.get("SHIFT_END", cls.shift_end),
             fixed_monthly_clp=int(env.get("FIXED_MONTHLY_CLP", "90000")),
             usage_m_clp=int(env.get("USAGE_M_CLP", "0")),
-            prebooking_minutes=int(env.get("PREBOOKING_MINUTES", cls.prebooking_minutes)),
-            retention_days=int(env.get("RETENTION_DAYS", "90")),
+            prebooking_minutes=int_env(env, "PREBOOKING_MINUTES", cls.prebooking_minutes),
+            retention_days=int_env(env, "RETENTION_DAYS", cls.retention_days),
         )
 
     def validate_runtime(self) -> None:

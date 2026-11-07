@@ -86,3 +86,25 @@ def test_prebooking_minutes_is_read_from_the_environment(monkeypatch):
     assert Settings.from_env().prebooking_minutes == 15
     monkeypatch.setenv("PREBOOKING_MINUTES", "45")
     assert Settings.from_env().prebooking_minutes == 45
+
+
+@pytest.mark.parametrize("name,field,default", [
+    ("PREBOOKING_MINUTES", "prebooking_minutes", 15),
+    ("RETENTION_DAYS", "retention_days", 90),
+])
+def test_blank_knob_values_count_as_unconfigured(monkeypatch, name, field, default):
+    """El compose pasa `${VAR:-}`: la variable existe pero llega vacía cuando el .env no la define.
+    Un valor en blanco debe tratarse como ausente (por defecto documentado), no romper int("")."""
+    monkeypatch.setenv(name, "")
+    assert getattr(Settings.from_env(), field) == default
+    monkeypatch.setenv(name, "   ")
+    assert getattr(Settings.from_env(), field) == default
+
+
+@pytest.mark.parametrize("name,field,value,expected", [
+    ("PREBOOKING_MINUTES", "prebooking_minutes", " 30 ", 30),
+    ("RETENTION_DAYS", "retention_days", " 7 ", 7),
+])
+def test_knob_values_surrounding_whitespace_are_still_parsed(monkeypatch, name, field, value, expected):
+    monkeypatch.setenv(name, value)
+    assert getattr(Settings.from_env(), field) == expected

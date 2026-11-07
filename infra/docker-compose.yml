@@ -144,7 +144,7 @@ services:
       HOTEL_DATA_PATH: /app/data/hotel.yaml
       COPILOTO_DB_PATH: /var/lib/copiloto/copiloto.sqlite
       CHATWOOT_URL: http://chatwoot:3000
-      CHATWOOT_PUBLIC_URL: http://localhost:3000
+      CHATWOOT_PUBLIC_URL: ${CHATWOOT_PUBLIC_URL:-http://localhost:3000}
       COPILOTO_PUBLIC_URL: ${COPILOTO_PUBLIC_URL:-http://localhost:8100}
       PMS_URL: http://pms-mock:8200
       PMS_STAFF_URL: http://localhost:8200
@@ -172,6 +172,10 @@ services:
       SHIFT_START: ${SHIFT_START:-08:00}
       SHIFT_END: ${SHIFT_END:-22:00}
       FIXED_MONTHLY_CLP: ${FIXED_MONTHLY_CLP:-90000}
+      # Perillas documentadas (docs/consentimiento-y-retencion.md y docs/ia.md): en blanco cuentan como
+      # sin configurar y Settings usa sus valores por defecto (90 / 15).
+      RETENTION_DAYS: ${RETENTION_DAYS:-}
+      PREBOOKING_MINUTES: ${PREBOOKING_MINUTES:-}
     volumes:
       - ./data:/app/data:ro
       - copiloto_state:/var/lib/copiloto

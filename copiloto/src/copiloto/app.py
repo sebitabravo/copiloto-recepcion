@@ -28,7 +28,7 @@ from copiloto.ai.agent import Agent
 from copiloto.ai.llm import LlmClient, LlmUnavailable
 from copiloto.ai.tools import ToolHooks
 from copiloto.chatwoot import ChatwootClient
-from copiloto.config import Settings
+from copiloto.config import Settings, int_env
 from copiloto.events import connect, init_db, record_event
 from copiloto.flow import Copiloto
 from copiloto.guided import guided_reply
@@ -113,11 +113,8 @@ def create_app(
     # entorno (ya parseado por Settings.from_env) y el YAML del hotel es el último recurso.
     retention = settings.retention_days
     if retention == Settings.retention_days:
-        from_env = os.environ.get("RETENTION_DAYS")
-        try:
-            retention = int(from_env) if from_env is not None else int(hotel.privacy["retention_days"])
-        except (TypeError, ValueError):
-            retention = settings.retention_days
+        # Mismo helper que Settings: un valor en blanco (compose pasa `${VAR:-}`) cuenta como ausente.
+        retention = int_env(os.environ, "RETENTION_DAYS", int(hotel.privacy["retention_days"]))
     settings = replace(settings, retention_days=retention)
     if db is None:
         db = connect(settings.db_path)

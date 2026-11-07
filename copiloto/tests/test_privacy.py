@@ -8,6 +8,7 @@ from pathlib import Path
 
 from conftest import FakeChatwoot
 from copiloto.app import create_app
+from copiloto.config import Settings
 from copiloto.privacy import render
 from fastapi.testclient import TestClient
 
@@ -68,6 +69,25 @@ def test_privacy_notice_and_purge_share_one_retention_source(harness, tmp_path, 
         encoding="utf-8",
     )
     monkeypatch.delenv("RETENTION_DAYS", raising=False)
+    client, app = _demo_client(harness, custom)
+    assert app.state.settings.retention_days == 60
+    assert "60 días" in client.get("/privacidad").text
+
+
+def test_blank_retention_env_leaves_the_hotel_yaml_in_charge(harness, tmp_path, monkeypatch):
+    """El compose pasa `${RETENTION_DAYS:-}`: cuando el .env no la define, la variable llega en blanco
+    al contenedor y debe contar como ausente para que el YAML del hotel siga siendo la fuente."""
+    monkeypatch.setenv("RETENTION_DAYS", "   ")
+    # En el arranque del contenedor el orden es este: FSM desde el entorno, luego la resolución de
+    # retención relee el entorno; el blanco ya fue tratado como ausente.
+    assert Settings.from_env().retention_days == 90
+    custom = tmp_path / "hotel.yaml"
+    custom.write_text(
+        Path(harness.settings.hotel_data_path)
+        .read_text(encoding="utf-8")
+        .replace("retention_days: 90", "retention_days: 60"),
+        encoding="utf-8",
+    )
     client, app = _demo_client(harness, custom)
     assert app.state.settings.retention_days == 60
     assert "60 días" in client.get("/privacidad").text
