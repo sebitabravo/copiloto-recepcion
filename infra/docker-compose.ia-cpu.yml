@@ -1,0 +1,42 @@
+# Variante sin GPU del perfil de IA local: el mismo modelo en CPU, más lento pero con el mismo comportamiento.
+# Va encima de los otros dos archivos:
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.ia.yml -f infra/docker-compose.ia-cpu.yml up -d
+# `./scripts/demo.sh ia` la usa sola cuando Docker no ve una GPU NVIDIA.
+
+services:
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server-b12169
+    deploy: !reset null
+    command:
+      - -hf
+      - unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M
+      - --alias
+      - qwen3-4b-instruct-2507
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - -c
+      - "8192"
+      - --parallel
+      - "1"
+      - -t
+      - "8"
+      - --jinja
+      - --reasoning
+      - "off"
+      - --cache-reuse
+      - "256"
+      - --top-k
+      - "20"
+      - --top-p
+      - "0.8"
+      - --min-p
+      - "0"
+      - --no-webui
+
+  copiloto:
+    environment:
+      # En CPU un turno con herramientas tarda varias veces más que en GPU.
+      LLM_TIMEOUT_S: "120"
+      AI_TURN_TIMEOUT_S: "90"

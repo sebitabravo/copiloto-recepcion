@@ -34,7 +34,16 @@ check "Chatwoot $CHATWOOT" http_ok "$CHATWOOT/"
 
 echo "2) Modelo local en el puerto $MODEL_PORT"
 model_dead=0
-if ! curl -s -o /dev/null -m 2 "http://localhost:$MODEL_PORT/v1/models"; then
+if ! curl -s -o /dev/null -m 2 "http://localhost:$MODEL_PORT/v1/models" && ! command -v llama-server >/dev/null; then
+  # Sin llama-server en el host (el caso normal en Windows): el modelo va en Docker, en la GPU si la hay.
+  echo "  · no está arriba: levantando el modelo en Docker (scripts/demo.sh ia)"
+  model_log="$(mktemp "${TMPDIR:-/tmp}/local-model.XXXXXX.log")"
+  if ! "$ROOT/scripts/demo.sh" ia >"$model_log" 2>&1; then
+    printf '  \033[31m✗\033[0m scripts/demo.sh ia falló · log: %s\n' "$model_log"
+    model_dead=1
+    fail=$((fail + 1))
+  fi
+elif ! curl -s -o /dev/null -m 2 "http://localhost:$MODEL_PORT/v1/models"; then
   echo "  · no está arriba: levantando scripts/local-model.sh"
   model_log="$(mktemp "${TMPDIR:-/tmp}/local-model.XXXXXX.log")"
   nohup "$ROOT/scripts/local-model.sh" >"$model_log" 2>&1 &

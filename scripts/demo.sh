@@ -65,8 +65,17 @@ case "$cmd" in
   e2e) uv run --with httpx --with tzdata python scripts/e2e.py ;;
   smoke) ./scripts/smoke-docker.sh ;;
   ia)
-    compose_ia=(docker compose -f infra/docker-compose.yml -f infra/docker-compose.ia.yml --project-directory .)
-    echo "Levantando el modelo local (la primera vez descarga ~2 GB dentro de Docker)…"
+    compose_ia=(docker compose -f infra/docker-compose.yml -f infra/docker-compose.ia.yml)
+    # GPU NVIDIA visible para Docker: el modelo corre en ella. Si no, la variante CPU (LLM_GPU=0 la fuerza).
+    if [ "${LLM_GPU:-auto}" != 0 ] && MSYS_NO_PATHCONV=1 docker run --rm --gpus all --entrypoint /app/llama-server \
+        ghcr.io/ggml-org/llama.cpp:server-cuda-b12169 --list-devices 2>/dev/null | grep -q CUDA0; then
+      echo "GPU NVIDIA detectada: el modelo corre en la GPU."
+    else
+      compose_ia+=(-f infra/docker-compose.ia-cpu.yml)
+      echo "Sin GPU NVIDIA en Docker: el modelo corre en CPU (más lento)."
+    fi
+    compose_ia+=(--project-directory .)
+    echo "Levantando el modelo local (la primera vez descarga ~2,5 GB dentro de Docker)…"
     "${compose_ia[@]}" up -d llm
     ready=0
     for _ in $(seq 1 240); do
