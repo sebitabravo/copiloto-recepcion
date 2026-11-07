@@ -106,9 +106,10 @@ en `.env.runtime` (gitignored). Nunca las commitees.
    No lo guarda en almacenamiento del navegador ni lo agrega a enlaces posteriores. El primer acceso
    aún puede dejar esa URL inicial en logs del proxy: evita registrar query strings del panel y no compartas
    ese enlace. Solo se cargan datos del personal después del intercambio y la validación de sesión.
-   `/webhooks/*` verifican firma o secreto. **`/metricas*` no tiene autenticación** (solo contadores):
-   protégelo con login en el proxy. Expón sin login solo `/webhooks/*`, `/panel` (HTML estático) y
-   `/privacidad`.
+   `/webhooks/*` verifican firma o secreto. **`/metricas` y `/metricas/data.json` exigen la sesión del
+   panel o el header `X-Panel-Token`** (401 sin credenciales); con el modo demo encendido la consola abre
+   esa sesión y los scripts locales la obtienen por la misma vía o con `PANEL_TOKEN`. Expón sin login solo
+   `/webhooks/*`, `/panel` (HTML estático) y `/privacidad`.
 4. Cambia la URL del Dashboard App en Chatwoot (Configuración → Integraciones → Dashboard Apps) a la URL
    pública del panel, y `PMS_STAFF_URL` a la del PMS.
 5. Respalda con `make backup` (Chatwoot y las bases SQLite; ver `docs/whatsapp-demo.md` para el canal de WhatsApp).

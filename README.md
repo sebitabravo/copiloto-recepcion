@@ -153,8 +153,9 @@ Quedan **pendientes de validar con el hotel**: Km 12.5 vs 2.5 de la dirección, 
   recepción confirma (`AI_MODE=assisted`, el valor por defecto, coherente con EVA2); `AI_MODE=full` agrega la
   reserva automática en el PMS simulado, solo como demostración técnica. Sin key funciona con el flujo guiado. Ver [asistente con IA](docs/ia.md). Para correrlo con un modelo
   local sin costo, ver [IA local](docs/ia-local.md).
-- Las métricas (solo contadores) no tienen autenticación propia: en un servidor, publícalas detrás de un
-  proxy con login (ver [despliegue](docs/despliegue.md)).
+- Las métricas exigen la misma sesión firmada del panel o el `PANEL_TOKEN` (header `X-Panel-Token`); con el
+  modo demo activo, la consola abre la sesión sola. En un servidor, mantenlas detrás del proxy con login
+  (ver [despliegue](docs/despliegue.md)).
 - El procesamiento de mensajes es *a lo más una vez*: no hay duplicados, pero si Chatwoot cae justo mientras
   el bot responde, ese mensaje no se reintenta (la conversación queda pendiente). Una cola durable queda para
   la fase real.

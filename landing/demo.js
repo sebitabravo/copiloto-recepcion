@@ -176,11 +176,11 @@
     updateControls();
   }
 
-  async function request(path, body) {
+  async function request(path, body, extra = {}) {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 90000);
     try {
-      const options = {method:body === undefined ? 'GET' : 'POST', credentials:'omit',
+      const options = {method:body === undefined ? 'GET' : 'POST', credentials:extra.credentials || 'omit',
         cache:'no-store', signal:controller.signal};
       if (body !== undefined) {
         options.headers = {'Content-Type':'application/json'};
@@ -724,6 +724,8 @@
     },
     metrics: {
       path: '/metricas/data.json?days=7',
+      // Las métricas exigen sesión del panel: la consola la obtuvo con el modo demo.
+      credentials: 'include',
       describe: data => {
         // ai_tools llega como {herramienta: veces}; se muestra el total y la más usada.
         const tools = Object.entries(data.ai_tools || {}).sort((a, b) => b[1] - a[1]);
@@ -746,7 +748,7 @@
       result.textContent = 'Consultando…';
       const started = performance.now();
       try {
-        const data = await request(spec.path);
+        const data = await request(spec.path, undefined, {credentials: spec.credentials});
         result.textContent = spec.describe(data, Math.round(performance.now() - started));
         card.classList.add('is-ok');
       } catch (error) {
