@@ -18,6 +18,8 @@ Uso: ./scripts/demo.sh <comando>
   test    Tests de copiloto, pms_mock, pms_bridge y wa_bridge
   e2e     4 casos reales contra el stack levantado
   smoke   Construye las imágenes y comprueba que arrancan
+  ia      Levanta el modelo local en Docker y reconecta el copiloto con IA
+  ia-off  Apaga el modelo y deja el copiloto en modo guiado
   down    Detiene el stack (conserva los datos)
   reset   BORRA los volúmenes y los archivos generados
 TXT
@@ -62,6 +64,30 @@ case "$cmd" in
     ;;
   e2e) uv run --with httpx --with tzdata python scripts/e2e.py ;;
   smoke) ./scripts/smoke-docker.sh ;;
+  ia)
+    compose_ia=(docker compose -f infra/docker-compose.yml -f infra/docker-compose.ia.yml --project-directory .)
+    echo "Levantando el modelo local (la primera vez descarga ~2 GB dentro de Docker)…"
+    "${compose_ia[@]}" up -d llm
+    ready=0
+    for _ in $(seq 1 240); do
+      if curl -fsS -o /dev/null http://localhost:11434/health 2>/dev/null; then ready=1; break; fi
+      sleep 5
+    done
+    if [ "$ready" != 1 ]; then
+      echo "El modelo no respondió. Revisa: docker compose -f infra/docker-compose.yml -f infra/docker-compose.ia.yml logs llm" >&2
+      exit 1
+    fi
+    echo "Modelo listo. Reconectando el copiloto con IA…"
+    "${compose_ia[@]}" up -d --force-recreate copiloto
+    ./scripts/wait-healthy.sh
+    curl -s http://localhost:8100/api/demo/status; echo
+    ;;
+  ia-off)
+    docker compose -f infra/docker-compose.yml -f infra/docker-compose.ia.yml --project-directory . stop llm >/dev/null 2>&1 || true
+    "${COMPOSE[@]}" up -d --force-recreate copiloto
+    ./scripts/wait-healthy.sh
+    curl -s http://localhost:8100/api/demo/status; echo
+    ;;
   down)
     confirm "Esto detiene el stack (los datos se conservan). ¿Seguir?"
     "${COMPOSE[@]}" down

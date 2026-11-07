@@ -1,0 +1,41 @@
+# Perfil de IA local para la demo: servidor llama.cpp con un modelo pequeño, sin API pagada.
+# Se combina con el compose base:
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.ia.yml up -d
+# El modelo se descarga la primera vez dentro del volumen `llm_models` (~2 GB).
+
+services:
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    command:
+      - -hf
+      - Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M
+      - --alias
+      - qwen2.5-3b-instruct
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - -c
+      - "8192"
+      - --no-webui
+      - -t
+      - "8"
+    environment:
+      LLAMA_CACHE: /models
+    volumes:
+      - llm_models:/models
+    ports:
+      - "127.0.0.1:11434:8080"
+    restart: unless-stopped
+
+  copiloto:
+    environment:
+      # Basta una clave no vacía: el servidor local no la valida, el copiloto la exige para activar la IA.
+      LLM_API_KEY: local
+      LLM_BASE_URL: http://llm:8080/v1
+      LLM_MODEL: qwen2.5-3b-instruct
+      LLM_TIMEOUT_S: "120"
+      AI_TURN_TIMEOUT_S: "90"
+
+volumes:
+  llm_models:

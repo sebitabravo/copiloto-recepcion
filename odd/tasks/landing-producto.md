@@ -100,3 +100,29 @@ L9 (decisión de diseño, sin credenciales en el navegador):
       no se crea sesión ni se ofrecen accesos automáticos.
     - La consola de demo (L7) usa esas dos vías: pestaña Recepción con la sesión demo, pestaña Admin con el
       PMS en modo demo. Sin tokens en JS ni en `config.js`.
+
+L10 (usuario, revisión de diseño):
+    "revisa el diseno de la demo ... no respeta el diseno estricto y bien elaborado de un disenador grafico y
+    alguien experto en ux/ui ya que hay cosas que estan muy juntas no tienen sentido y se ve feo"
+    "el celular no se parece al diseno que tiene whassap la idea es que sea el simulador de un whassap
+    tambien la idea es tener el boton de llamada ya que tenemos la opcion de que se pueda llamar al bot y que
+    te hable en vez de solo escribirle entonces esa funcionalidad igual hay que dejarla bien y fina"
+
+L11 (diagnóstico medido, 1440 px):
+    - El hero compacto y la sección `#demo` repiten título (dos h2 para lo mismo) y entre las pestañas y el
+      teléfono hay 240 px de texto (heading 86 + intro 101 + aviso 54).
+    - `.demo-grid` es de una columna de 520 px con `#actions-panel` oculto: el teléfono queda centrado en un
+      card de 1.062 px con 271 px vacíos a cada lado, y la traza de herramientas (lo mejor del producto) no
+      se ve sin hacer clic.
+    - El bloque de guiones (235 px) y la tarjeta de voz son secciones apiladas más, con su propio eyebrow/h3.
+    - El teléfono no imita WhatsApp: sin iconos de llamada/video/menú, sin colita en las burbujas, sin
+      separador de día, composer sin emoji/adjuntar/cámara.
+L12 (decisión de diseño):
+    - Consola de dos columnas en escritorio: teléfono 340-400 px + acciones visibles por defecto; una sola
+      franja compacta de título, sin intro larga.
+    - Piel WhatsApp fiel con los tokens `--wa-*` ya existentes (cabecera 56 px con avatar, estado y acciones;
+      burbujas con colita y marcas; separador HOY; composer con emoji, adjuntar, cámara y botón verde).
+    - **Llamada dentro del teléfono**: el icono de llamada abre una pantalla de llamada (fondo oscuro, avatar,
+      estado, cronómetro, transcripción y colgar) que usa el flujo de voz existente. Si el navegador no
+      soporta reconocimiento, la misma pantalla ofrece el modo escrito. Sin audio real en la demo de escritorio,
+      la pantalla debe verse y funcionar igual.
