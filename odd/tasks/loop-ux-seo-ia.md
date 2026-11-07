@@ -223,3 +223,16 @@ L15 (T10, verificación final): `copiloto` 403 pruebas, `pms_mock` 47, `node --t
     errores de consola ni desbordes en `/`, `/demo` (tres pestañas y llamada), `/panel`, `/metricas`,
     `/privacidad` y PMS. Capturas de `docs/img` regeneradas con el diseño nuevo. Commits por unidad de trabajo
     en `refactor/ux-logic-cleanup`.
+
+L16 (revisión nativa y cierre): `assess` sobre el rango de commits dio `nativeRisk: high` con
+    `reviewDue: true` (item 5: procesos de shell en `scripts/demo.sh`). El START del rango completo
+    (130 rutas, ~8.500 líneas) falló en preflight con `lens_context_budget_exceeded`, sin crear
+    autoridad: se reencuadró a la rebanada de IA local (`afd214c..HEAD`, 8 rutas, 512 líneas) con dos
+    lentes; ahí la autoridad se creó (`review-2c2c6d4fcee27224`, tier high, budget 200) y el STATUS
+    pidió las dos lentes. El relay del revisor no corre: cuota del modelo agotada («resets 5:50 a. m.,
+    America/Santiago»), y el STATUS sigue ofreciendo los dos slots intactos para capturarlos cuando
+    haya cuota. No se reintenta ni se inventa un veredicto;queda como decisión pendiente.
+    Hallazgo de la verificación final: `scripts/e2e.py` recreaba `copiloto` solo con el compose base y
+    apagaba la IA sin avisar (después de correr e2e la demo quedaba en modo guiado). Ahora detecta la
+    etiqueta del servicio `llm` en Docker y mantiene el overlay de IA; e2e sigue en verde y
+    `/api/demo/status` queda con `ai_enabled: true`.

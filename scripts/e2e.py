@@ -23,6 +23,18 @@ CHECKIN = date.today() + timedelta(days=150)
 CHECKOUT = CHECKIN + timedelta(days=3)
 
 
+def local_llm_running() -> bool:
+    """¿El perfil de IA local está corriendo? Se pregunta a Docker por la etiqueta del servicio `llm`."""
+    try:
+        out = subprocess.run(
+            ["docker", "ps", "--filter", "label=com.docker.compose.service=llm", "--format", "{{.ID}}"],
+            capture_output=True, timeout=20,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return out.returncode == 0 and bool(out.stdout.strip())
+
+
 def read_runtime():
     values = {}
     for raw in (ROOT / ".env.runtime").read_text(encoding="utf-8").splitlines():
@@ -96,11 +108,15 @@ class Runner:
         environment.pop("SHIFT_END", None)
         environment.update(overrides)
         environment["COMPOSE_PROJECT_NAME"] = "copiloto"
+        # Con el modelo local levantado, el overlay de IA tiene que seguir en juego: sin él el
+        # copiloto vuelve en modo guiado y la demo queda muda para el resto del día.
+        files = ["-f", "infra/docker-compose.yml"]
+        if local_llm_running():
+            files += ["-f", "infra/docker-compose.ia.yml"]
         command = [
             "docker",
             "compose",
-            "-f",
-            "infra/docker-compose.yml",
+            *files,
             "--project-directory",
             ".",
             "up",
