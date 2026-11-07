@@ -1258,7 +1258,6 @@ textarea::placeholder { color: var(--wa-muted); }
   padding: 10px 13px;
   border: 1px dashed var(--line);
   border-radius: 11px;
-  opacity: .8;
 }
 
 .ghost-trace b {

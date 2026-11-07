@@ -15,10 +15,13 @@ Métricas de carga (portada / consola):
 | Métrica | Portada | Consola | Presupuesto |
 | --- | --- | --- | --- |
 | First Contentful Paint | 1,2 s | 1,2 s | < 2,0 s |
-| Largest Contentful Paint | 1,7 s | 1,8 s | < 2,5 s |
+| Largest Contentful Paint | 1,7 s | 2,0 s | < 2,5 s |
 | Total Blocking Time | 0 ms | 90 ms | < 200 ms |
-| Cumulative Layout Shift | 0 | 0 | < 0,1 |
+| Cumulative Layout Shift | 0 | 0,006 | < 0,1 |
 | Speed Index | 1,2 s | 1,2 s | < 2,5 s |
+
+Medición posterior al rediseño del simulador (piel WhatsApp y llamada dentro del teléfono); la
+accesibilidad volvió a 100 al corregir el contraste de la cabecera y de la traza.
 
 Oportunidad abierta (portada): 244 ms de CSS bloqueante. Es el costo de servir una hoja sin build; se
 resuelve en la fase 2 del ADR (`docs/adr/0001-front-estatico.md`), no antes de la entrega.
@@ -57,7 +60,8 @@ No las cubre Lighthouse y se hacen en el navegador antes de una entrega:
 2. Consola, pestaña Huésped: escribir "hola" devuelve aviso de privacidad y ubicación.
 3. Consola, pestaña Recepción: con el modo demo encendido carga la cola real; apagado, muestra el camino manual.
 4. Consola, pestaña Admin: el PMS entra con `?demo=1` sin pedir token; métricas abre.
-5. Sin desbordes horizontales entre 380 y 1440 px (medido: 0 en los seis anchos).
+5. Sin desbordes horizontales entre 380 y 1440 px, y objetivos táctiles ≥ 44 px en la consola
+   (medido: 0 desbordes y 0 objetivos pequeños en 380/620/1000/1440).
 6. `prefers-reduced-motion`: sin animaciones.
 
 ## Deuda declarada
