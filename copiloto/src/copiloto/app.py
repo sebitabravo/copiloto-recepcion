@@ -209,6 +209,10 @@ def create_app(
         response = await call_next(request)
         # El panel lo enmarca Chatwoot (Dashboard App); el resto de las páginas no se puede enmarcar
         framing = chatwoot_origin if request.url.path == "/panel" else "'none'"
+        # Las vistas internas y la API no se indexan (C4); la portada y el aviso de privacidad sí
+        path = request.url.path
+        if path in ("/panel", "/metricas") or path.startswith(("/metricas/", "/api/")):
+            response.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "no-referrer")
         response.headers.setdefault(
@@ -466,6 +470,8 @@ def create_app(
             settings.llm_base_url,
             voice=tts is not None,
             retention_days=settings.retention_days,
+            # Fuera de la portada (:8100 directo) el enlace de vuelta tiene que abrir la portada real.
+            home_url=settings.landing_origin,
         )
 
     demo_ip_limiter = SlidingWindowLimiter(settings.demo_ip_per_min, clock=clock)

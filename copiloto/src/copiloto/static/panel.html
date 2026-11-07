@@ -3,18 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>Panel · Copiloto de Recepción</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%238d5a2b'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%23fff8ef' text-anchor='middle'%3EB%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/theme.css">
 <style>
   body { padding: 14px; }
-  .shell { max-width: 680px; margin: 0 auto; display: grid; gap: 10px; }
-  h1 { font-family: var(--font-body); font-size: 11px; margin: 0 0 10px; color: var(--muted);
-       font-weight: 600; letter-spacing: .09em; text-transform: uppercase; }
+  .shell { max-width: 680px; margin: 0 auto; display: grid; gap: 10px; align-content: start; }
+  /* Un solo título de página en serif; cada tarjeta lleva un epígrafe en mayúsculas. */
+  .eyebrow { font-family: var(--font-body); font-size: 11px; margin: 0 0 10px; color: var(--muted);
+             font-weight: 650; letter-spacing: .12em; text-transform: uppercase; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
           box-shadow: var(--shadow); }
   .topbar { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-  .brand { font-family: var(--font-display); font-size: 19px; margin: 0; color: var(--ink); }
+  .brand { font-family: var(--font-display); font-size: 22px; font-weight: 400; line-height: 1.15; margin: 0;
+           color: var(--ink); letter-spacing: -.01em; }
+  .login-card .brand { margin-bottom: 4px; }
+  .login-card .lead { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
   .who { color: var(--muted); font-size: 12px; margin: 0; }
   .timer { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
   .clock { font-size: 44px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1;
@@ -71,6 +76,21 @@
   .stat { display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
           border-bottom: 1px dashed var(--line); padding-bottom: 5px; }
   .stat dt { font-size: 12px; } .stat dd { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .span-all { grid-column: 1 / -1; }
+  /* Fuera de Chatwoot (pestaña propia) el panel usa el ancho: la barra lateral sigue compacta. */
+  .standalone body { padding: 32px 24px 48px; }
+  .standalone .shell { max-width: 1120px; gap: 14px; }
+  .standalone .shell.is-login { max-width: 420px; padding-top: 6vh; }
+  .standalone .brand { font-size: clamp(26px, 3vw, 34px); }
+  .standalone .card { padding: 20px; border-radius: 18px; }
+  @media (min-width: 1024px) {
+    .standalone .shell.is-queue { grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); align-items: start; }
+    .standalone .shell.is-queue > .queue-head { grid-column: 1 / -1; }
+    .standalone .shell.is-queue .stats { grid-template-columns: 1fr; }
+    .standalone .shell.is-detail { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+    .standalone .shell.is-detail > .back, .standalone .shell.is-detail > [aria-label="Notas del turno"] {
+      grid-column: 1 / -1; }
+  }
 </style>
 </head>
 <body>
@@ -89,6 +109,10 @@
 <script>
 (() => {
   const app = document.getElementById("app");
+  // Dentro del iframe de Chatwoot queda compacto; abierto en su propia pestaña, ancho y centrado.
+  const embedded = (() => { try { return window.self !== window.top; } catch (_) { return true; } })();
+  if (!embedded) document.documentElement?.classList.add("standalone");
+  const setView = (view) => { app.className = `shell is-${view}`; };
   const params = new URLSearchParams(location.search);
   let conversationId = params.get("conversation_id");
   let bootstrapToken = params.get("token") || "";
@@ -102,7 +126,7 @@
   const fmt = (seconds) => {
     const s = Math.max(0, Math.floor(seconds));
     // Pasada la hora, "1108:25" no dice nada: se muestra en horas y minutos.
-    if (s >= 3600) return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
+    if (s >= 3600) return `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`;
     return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
   };
   const esc = (value) => String(value ?? "—").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -110,6 +134,12 @@
   const fmtDate = (iso) => {
     const [y, m, d] = String(iso ?? "").split("-");
     return y && m && d ? `${d}/${m}/${y}` : String(iso ?? "—");
+  };
+  // Chatwoot nombra al visitante anónimo del widget como "cool-mountain-791": se muestra legible.
+  const displayName = (name, id) => {
+    const anonymous = /^[a-z]+-[a-z]+-(\d+)$/.exec(String(name ?? "").trim());
+    if (anonymous) return `Visitante web · ${anonymous[1]}`;
+    return name || (id != null ? `Conversación ${id}` : null);
   };
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const money = (n) => "$" + Number(n).toLocaleString("es-CL");
@@ -141,10 +171,11 @@
     const preText = !pre ? "Sin pre-reserva" :
       pre.status === "active" ? `Activa · vence en ${fmt(pre.expires_at - now)}` :
       ({expired: "Vencida (no tocó el PMS)", converted: "Cerrada en el PMS", superseded: "Reemplazada"}[pre.status] || pre.status);
+    setView("detail");
     app.innerHTML = `
       <button class="back" type="button">← Cola de recepción</button>
       <section id="timer-card" class="card rise ${t.css === "state-bad" && !s.sla.stopped_at ? "is-late" : ""}" aria-label="Cronómetro">
-        <h1>Respuesta a tiempo</h1>
+        <h2 class="eyebrow">Respuesta a tiempo</h2>
         <div class="timer">
           <span id="timer-clock" class="clock ${t.css}">${t.text}</span>
           <span class="goal">meta ${fmt(s.sla.red_s)}</span>
@@ -154,9 +185,9 @@
           <span id="timer-bar" style="width:${t.pct}%; background:${color}"></span></div>
       </section>
       <section class="card rise" style="--i:1" aria-label="Pre-información">
-        <h1>Pre-información lista</h1>
+        <h2 class="eyebrow">Pre-información lista</h2>
         <dl>
-          <dt>Contacto</dt><dd id="f-contact">${esc(s.contact_name)}</dd>
+          <dt>Contacto</dt><dd id="f-contact">${esc(displayName(s.contact_name))}</dd>
           <dt>Fechas</dt><dd id="f-stay">${esc(stay)}</dd>
           <dt>Huéspedes</dt><dd id="f-guests">${esc(guests)}</dd>
           <dt>Habitación</dt><dd id="f-room">${esc(s.room_name || (d.checkin ? "A definir por recepción" : null))}</dd>
@@ -168,7 +199,7 @@
         <p class="note">El copiloto nunca confirma. Revalida la lectura en el PMS y confirma una persona.</p>
       </section>
       <section class="card rise" style="--i:2" aria-label="Notas del turno">
-        <h1>Notas del turno</h1>
+        <h2 class="eyebrow">Notas del turno</h2>
         <form class="note-form" id="note-form">
           <textarea id="note-body" rows="2" maxlength="500" aria-label="Nueva nota para el siguiente turno"
                     placeholder="Ej: pidió cuna, confirmar antes de las 18:00"></textarea>
@@ -252,7 +283,7 @@
     const s = snapshot, d = s.data || {};
     const guests = d.adults ? `${plural(d.adults, "adulto", "adultos")} · ${plural(d.children ?? 0, "niño", "niños")}` : null;
     const stay = d.checkin ? `${fmtDate(d.checkin)} → ${fmtDate(d.checkout)}` : null;
-    document.getElementById("f-contact").textContent = s.contact_name ?? "—";
+    document.getElementById("f-contact").textContent = displayName(s.contact_name) ?? "—";
     document.getElementById("f-stay").textContent = stay ?? "—";
     document.getElementById("f-guests").textContent = guests ?? "—";
     document.getElementById("f-room").textContent = s.room_name || (d.checkin ? "A definir por recepción" : "—");
@@ -280,9 +311,11 @@
   // Sin sesión no se muestra nada: el panel tiene datos de huéspedes.
   function renderLogin() {
     currentUser = null;
+    setView("login");
     app.innerHTML = `
-      <section class="card rise" aria-label="Acceso al panel">
-        <h1>Panel de recepción</h1>
+      <section class="card rise login-card" aria-label="Acceso al panel">
+        <h1 class="brand">Panel de recepción</h1>
+        <p class="lead">Hotel Boutique Bordeluz · cola, cronómetro y notas del turno.</p>
         <form class="login" id="login-form">
           <label for="login-name">Tu nombre</label>
           <input id="login-name" name="name" autocomplete="name" maxlength="40" required>
@@ -339,6 +372,7 @@
       ]);
       renderQueue(queue, shift);
     } catch (error) {
+      setView("error");
       app.innerHTML = '<p class="empty">No pude leer la cola de recepción.</p>';
     }
   }
@@ -348,7 +382,8 @@
     const card = document.createElement("section");
     card.className = "card rise";
     card.setAttribute("aria-label", "Resumen del turno");
-    const title = document.createElement("h1");
+    const title = document.createElement("h2");
+    title.className = "eyebrow";
     title.textContent = `Turno · últimas ${shift.hours} h`;
     const list = document.createElement("dl");
     list.className = "stats";
@@ -377,9 +412,10 @@
 
   function renderQueue(data, shift) {
     const items = data.conversations || [];
+    setView("queue");
     const header = document.createElement("div");
     header.className = "queue-head rise";
-    const heading = document.createElement("p");
+    const heading = document.createElement("h1");
     heading.className = "brand";
     heading.textContent = "Cola de recepción";
     const out = document.createElement("button");
@@ -409,7 +445,7 @@
       button.style.setProperty("--i", index + 1);
       const name = document.createElement("span");
       name.className = "queue-name";
-      name.textContent = item.contact_name || `Conversación ${item.conversation_id}`;
+      name.textContent = displayName(item.contact_name, item.conversation_id);
       const state = document.createElement("span");
       state.className = "queue-state";
       if (item.waiting_s == null) {
@@ -447,6 +483,7 @@
       if (document.getElementById("timer-card")) updateDetail();
       else render();
     } catch (error) {
+      setView("error");
       app.innerHTML = '<p class="empty">No pude leer el estado de esta conversación.</p>';
     }
   }

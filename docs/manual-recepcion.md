@@ -25,6 +25,16 @@ En la barra lateral derecha de la conversación abre la app **Copiloto**:
 El reloj arranca en el traspaso dentro del turno, **no se reinicia al asignar** y se detiene con tu primer
 mensaje al huésped (las notas privadas no cuentan). Fuera de turno no corre.
 
+## Cola de recepción
+
+Sin una conversación abierta, el panel muestra la cola y el resumen del turno. Abierto en su propia pestaña
+(http://localhost:8100/panel) usa todo el ancho: el resumen a la izquierda y la cola a la derecha; dentro de
+Chatwoot queda en una columna.
+
+- Los visitantes anónimos del widget, que Chatwoot nombra como `cool-mountain-791`, aparecen como
+  **Visitante web · 791** (el número es el de Chatwoot).
+- Las esperas de una hora o más se leen como `10 h 38 min`; las menores, como `2:15`.
+
 ## Confirmar una reserva
 
 1. Pulsa **Confirmar en el PMS** en el panel. Se abre el PMS con los datos prellenados.

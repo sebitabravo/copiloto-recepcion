@@ -3,112 +3,134 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>Recepción · Hotel Boutique Bordeluz</title>
 <style>
+  /* Mismo sistema visual que el copiloto (design/system.md): paleta Bordeluz, Instrument Serif en
+     títulos e Inter en el cuerpo. Las tipografías las sirve este mismo PMS en /admin/fonts/. */
+  @font-face { font-family:"Instrument Serif"; src:url("/admin/fonts/instrument-serif-normal.woff2") format("woff2");
+               font-weight:400; font-style:normal; font-display:swap; }
+  @font-face { font-family:"Inter"; src:url("/admin/fonts/inter-normal.woff2") format("woff2");
+               font-weight:100 900; font-style:normal; font-display:swap; }
   :root {
-    color-scheme: light; --bg:#f6f0e6; --card:#fffaf2; --ink:#2f2418; --muted:#6b5c49;
-    --line:#e3d6c0; --accent:#8c6a3f; --soft:#eee3d1; --button-ink:#fff;
-    --ok:#245b38; --ok-bg:#e8f1e6; --bad:#a62924; --bad-bg:#fff0eb;
-    --shadow:0 12px 36px #49341c09;
+    color-scheme: light; --bg:#f3ebdf; --card:#fcf8f1; --card-2:#f6efe3; --ink:#211a12; --ink-2:#423325;
+    --muted:#6b5943; --line:#ded0b9; --accent:#8d5a2b; --accent-ink:#fffaf2; --glow:#dfae7f;
+    --ok:#2c6340; --ok-bg:#e6eee2; --bad:#9c2a22; --bad-bg:#fbeae4;
+    --shadow:0 1px 2px rgb(50 33 16 / 6%), 0 6px 18px rgb(50 33 16 / 5%);
+    --font-display:"Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --font-body:"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --ease:cubic-bezier(.2, .8, .3, 1);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      color-scheme: dark; --bg:#1d1812; --card:#272017; --ink:#efe5d3; --muted:#b5a58c;
-      --line:#3b3226; --accent:#d1a971; --soft:#352b1e; --button-ink:#1d1812;
-      --ok:#9bd2a3; --ok-bg:#203326; --bad:#ffaaa0; --bad-bg:#3b2421; --shadow:0 12px 36px #0002;
+      color-scheme: dark; --bg:#14100b; --card:#201a13; --card-2:#261e16; --ink:#f0e6d5; --ink-2:#d6c7b1;
+      --muted:#a4947d; --line:#3f3427; --accent:#dcaa6d; --accent-ink:#14100b; --glow:#6a4a2a;
+      --ok:#9fd0ae; --ok-bg:#1f2b22; --bad:#ffc0b8; --bad-bg:#432723; --shadow:0 1px 2px rgb(0 0 0 / 30%);
     }
   }
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui, sans-serif; }
-  main { width:100%; max-width:1184px; margin:0 auto; padding:36px 16px 48px; }
+  body { margin:0; color:var(--ink); font:15px/1.6 var(--font-body); -webkit-font-smoothing:antialiased;
+         background:radial-gradient(1200px 600px at 85% -10%, color-mix(in oklab, var(--glow) 18%, transparent), transparent 65%),
+                    var(--bg); }
+  main { width:100%; max-width:1080px; margin:0 auto; padding:32px 24px 48px; }
   h1, h2, h3, p { margin-top:0; }
-  h1 { font-size:clamp(1.5rem,4vw,2rem); line-height:1.2; letter-spacing:-.035em; margin-bottom:12px; }
-  h2 { font-size:1.25rem; letter-spacing:-.02em; margin-bottom:6px; }
-  h3 { font-size:1rem; }
+  h1, h2 { font-family:var(--font-display); font-weight:400; color:var(--ink); }
+  h1 { font-size:clamp(1.9rem,4vw,2.6rem); line-height:1.05; letter-spacing:-.02em; margin-bottom:10px; }
+  h2 { font-size:1.55rem; line-height:1.1; letter-spacing:-.015em; margin-bottom:6px; }
+  h3 { font-size:1rem; font-weight:600; letter-spacing:-.005em; }
   .muted, .helper, footer { color:var(--muted); }
-  .helper { font-size:.875rem; margin:6px 0 0; }
+  .helper { font-size:.85rem; margin:6px 0 0; }
   .topline, .section-heading, .session, .actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-  .topline { justify-content:space-between; margin-bottom:16px; }
+  .topline { justify-content:space-between; margin-bottom:18px; }
+  .brand { display:inline-flex; align-items:center; gap:10px; font-weight:650; letter-spacing:-.01em; }
+  .brand-mark { width:30px; height:30px; display:grid; place-items:center; border-radius:9px; color:var(--accent-ink);
+                font:400 1.15rem/1 var(--font-display);
+                background:linear-gradient(160deg, color-mix(in oklab, var(--accent) 88%, #fff), var(--accent)); }
   .session { justify-content:flex-end; }
-  header { padding-bottom:20px; border-bottom:1px solid var(--line); margin-bottom:28px; }
-  header > p { max-width:680px; margin-bottom:0; }
+  header { padding-bottom:22px; border-bottom:1px solid var(--line); margin-bottom:28px; }
+  header > p { max-width:62ch; margin-bottom:0; }
   .badge, .chip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line);
-                  border-radius:999px; padding:6px 12px; font-size:.8rem; font-weight:650;
-                  background:var(--soft); max-width:100%; overflow-wrap:anywhere; }
+                  border-radius:999px; padding:6px 12px; font-size:.72rem; font-weight:600; color:var(--accent);
+                  background:var(--card); max-width:100%; overflow-wrap:anywhere; }
   .badge::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--accent); }
-  .card { min-width:0; background:var(--card); border:1px solid var(--line); border-radius:18px;
-          padding:28px; box-shadow:var(--shadow); }
-  .access { max-width:510px; margin:40px auto; }
+  .card { min-width:0; background:var(--card); border:1px solid var(--line); border-radius:22px;
+          padding:26px; box-shadow:var(--shadow); }
+  .access { max-width:480px; margin:40px auto; }
   .access-icon { width:48px; height:48px; display:grid; place-items:center; border-radius:14px;
-                 background:var(--soft); color:var(--accent); font-size:1.4rem; margin-bottom:18px; }
-  label, legend { font-size:.9rem; font-weight:650; }
+                 background:var(--card-2); color:var(--accent); font-size:1.4rem; margin-bottom:18px; }
+  label, legend { font-size:.88rem; font-weight:600; color:var(--ink-2); }
   label { display:block; margin-bottom:7px; }
   input, select, button { font:inherit; }
-  input, select { width:100%; min-width:0; min-height:48px; border:1px solid var(--line); border-radius:9px;
-                  padding:11px 12px; background:var(--bg); color:var(--ink); }
+  input, select { width:100%; min-width:0; min-height:48px; border:1px solid var(--line); border-radius:12px;
+                  padding:11px 12px; background:var(--bg); color:var(--ink);
+                  transition:border-color .2s var(--ease), box-shadow .2s var(--ease); }
   select { text-overflow:ellipsis; }
-  input:focus, select:focus { border-color:var(--accent); }
+  input:focus, select:focus { outline:none; border-color:var(--accent);
+                              box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent); }
   :focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
   input[aria-invalid="true"], select[aria-invalid="true"] { border-color:var(--bad); }
-  button { min-height:44px; border:1px solid var(--line); border-radius:9px; padding:10px 16px;
-           background:var(--card); color:var(--ink); cursor:pointer; font-weight:650; }
-  button:hover:not(:disabled) { background:var(--soft); }
-  button.primary { background:var(--accent); color:var(--button-ink); border-color:var(--accent); }
-  button.primary:hover:not(:disabled) { filter:brightness(.94); background:var(--accent); }
-  button:disabled { opacity:.48; cursor:not-allowed; }
+  button { min-height:44px; border:1px solid var(--line); border-radius:999px; padding:10px 18px;
+           background:var(--card); color:var(--ink); cursor:pointer; font-weight:600; font-size:.92rem;
+           transition:transform .2s var(--ease), background .2s var(--ease), box-shadow .2s var(--ease); }
+  button:hover:not(:disabled) { background:var(--card-2); }
+  button.primary { border-color:transparent; color:var(--accent-ink);
+                   background:linear-gradient(160deg, color-mix(in oklab, var(--accent) 88%, #fff), var(--accent));
+                   box-shadow:inset 0 1px 0 rgb(255 255 255 / 18%), 0 10px 26px -12px var(--accent); }
+  button.primary:hover:not(:disabled) { transform:translateY(-1px);
+                   background:linear-gradient(160deg, color-mix(in oklab, var(--accent) 88%, #fff), var(--accent)); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
   button.link { border:0; background:none; padding:10px 4px; text-decoration:underline; color:var(--accent); }
   .token-row { display:flex; gap:8px; }
   .token-row input { flex:1; }
   .token-row button { flex-shrink:0; }
   .access .primary { width:100%; margin-top:20px; }
-  .layout { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; max-width:760px; }
+  .layout { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; }
   .section-heading { justify-content:space-between; margin-bottom:20px; }
   .step { display:inline-grid; place-items:center; width:28px; height:28px; border-radius:50%;
-          background:var(--soft); color:var(--accent); margin-right:8px; font-size:.8rem; vertical-align:middle; }
+          background:var(--card-2); border:1px solid var(--line); color:var(--accent); margin-right:10px;
+          font:600 .8rem/1 var(--font-body); vertical-align:middle; }
   .fields { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
   .wide { grid-column:1 / -1; }
   .field { min-width:0; }
   .error { color:var(--bad); font-size:.85rem; margin:5px 0 0; }
   fieldset { margin:0; padding:0; border:0; min-width:0; }
-  .stepper { display:flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; background:var(--bg); }
-  .stepper button { flex:0 0 48px; border:0; border-radius:0; font-size:1.3rem; }
-  .stepper input { text-align:center; border:0; border-radius:0; padding:8px 0; appearance:textfield; }
+  .stepper { display:flex; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--bg); }
+  .stepper button { flex:0 0 48px; border:0; border-radius:0; font-size:1.3rem; background:transparent; }
+  .stepper input { text-align:center; border:0; border-radius:0; padding:8px 0; appearance:textfield; box-shadow:none; }
   .stepper input::-webkit-inner-spin-button { appearance:none; }
-  .summary { background:var(--soft); border-radius:12px; padding:16px; margin:22px 0; }
-  .summary p { margin:0; }
+  .summary { background:var(--card-2); border:1px solid var(--line); border-radius:12px; padding:16px; margin:22px 0; }
+  .summary p { margin:0; color:var(--muted); }
   .summary strong { display:block; margin-bottom:4px; }
   .availability { margin:16px 0 20px; border-left:3px solid var(--accent); padding-left:14px; }
   .availability p { margin:0 0 8px; }
   .alternatives { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
-  .alternatives button { font-size:.82rem; text-align:left; border-radius:999px; overflow-wrap:anywhere; }
+  .alternatives button { font-size:.82rem; text-align:left; overflow-wrap:anywhere; }
   .review { display:flex; align-items:flex-start; gap:10px; padding:14px 0; min-height:48px; }
   .review input { width:22px; min-height:22px; height:22px; margin:1px 0 0; accent-color:var(--accent); flex-shrink:0; }
   .review label { margin:0; min-height:44px; cursor:pointer; }
   .submit-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-  .submit-row .primary { flex:1; }
-  .notice { border:1px solid var(--line); padding:16px 18px; border-radius:12px; margin-bottom:22px; }
+  .submit-row .primary { flex:1; min-height:50px; }
+  .notice { border:1px solid var(--line); padding:16px 18px; border-radius:12px; margin-bottom:22px; background:var(--card-2); }
   .notice p { margin:0; }
-  .notice.success { background:var(--ok-bg); border-color:var(--ok); color:var(--ok); }
+  .notice.success { background:var(--ok-bg); border-color:color-mix(in oklab, var(--ok) 40%, var(--line)); color:var(--ok); }
   .notice.error { background:var(--bad-bg); border-color:var(--bad); color:var(--bad); }
-  .bookings { margin-top:28px; }
+  .bookings { margin-top:24px; }
   .table-wrap { width:100%; }
   table { border-collapse:collapse; width:100%; font-size:.875rem; table-layout:fixed; }
   caption { text-align:left; color:var(--muted); padding-bottom:16px; }
-  th { text-align:left; font-size:.75rem; text-transform:uppercase; letter-spacing:.045em; color:var(--muted); }
+  th { text-align:left; font-size:.71rem; font-weight:650; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); }
   th, td { border-bottom:1px solid var(--line); padding:14px 10px; vertical-align:top; overflow-wrap:anywhere; }
   th:first-child, td:first-child { padding-left:0; width:10%; }
   th:nth-child(3) { width:24%; }
+  td:first-child { font-variant-numeric:tabular-nums; }
   .new-booking { background:var(--ok-bg); }
-  .new-booking td:first-child { color:var(--ok); font-weight:750; }
-  .empty { padding:32px 16px; text-align:center; border:1px dashed var(--line); border-radius:12px; }
+  .new-booking td:first-child { color:var(--ok); font-weight:700; }
+  .empty { padding:32px 16px; text-align:center; border:1px dashed var(--line); border-radius:12px; color:var(--muted); }
   footer { text-align:center; font-size:.8rem; margin-top:28px; }
-  @media (max-width:860px) {
-    .layout { grid-template-columns:minmax(0,1fr); }
-    }
   @media (max-width:640px) {
-    main { padding-top:24px; }
-    .card { padding:20px 16px; border-radius:14px; }
+    main { padding:24px 18px 40px; }
+    .card { padding:20px 16px; border-radius:18px; }
     .fields { grid-template-columns:minmax(0,1fr); gap:18px; }
     .wide { grid-column:auto; }
     .access { margin:24px auto; }
@@ -122,12 +144,16 @@
     td::before { content:attr(data-label); color:var(--muted); font-size:.75rem; font-weight:600; }
     caption { display:block; }
   }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration:.001ms !important; animation-duration:.001ms !important; }
+  }
 </style>
 </head>
 <body>
 <main>
   <header>
     <div class="topline">
+      <span class="brand"><span class="brand-mark" aria-hidden="true">B</span>Bordeluz · PMS</span>
       <span class="badge">PMS simulado</span>
     </div>
     <h1>Recepción · Hotel Boutique Bordeluz</h1>

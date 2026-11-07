@@ -11,20 +11,40 @@ PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aviso de privacidad · Copiloto de Recepción</title>
+<link rel="icon" href="{favicon}">
+<link rel="stylesheet" href="/static/theme.css">
 <style>
-  :root {{ --bg:#f6f0e6; --ink:#2f2418; --accent:#8c6a3f; --card:#fffaf2; --line:#e3d6c0; }}
-  @media (prefers-color-scheme: dark) {{
-    :root {{ --bg:#1d1812; --ink:#efe5d3; --accent:#d1a971; --card:#272017; --line:#3b3226; }}
-  }}
-  body {{ margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 system-ui, sans-serif; }}
-  main {{ max-width:720px; margin:0 auto; padding:24px 16px 64px; }}
-  h1 {{ font-size:1.6rem; }} h2 {{ font-size:1.1rem; margin-top:2rem; color:var(--accent); }}
-  .draft {{ background:var(--card); border:1px solid var(--line); border-left:4px solid var(--accent);
-           padding:12px 16px; border-radius:6px; }}
+  body {{ font-size:16px; line-height:1.7; }}
+  .site {{ border-bottom:1px solid var(--line); background:color-mix(in oklab, var(--bg) 88%, transparent); }}
+  .site-inner {{ max-width:720px; margin:0 auto; padding:14px 20px; display:flex; align-items:center;
+                justify-content:space-between; gap:12px; flex-wrap:wrap; }}
+  .brand {{ display:inline-flex; align-items:center; gap:10px; color:var(--ink); text-decoration:none;
+           font-weight:650; letter-spacing:-.01em; min-height:44px; }}
+  .brand-tag {{ color:var(--muted); font-weight:500; font-size:.82rem; padding-left:10px;
+               border-left:1px solid var(--line); }}
+  .brand-mark {{ width:30px; height:30px; display:grid; place-items:center; border-radius:9px;
+                color:var(--accent-ink); font:400 1.15rem/1 var(--font-display);
+                background:linear-gradient(160deg, color-mix(in oklab, var(--accent) 88%, #fff), var(--accent)); }}
+  .back {{ color:var(--accent); font-weight:600; font-size:.92rem; min-height:44px; display:inline-flex;
+          align-items:center; }}
+  main {{ max-width:720px; margin:0 auto; padding:40px 20px 72px; }}
+  h1 {{ font-size:clamp(2.2rem, 5vw, 3rem); line-height:1.05; letter-spacing:-.02em; margin:0 0 1.2rem; }}
+  h2 {{ font-size:1.55rem; line-height:1.15; letter-spacing:-.015em; margin:2.4rem 0 .6rem; }}
+  p, li {{ max-width:68ch; color:var(--ink-2); }}
+  .draft {{ background:var(--card); border:1px solid var(--line); border-left:3px solid var(--accent);
+           padding:14px 18px; border-radius:12px; color:var(--ink); box-shadow:var(--shadow); }}
   a {{ color:var(--accent); }}
+  :focus-visible {{ outline:3px solid var(--accent); outline-offset:3px; border-radius:4px; }}
 </style>
 </head>
 <body>
+<header class="site">
+<div class="site-inner">
+<a class="brand" href="{home}"><span class="brand-mark" aria-hidden="true">B</span>Bordeluz
+<span class="brand-tag">Copiloto de recepción</span></a>
+<a class="back" href="{home}">← Volver a la portada</a>
+</div>
+</header>
 <main>
 <h1>Aviso de privacidad</h1>
 <p class="draft"><strong>Borrador para revisión del hotel.</strong> Prototipo académico INNOVA3 · INACAP.
@@ -67,6 +87,13 @@ escribiendo a <a href="mailto:{contact}">{contact}</a>.</p>
 """
 
 
+# El mismo monograma que el panel y las métricas, en línea: la página no depende de otro archivo.
+FAVICON = (
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
+    "%3Crect width='32' height='32' rx='9' fill='%238d5a2b'/%3E%3Ctext x='16' y='23' "
+    "font-family='Georgia,serif' font-size='19' fill='%23fff8ef' text-anchor='middle'%3EB%3C/text%3E%3C/svg%3E"
+)
+
 AI_OFF = (
     "El flujo sin IA no envía mensajes a un modelo generativo. El canal separado de recepción usa Chatwoot; "
     "si usas voz, se aplica también el tratamiento indicado para ese canal."
@@ -100,6 +127,7 @@ def render(
     ai_base_url: str = "",
     voice: bool = False,
     retention_days: int | None = None,
+    home_url: str = "/",
 ) -> str:
     if not ai_provider:
         paragraph = AI_OFF
@@ -110,6 +138,8 @@ def render(
     if voice:
         paragraph = f"{paragraph} {VOICE_ON}"
     return PAGE.format(
+        home=escape(home_url) or "/",
+        favicon=FAVICON,
         ai_paragraph=escape(paragraph),
         hotel=escape(hotel.hotel["name"]),
         contact=escape(hotel.privacy["responsible_contact"]),

@@ -12,8 +12,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import yaml
-from fastapi import BackgroundTasks, Cookie, Depends, FastAPI, Header, HTTPException, Query, Response
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import BackgroundTasks, Cookie, Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
@@ -22,6 +22,8 @@ DEFAULT_HOTEL_PATH = Path(__file__).resolve().parents[3] / "data" / "hotel.yaml"
 # Mismo criterio de verdad que copiloto.config._TRUTHY: la entrada de demo está apagada por defecto.
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
 STAFF_COOKIE = "staff_session"
+FONTS_DIR = Path(__file__).with_name("fonts")
+FONTS = frozenset({"instrument-serif-normal.woff2", "inter-normal.woff2"})
 
 
 def demo_mode_enabled() -> bool:
@@ -209,6 +211,14 @@ def create_app() -> FastAPI:
     application.state.database_path = database_path
     application.state.room_types = rooms
 
+    @application.middleware("http")
+    async def robots_header(request: Request, call_next):
+        response = await call_next(request)
+        # El panel del personal es interno: no se indexa.
+        if request.url.path == "/admin" or request.url.path.startswith("/admin/"):
+            response.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
+        return response
+
     @application.get("/health")
     def health():
         return {"status": "ok"}
@@ -313,6 +323,15 @@ def create_app() -> FastAPI:
                 return redirect
             raise HTTPException(status_code=404, detail="Not Found")
         return Path(__file__).with_name("admin.html").read_text(encoding="utf-8")
+
+    @application.get("/admin/fonts/{name}", include_in_schema=False)
+    def admin_font(name: str):
+        # Tipografías del sistema visual servidas por el mismo PMS: sin CDN. Solo los .woff2 incluidos.
+        if name not in FONTS:
+            raise HTTPException(status_code=404, detail="Not Found")
+        return FileResponse(
+            FONTS_DIR / name, media_type="font/woff2", headers={"Cache-Control": "public, max-age=86400"}
+        )
 
     @application.get("/favicon.ico", include_in_schema=False)
     def favicon():
