@@ -236,3 +236,19 @@ L16 (revisión nativa y cierre): `assess` sobre el rango de commits dio `nativeR
     apagaba la IA sin avisar (después de correr e2e la demo quedaba en modo guiado). Ahora detecta la
     etiqueta del servicio `llm` en Docker y mantiene el overlay de IA; e2e sigue en verde y
     `/api/demo/status` queda con `ai_enabled: true`.
+
+L17 (verificación independiente, cierra los huecos de L16): un `gentle-ai-verify` revisó el slice de
+    IA local con 61 llamadas y verificó seis afirmaciones (merge de compose GPU/CPU, detección de CUDA,
+    preflight, restauración del e2e, guardrails del asistente, suites). Sin defectos bloqueantes, cinco
+    avisos; se corrigieron los tres que podían degradar el entorno:
+    (a) el e2e restauraba `copiloto` sin comprobar el estado de la IA, así que una consulta fallida a
+    Docker volvía a apagar la IA como PASS; ahora `Runner.restore` compara `/api/demo/status` y falla
+    si no coincide; (b) en CPU la restauración dejaba los topes del perfil de GPU (30/25 s en vez de
+    120/90 s): ahora el e2e mira la imagen del contenedor `llm` y agrega `ia-cpu.yml`;
+    (c) `demo.sh` mandaba el stderr de la prueba de GPU a `/dev/null` y un fallo de Docker se veía
+    como «sin NVIDIA». Además `model_eval.case_handoff` gana la comprobación negativa de la guía
+    («derivar sin prometer una llamada»). Once pruebas nuevas (`test_deploy_profiles.py`,
+    `test_e2e_restore.py`) con RED observado. `copiloto` 414 pruebas, ruff limpio, e2e 39 PASS con
+    `restore · copiloto · IA activa; esperada activa`. Avisos diferidos: `--hf repo:quant` se resuelve
+    por referencia y no por digest (cambia si el repo se re-sube); `COMPOSE` sin usar en preflight
+    (preexistente); la copia local de `scripts/demo.sh` queda en CRLF mientras el blob es LF.
