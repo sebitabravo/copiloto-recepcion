@@ -46,6 +46,9 @@ case "$cmd" in
     ./scripts/seed-chatwoot.sh
     "${COMPOSE[@]}" up -d --force-recreate copiloto
     ./scripts/wait-healthy.sh
+    # nginx lee el bind-mount de infra/landing/nginx.conf al arrancar: un reinicio evita que /demo
+    # dé 404 en un stack ya levantado tras un cambio de configuración.
+    "${COMPOSE[@]}" restart landing
     echo "Listo. Portada: http://localhost:8080 · Demo: http://localhost:8080/demo · Recepción: http://localhost:3000"
     ;;
   seed) ./scripts/seed-chatwoot.sh ;;

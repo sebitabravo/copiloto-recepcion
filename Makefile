@@ -2,7 +2,7 @@
 COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
 
 .DEFAULT_GOAL := help
-.PHONY: help up down reset env ps logs test bridge seed health e2e creds smoke backup ai-smoke demo model ui-test piloto beds24-check wa-up wa-down wa-qr wa-e2e
+.PHONY: help up down reset env ps logs test lint bridge seed health e2e creds smoke backup ai-smoke demo model ui-test piloto beds24-check wa-up wa-down wa-qr wa-e2e
 
 help: ## Muestra esta ayuda
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z0-9_-]+:.*## / {printf "  \033[1m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -20,6 +20,9 @@ up: env ## Levanta todo el stack (primer arranque: varios minutos)
 	./scripts/seed-chatwoot.sh
 	$(COMPOSE) up -d --force-recreate copiloto
 	./scripts/wait-healthy.sh
+	# nginx lee el bind-mount de infra/landing/nginx.conf al arrancar: un reinicio evita que /demo
+	# dé 404 en un stack ya levantado tras un cambio de configuración.
+	$(COMPOSE) restart landing
 	@echo "Listo. Landing: http://localhost:8080 · Recepción: http://localhost:3000 · Métricas: http://localhost:8100/metricas"
 
 seed: ## Vuelve a sembrar Chatwoot (idempotente)
@@ -39,6 +42,9 @@ test: ## Tests de copiloto, pms_mock y los puentes (PMS y WhatsApp)
 	cd pms_mock && uv run pytest -q
 	cd pms_bridge && uv run pytest -q
 	cd wa_bridge && uv run pytest -q
+
+lint: ## Lint de Python igual que CI (ruff con versión fijada)
+	uvx ruff@0.17.3 check copiloto pms_mock pms_bridge wa_bridge scripts
 
 bridge: ## Levanta el puente Beds24 en 8300 (requiere BEDS24_* configurado)
 	cd pms_bridge && uv run uvicorn pms_bridge.main:app --port 8300

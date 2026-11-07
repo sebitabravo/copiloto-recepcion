@@ -12,11 +12,18 @@ api="http://localhost:2785"
 name="default"
 curl -fs -o /dev/null "$api/api/health" || { echo "OpenWA no responde en $api. Corre: make wa-up" >&2; exit 1; }
 
+# Python portable: en Windows `python3` suele ser el stub de la Microsoft Store (igual que en backup.sh).
+if command -v python >/dev/null 2>&1 && python -c 'import sys' >/dev/null 2>&1; then
+  PY=python
+else
+  PY=python3
+fi
+
 call() { curl -fs -H "X-API-Key: $OPENWA_API_KEY" -H "Content-Type: application/json" "$@"; }
 
 # Imprime "<id> <status>" de la sesión con ese nombre, o nada si no existe
 session_line() {
-  call "$api/api/sessions" | NAME="$name" python3 -c \
+  call "$api/api/sessions" | NAME="$name" "$PY" -c \
     'import json,os,sys; n=os.environ["NAME"]; print(next((f"{s[\"id\"]} {s[\"status\"]}" for s in json.load(sys.stdin) if s.get("name")==n), ""))'
 }
 
@@ -53,7 +60,7 @@ for _ in $(seq 1 120); do
   fi
   if [ "$status" = "qr_ready" ]; then
     # El QR rota solo: se reescribe el mismo archivo y se abre una única vez (Vista Previa recarga los cambios)
-    if call "$api/api/sessions/$id/qr" | python3 -c \
+    if call "$api/api/sessions/$id/qr" | "$PY" -c \
       'import base64,json,sys; q=json.load(sys.stdin)["qrCode"]; sys.stdout.buffer.write(base64.b64decode(q.split(",",1)[-1]))' >"$qr" 2>/dev/null \
       && [ "$shown" = 0 ]; then
       open "$qr" 2>/dev/null || echo "Abre manualmente $api/ y escanea el QR de la sesión '$name'."
