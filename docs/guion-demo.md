@@ -58,6 +58,17 @@ Por eso: el recorrido del miércoles va con el **flujo guiado** (correcto y ráp
 Si quieres mostrar la IA, calienta el modelo con una pregunta de ubicación antes de presentar y evita
 las de disponibilidad.
 
+## La consola, en tres perspectivas
+
+`/demo` abre en **Huésped**; las pestañas de arriba cambian de perspectiva sin salir de la página:
+
+- **Huésped**: el chat tipo WhatsApp y, debajo, la traza de lo que hizo el asistente.
+- **Recepción**: la cola real con espera y riesgo de SLA (solo lectura).
+- **Admin**: el PMS simulado y el enlace a métricas, con el modo demo resolviendo el acceso.
+
+El **icono de llamada** de la cabecera del teléfono abre una llamada dentro del teléfono: estado,
+cronómetro, transcripción y colgar. Si el navegador no reconoce voz, la misma pantalla ofrece escribir.
+
 ## Guion (5 minutos)
 
 | Momento | Qué haces | Qué se ve |
