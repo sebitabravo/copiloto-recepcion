@@ -13,7 +13,8 @@ la confirma una persona en el PMS (en la demo, el modo `full` reserva en un PMS 
 
 | Pieza | Qué hace | URL local |
 |---|---|---|
-| Landing + widget | Página demo con el chat embebido | http://localhost:8080 |
+| Portada | Página de producto: qué hace, recorrido y pantallas reales | http://localhost:8080 |
+| Consola de demo | Huésped, recepción y admin en una vista, con **modo demo** sin credenciales | http://localhost:8080/demo |
 | Chatwoot Community `v4.18.0-ce` | Bandeja de recepción (MIT, $0) | http://localhost:3000 |
 | `copiloto` (FastAPI) | Flujo del bot, SLA, panel, métricas, privacidad | http://localhost:8100 |
 | `pms_mock` (FastAPI) | PMS simulado con los 12 tipos de habitación reales | http://localhost:8200/admin |
@@ -54,18 +55,21 @@ make up        # genera secretos locales, construye, migra Chatwoot, siembra dat
 make creds     # muestra usuarios demo y contraseña locales
 ```
 
-El primer arranque puede tardar varios minutos. Para detener: `make down`. Para borrar todo: `make reset`
-(ambos piden confirmación).
+En Windows con Git Bash no hace falta `make`: `./scripts/demo.sh` expone los mismos comandos
+(`up`, `seed`, `status`, `creds`, `test`, `e2e`, `smoke`, `down`, `reset`).
+
+El primer arranque puede tardar varios minutos. Para detener: `make down` o `./scripts/demo.sh down`.
+Para borrar todo: `make reset` o `./scripts/demo.sh reset` (ambos piden confirmación).
 
 ## Recorrido de 5 minutos (profesora y hotel)
 
-1. Abre http://localhost:8080 y el chat. Escribe **hola**: aparece el aviso de privacidad y la **ubicación**
-   antes de cualquier pregunta.
+1. Abre http://localhost:8080 y pulsa **Probar la demo**. En la pestaña **Huésped**, escribe **hola**:
+   aparece el aviso de privacidad y la **ubicación** antes de cualquier pregunta.
 2. Pregunta **¿tienen piscina?** → respuesta aprobada en segundos; la conversación sigue con el bot.
 3. Elige **Disponibilidad**, escribe `15/03/2027 al 18/03/2027`, `2` adultos, `0` niños y una habitación.
    Verás «Disponible según lectura del PMS a las HH:MM … Pendiente de confirmación por recepción».
 4. En otra ventana entra a http://localhost:3000 como `recepcion1@bordeluz-demo.test` (contraseña con
-   `make creds`). La conversación aparece **abierta**, con etiqueta `comercial`, la nota privada de
+   `make creds` o `./scripts/demo.sh creds`). La conversación aparece **abierta**, con etiqueta `comercial`, la nota privada de
    pre-información y, en la barra lateral derecha, la app **Copiloto** con el cronómetro (verde → ámbar a
    los 120 s → rojo a los 180 s).
    Deja la bandeja abierta: mientras nadie de recepción está en línea el widget muestra «Estamos ausentes».
@@ -106,7 +110,8 @@ make piloto # métricas del piloto contra las metas de la Unidad 2 (DAYS=14)
 ```
 
 El guion de la sesión con recepción, las cinco tareas y los criterios de avance están en
-[piloto](docs/piloto.md).
+[piloto](docs/piloto.md). El guion de la presentación (preflight, recorrido y respaldos) está en
+[guion de demo](docs/guion-demo.md). En Windows, `./scripts/demo.sh <comando>` reemplaza a `make`.
 
 ## Documentación
 

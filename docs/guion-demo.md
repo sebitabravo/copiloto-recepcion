@@ -5,19 +5,19 @@ Para la presentación del miércoles. Cinco minutos de recorrido, con los respal
 ## Un día antes
 
 ```bash
-make up            # stack completo y healthchecks
-make seed          # idempotente: usuarios, bandeja, etiquetas, equipo
-make test          # 428 pruebas
-uv run --with httpx --with tzdata python scripts/e2e.py   # 4 casos reales
-make creds         # usuarios demo y token del PMS
+./scripts/demo.sh up      # stack completo y healthchecks (o `make up` si tienes make)
+./scripts/demo.sh seed    # idempotente: usuarios, bandeja, etiquetas, equipo
+./scripts/demo.sh test    # 447 pruebas
+./scripts/demo.sh e2e     # 4 casos reales contra el stack
+./scripts/demo.sh creds   # usuarios demo y token del PMS
 ```
 
 Si `e2e` falla, no se presenta: primero se arregla. El e2e cubre los cuatro casos que se van a mostrar
 (FAQ, disponibilidad, fuera de turno, PMS caído).
 
 Si quieres empezar con la cola vacía (las pruebas dejan conversaciones con esperas de horas), corre
-`make reset` **antes** de `make up`; borra volúmenes y vuelve a sembrar. Es destructivo para los datos de
-la demo, no para el código.
+`./scripts/demo.sh reset` **antes** de `./scripts/demo.sh up`; borra volúmenes y vuelve a sembrar. Es
+destructivo para los datos de la demo, no para el código.
 
 ## Treinta minutos antes
 
@@ -55,7 +55,7 @@ Frase de cierre sugerida: «El copiloto propone y recepción confirma; el bot no
 | «Recepción verificará cupos» | El PMS está caído o simulado caído (`SIMULATE_DOWN=1`) | «Cuando el PMS no responde, el bot no promete cupos: deriva» |
 | Fuera de horario | `SHIFT_START`/`SHIFT_END` en `.env` | «El bot informa el horario real de recepción» |
 | El widget no abre | Chatwoot no está arriba | «El canal de recepción está separado del simulador; ahora no está disponible» |
-| No carga la consola | Revisa `/health` y `docker compose ps` | No improvises: `make up` y espera healthchecks |
+| No carga la consola | Revisa `/health` y `docker compose ps` | No improvises: `./scripts/demo.sh up` y espera healthchecks |
 
 ## Qué responder si preguntan por el stack
 
@@ -70,5 +70,5 @@ Frase de cierre sugerida: «El copiloto propone y recepción confirma; el bot no
 ## Después
 
 ```bash
-make backup    # respaldo en caliente de Chatwoot y las bases SQLite
+./scripts/backup.sh    # respaldo en caliente de Chatwoot y las bases SQLite (o `make backup`)
 ```
