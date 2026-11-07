@@ -58,7 +58,8 @@
   .queue-state { font-variant-numeric: tabular-nums; font-weight: 700; }
   .queue-meta { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
   .back { background: none; border: 0; color: var(--accent); font: inherit; cursor: pointer;
-          padding: 0 0 10px; transition: transform .18s var(--ease); }
+          /* 44 px de alto efectivo: es el botón de salir o de volver, siempre en zona de toque. */
+          min-height: 44px; padding: 0 0 10px; transition: transform .18s var(--ease); }
   .back:hover { transform: translateX(-2px); }
   .login, .note-form { display: grid; gap: 8px; }
   .login label { color: var(--muted); font-size: 12px; }

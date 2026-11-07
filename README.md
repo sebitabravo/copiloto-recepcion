@@ -96,17 +96,21 @@ y después el canal real.
 
 ## Capturas
 
-| Landing pública | Demo con traza de herramientas |
+| Landing pública | Simulador tipo WhatsApp |
 |---|---|
 | ![Landing](docs/img/01-landing.webp) | ![Demo](docs/img/02-demo.webp) |
 
-| Conexiones en vivo | Panel de recepción |
+| Traza de herramientas | Vista de recepción en la consola |
 |---|---|
-| ![En vivo](docs/img/03-en-vivo.webp) | ![Panel](docs/img/04-panel.webp) |
+| ![Traza](docs/img/03-traza.webp) | ![Recepción](docs/img/04-recepcion.webp) |
 
-| Métricas del piloto | PMS simulado |
+| Panel de recepción | Métricas del piloto |
 |---|---|
-| ![Métricas](docs/img/05-metricas.webp) | ![PMS](docs/img/06-pms-admin.webp) |
+| ![Panel](docs/img/05-panel.webp) | ![Métricas](docs/img/06-metricas.webp) |
+
+| PMS simulado | Aviso de privacidad |
+|---|---|
+| ![PMS](docs/img/07-pms.webp) | ![Privacidad](docs/img/08-privacidad.webp) |
 
 El recorrido completo, las decisiones y lo que falló en el camino están en el
 [caso de estudio](docs/caso-de-estudio.md).
