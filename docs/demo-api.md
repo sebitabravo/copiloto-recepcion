@@ -89,6 +89,54 @@ Errores (JSON `{"detail": "...", ...}`):
 Petición `{"session_id": "..."}`. Borra el historial de esa sesión. Respuesta `{"status": "ok"}`.
 No elimina reservas del PMS ni conversaciones de Chatwoot. El navegador inicia después un identificador nuevo.
 
+## `POST /api/demo/session`
+
+Crea la sesión firmada del panel sin credenciales en el navegador: es lo que usa la pestaña Recepción de la
+consola con el **Modo demo** encendido. El cuerpo se ignora (tope de 4 KB).
+
+Respuesta 204, sin cuerpo: la sesión viaja solo en una cookie `HttpOnly` (`SameSite=Lax`, `Secure` con
+HTTPS). Nunca devuelve el token ni ningún secreto.
+
+| Código | Cuándo |
+|---|---|
+| 204 | Sesión demo creada (`DEMO_ENABLED=1`, el valor por defecto) |
+| 403 | Demo apagada (`DEMO_ENABLED=0`); no deja cookie |
+| 413 | Cuerpo de más de 4 KB |
+
+## `GET /api/demo/session`
+
+```json
+{"demo": true, "name": "Recepción (demo)"}
+```
+
+La página pregunta si el modo demo está disponible y quién es la sesión, sin secretos: `demo` refleja
+`DEMO_ENABLED` y `name` es el nombre de la sesión del panel de esta cookie, o `null` si no hay sesión.
+
+## `POST /api/demo/voice`
+
+Mismo cuerpo y mismos límites que `POST /api/demo/chat` (`session_id` y `message`); comparten sesión,
+cupo de mensajes y límites por IP con el chat de texto. A la respuesta del turno le agrega la síntesis:
+
+```json
+{
+  "reply": "Estamos en el sector Molco...",
+  "mode": "ai",
+  "spoken": "Estamos en el sector Molco...",
+  "spoken_language": "es",
+  "audio_b64": "<base64>",
+  "audio_format": "mp3",
+  "voice_error": null
+}
+```
+
+- Se sintetiza solo la respuesta del asistente (`spoken`), nunca texto enviado por el navegador.
+- `audio_b64` y `audio_format` pueden ser `null` con `voice_error`: sin proveedor configurado, presupuesto
+  de voz agotado (`tope_de_voz`) o falla del proveedor (`voz_no_disponible`). El texto siempre llega: la voz
+  nunca impide que el huésped lea la respuesta.
+- `audio_format` es `mp3` (ElevenLabs) o `wav` (Piper local), según el proveedor que respondió.
+- `spoken_language` se deduce del mensaje del huésped (`es` o `en`).
+- La voz no crea reservas autónomas.
+
 ## Canales y comprobaciones
 
 - El simulador del navegador usa esta API: no es WhatsApp y no crea conversaciones en Chatwoot.

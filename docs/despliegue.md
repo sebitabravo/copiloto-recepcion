@@ -6,6 +6,9 @@
 make up && make creds
 ```
 
+Sin `make` (Windows con Git Bash), `./scripts/demo.sh` expone los mismos comandos:
+`./scripts/demo.sh up && ./scripts/demo.sh creds`.
+
 Requiere Docker con 4 GB o más. Si Chatwoot no arranca por falta de memoria con OrbStack, sube el límite:
 `orb config set memory_mib 8192` (reinicia la VM de Docker, así que detiene otros contenedores).
 
@@ -20,6 +23,12 @@ de rutas de MSYS (`MSYS_NO_PATHCONV`) y los comandos de Python usan `uv run pyth
 
 Los puertos se publican solo en `127.0.0.1`. Para mostrar la demo a otros equipos de tu red define
 `BIND_ADDR=0.0.0.0` antes de `make up`; en ese caso protege el panel y las métricas (ver «Servidor»).
+
+Al abrir la demo desde otro equipo, define también `LANDING_ORIGIN` con la URL que escribes en el navegador
+(por ejemplo `http://192.168.1.50:8080`), no la de `localhost`. El copiloto solo acepta peticiones de ese
+origen (CORS) y tanto la consola (`/demo`) como el chat hablan con el copiloto en `:8100` de forma
+*cross-origin*: si el origen no coincide, el navegador bloquea las llamadas y el síntoma es que la consola
+queda en «Sin sesión» y el chat no responde. Déjalo en `.env` y reinicia el copiloto.
 
 Las URLs públicas no se editan a mano en la landing: `scripts/seed-chatwoot.sh` genera `landing/config.js`
 (gitignored) con la URL de Chatwoot, la del copiloto, el token del widget y `privacyUrl`. Si cambias

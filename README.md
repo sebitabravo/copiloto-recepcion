@@ -63,20 +63,34 @@ Para borrar todo: `make reset` o `./scripts/demo.sh reset` (ambos piden confirma
 
 ## Recorrido de 5 minutos (profesora y hotel)
 
+La demo tiene **dos canales separados**. El simulador de la consola (pestaña Huésped) responde con la misma
+lógica del bot, pero no crea conversaciones: no llega a la bandeja ni al panel. El canal real es el widget
+**Escribir a recepción**, y esa conversación es la que ve recepción. El recorrido usa primero el simulador
+y después el canal real.
+
+**Simulador (2 min):**
+
 1. Abre http://localhost:8080 y pulsa **Probar la demo**. En la pestaña **Huésped**, escribe **hola**:
    aparece el aviso de privacidad y la **ubicación** antes de cualquier pregunta.
 2. Pregunta **¿tienen piscina?** → respuesta aprobada en segundos; la conversación sigue con el bot.
 3. Elige **Disponibilidad**, escribe `15/03/2027 al 18/03/2027`, `2` adultos, `0` niños y una habitación.
    Verás «Disponible según lectura del PMS a las HH:MM … Pendiente de confirmación por recepción».
-4. En otra ventana entra a http://localhost:3000 como `recepcion1@bordeluz-demo.test` (contraseña con
-   `make creds` o `./scripts/demo.sh creds`). La conversación aparece **abierta**, con etiqueta `comercial`, la nota privada de
-   pre-información y, en la barra lateral derecha, la app **Copiloto** con el cronómetro (verde → ámbar a
-   los 120 s → rojo a los 180 s).
-   Deja la bandeja abierta: mientras nadie de recepción está en línea el widget muestra «Estamos ausentes».
-5. Responde al huésped: el cronómetro se detiene. Pulsa **Confirmar en el PMS**: se abre el PMS simulado con
-   los datos prellenados; ingresa el token de personal, confirma, y revisa http://localhost:8100/metricas
-   (conversión, cumplimiento <180 s y costo por consulta).
-6. Prueba también fuera de turno (`SHIFT_START`/`SHIFT_END` en `.env`) y con el PMS caído
+
+**Canal real (3 min):**
+
+4. En la misma consola, pulsa **Escribir a recepción**: se abre el widget real de Chatwoot. Envía
+   **quiero reservar**. El copiloto responde igual, pero esta conversación sí entra al sistema.
+5. En otra ventana entra a http://localhost:3000 como `recepcion1@bordeluz-demo.test` (contraseña con
+   `make creds` o `./scripts/demo.sh creds`). La conversación del widget aparece **abierta**, con etiqueta
+   `comercial`, la nota privada de pre-información y, en la barra lateral derecha, la app **Copiloto** con
+   el cronómetro (verde → ámbar a los 120 s → rojo a los 180 s). En la consola, la pestaña **Recepción**
+   muestra la misma conversación en la cola con su riesgo de SLA. Deja la bandeja abierta: mientras nadie
+   de recepción está en línea el widget muestra «Estamos ausentes».
+6. Responde al huésped desde la bandeja: el cronómetro se detiene. Pulsa **Confirmar en el PMS** (en la
+   pestaña **Recepción** de la consola): se abre el PMS simulado con los datos prellenados; ingresa el
+   token de personal, confirma, y revisa http://localhost:8100/metricas (conversión, cumplimiento <180 s y
+   costo por consulta).
+7. Vuelve al simulador y prueba fuera de turno (`SHIFT_START`/`SHIFT_END` en `.env`) y con el PMS caído
    (`SIMULATE_DOWN=1`): el bot informa el horario real o dice que recepción verificará cupos, sin afirmar
    disponibilidad, y la escritura en el PMS simulado responde 503.
 

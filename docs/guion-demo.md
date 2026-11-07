@@ -19,6 +19,14 @@ Si quieres empezar con la cola vacía (las pruebas dejan conversaciones con espe
 `./scripts/demo.sh reset` **antes** de `./scripts/demo.sh up`; borra volúmenes y vuelve a sembrar. Es
 destructivo para los datos de la demo, no para el código.
 
+Dos notas de operación:
+
+- Si cambias `infra/landing/nginx.conf`, vuelve a levantar el stack (`./scripts/demo.sh up` o `make up`):
+  ambos reinician el contenedor `landing` al final, y nginx lee su configuración al arrancar. Sin ese
+  reinicio, un stack ya levantado sigue con la configuración vieja y `/demo` responde 404.
+- `landing/config.js` solo existe después del seed (`./scripts/demo.sh seed`): lo genera `scripts/seed-chatwoot.sh`.
+  Sin ese archivo el widget de Chatwoot no carga y el enlace de privacidad cae a su valor por defecto.
+
 ## Treinta minutos antes
 
 1. `./scripts/preflight.sh` — verifica los servicios y (si corresponde) el modelo local.
@@ -40,10 +48,14 @@ destructivo para los datos de la demo, no para el código.
 | 1. Portada | Recorres la página hasta el CTA | Hero compuesto, cifras con contexto, recorrido de cinco pasos, pantallas de recepción y límites declarados |
 | 2. Huésped | "Probar la demo" → pestaña Huésped → escribes **hola** | Aviso de privacidad primero y **ubicación** antes de cualquier pregunta |
 | 3. Consulta | **¿tienen piscina?** y luego **quiero reservar** con fechas y 2 adultos | Respuesta en segundos y «Disponible según lectura del PMS a las HH:MM · pendiente de confirmación» |
-| 4. Recepción | Pestaña Recepción | La conversación llega con nota privada, etiqueta comercial y cronómetro de SLA (verde → ámbar 120 s → rojo 180 s) |
-| 5. Confirmación | Panel → **Confirmar en el PMS** → token de personal | Reserva creada; vuelves a la pestaña Admin y está en el PMS y en las métricas |
-| 6. Canal real | Botón **Escribir a recepción** | Widget real de Chatwoot, misma respuesta del copiloto, misma bandeja |
+| 4. Canal real | En la consola, botón **Escribir a recepción** → envías **quiero reservar** | Widget real de Chatwoot: misma respuesta del copiloto, pero esta conversación sí entra al sistema |
+| 5. Recepción | Pestaña Recepción (y bandeja en http://localhost:3000) | La conversación del canal real llega con nota privada, etiqueta comercial y cronómetro de SLA (verde → ámbar 120 s → rojo 180 s) |
+| 6. Confirmación | Panel → **Confirmar en el PMS** → token de personal | Reserva creada; vuelves a la pestaña Admin y está en el PMS y en las métricas |
 | 7. Cierre | Métricas | Conversión, cumplimiento < 180 s y costo por consulta |
+
+Los turnos del simulador (momentos 2 y 3) **no aparecen** en la pestaña Recepción ni en la bandeja de
+Chatwoot: el simulador no crea conversaciones. Lo que ve recepción —cola, nota, etiqueta y cronómetro—
+es solo la conversación del canal real del widget.
 
 Frase de cierre sugerida: «El copiloto propone y recepción confirma; el bot no cierra reservas solo».
 
@@ -61,7 +73,7 @@ Frase de cierre sugerida: «El copiloto propone y recepción confirma; el bot no
 
 - Front **estático** (HTML/CSS/JS) servido por nginx, con sistema de diseño y auditoría de calidad: decisión
   documentada en `docs/adr/0001-front-estatico.md`, con la migración a componentes planificada.
-- API **FastAPI** con 428 pruebas, e2e de cuatro casos, contenedores sin root, solo lectura y `cap_drop`.
+- API **FastAPI** con 447 pruebas, e2e de cuatro casos, contenedores sin root, solo lectura y `cap_drop`.
 - **Modo demo por sesión de servidor**: el navegador nunca recibe credenciales; el token del PMS no se
   expone.
 - Límites declarados: PMS real por contrato (sin API pública de Pxsol), WhatsApp no oficial y un solo

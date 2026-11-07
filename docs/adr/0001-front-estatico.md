@@ -13,7 +13,7 @@ El producto tiene dos superficies web:
    (huésped, recepción, admin) con datos leídos de la API.
 
 El resto del sistema es Python: FastAPI (`copiloto`), PMS simulado (`pms_mock`), puentes (`pms_bridge`,
-`wa_bridge`), 428 pruebas, un e2e de cuatro casos y CI. La demo corre con Docker Compose y se muestra en
+`wa_bridge`), 447 pruebas, un e2e de cuatro casos y CI. La demo corre con Docker Compose y se muestra en
 vivo, en plazos cortos, sin CDNs ni servicios externos: las tipografías y todo el CSS se sirven locales.
 
 La pregunta que motiva este ADR es si corresponde reemplazar HTML/CSS/JS por un framework "más senior".
