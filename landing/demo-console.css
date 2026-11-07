@@ -92,7 +92,8 @@
   background: #e1f3fb; color: #4a6b74; font-size: .6rem; font-weight: 600;
   letter-spacing: .06em; text-transform: uppercase;
 }
-.message { display: flex; margin-bottom: 6px; }
+.message { display: flex; flex-wrap: wrap; margin-bottom: 6px; }
+.quick-replies { flex-basis: 100%; }
 .message.user { justify-content: flex-end; }
 .bubble {
   max-width: 86%; padding: 6px 9px; border-radius: 8px;
