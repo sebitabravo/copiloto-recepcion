@@ -41,6 +41,23 @@ Dos notas de operación:
    sin pedir credenciales. Si aparece "Sin sesión", el backend tiene la demo apagada (`DEMO_ENABLED`).
 4. Baja el zoom del navegador a 90 % para que entren las tres columnas en el proyector.
 
+## IA local (opcional)
+
+El modelo corre en Docker (llama.cpp + Qwen2.5-3B) y no cuesta por consulta:
+
+```bash
+./scripts/demo.sh ia       # baja el modelo la primera vez (~2 GB) y reconecta el copiloto
+./scripts/demo.sh ia-off   # vuelve al flujo guiado determinista
+```
+
+Medido en este equipo: **38 s** el primer turno (el servidor arma la caché del prompt) y **3-8 s**
+en caliente. El modelo acierta ubicación y consultas con herramienta, pero **se equivoca en preguntas
+frecuentes aprobadas** y no interpreta fechas en lenguaje natural.
+
+Por eso: el recorrido del miércoles va con el **flujo guiado** (correcto y rápido, validado por el e2e).
+Si quieres mostrar la IA, calienta el modelo con una pregunta de ubicación antes de presentar y evita
+las de disponibilidad.
+
 ## Guion (5 minutos)
 
 | Momento | Qué haces | Qué se ve |
