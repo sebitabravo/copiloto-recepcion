@@ -268,3 +268,34 @@ def parse_weekday_range(text: str, today: date) -> tuple[date, date] | None:
     start = _next_weekday(match.group(1), today)
     end = _next_weekday(match.group(2), today, after=start)
     return start, end
+
+
+# Formato de chat (contrato C2): el huésped ve texto plano y montos en pesos chilenos.
+_BOLD = re.compile(r"\*\*(.+?)\*\*|__(.+?)__", re.S)
+_CODE_FENCE = re.compile(r"^[ \t]*```.*$", re.M)
+_INLINE_CODE = re.compile(r"`([^`\n]*)`")
+_HEADER = re.compile(r"^[ \t]*#{1,6}[ \t]+", re.M)
+_STAR_BULLET = re.compile(r"^([ \t]*)[*•][ \t]+", re.M)
+_CLP_GROUPED = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+)(?!\d)")
+_CLP_PLAIN = re.compile(r"\$\s?(\d{4,})(?![\d.,]\d)")
+
+
+def chat_format(text: str, max_blocks: int = 3) -> str:
+    """Texto plano para el chat: sin Markdown, montos `$65.000` y a lo más `max_blocks` bloques.
+
+    Una línea en blanco separa ideas (contrato C1: el simulador muestra cada bloque como una burbuja). Los
+    bloques que sobran se unen al último con un salto simple, sin perder texto. El `*texto*` simple queda:
+    es la negrita de WhatsApp que el simulador muestra.
+    """
+    text = _CODE_FENCE.sub("", text.replace("\r\n", "\n"))
+    text = _BOLD.sub(lambda m: m.group(1) if m.group(1) is not None else m.group(2), text)
+    text = _INLINE_CODE.sub(r"\1", text)
+    text = _HEADER.sub("", text)
+    text = _STAR_BULLET.sub(r"\1- ", text)
+    text = _CLP_GROUPED.sub(lambda m: "$" + m.group(1).replace(",", "."), text)
+    text = _CLP_PLAIN.sub(lambda m: money(int(m.group(1))), text)
+    lines = "\n".join(line.rstrip() for line in text.split("\n")).strip()
+    blocks = [block.strip("\n") for block in re.split(r"\n{2,}", lines) if block.strip()]
+    if len(blocks) > max_blocks:
+        blocks = [*blocks[: max_blocks - 1], "\n".join(blocks[max_blocks - 1 :])]
+    return "\n\n".join(blocks)

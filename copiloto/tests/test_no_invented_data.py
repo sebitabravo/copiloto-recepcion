@@ -29,3 +29,11 @@ async def test_invented_reply_without_tools_is_replaced(make_ai):
     await h.say("hola")
     await h.say("cuéntame algo interesante del lugar")
     assert h.chatwoot.guest_texts()[-1] == SAFE_NO_DATA
+
+
+async def test_first_person_hotel_claim_without_a_tool_is_replaced(make_ai):
+    """El prompt habla como el hotel («tenemos»): esa afirmación también necesita una herramienta detrás."""
+    h, _ = make_ai([say("Tenemos spa, gimnasio y cancha de tenis.")])
+    await h.say("hola")
+    await h.say("¿qué más ofrecen?")
+    assert h.chatwoot.guest_texts()[-1] == SAFE_NO_DATA

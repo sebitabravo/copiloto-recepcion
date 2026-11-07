@@ -6,6 +6,7 @@ from copiloto.ai import sessions as ai_sessions
 from copiloto.ai.llm import LlmUnavailable
 from copiloto.ai.sessions import AiSession
 from copiloto.ai.tools import ToolHooks, ToolRunner, tool_specs
+from copiloto.flow import AI_FALLBACK_NOTICE
 from copiloto.pms import PmsConflict, PmsUnavailable
 
 from copiloto import store
@@ -230,7 +231,7 @@ async def test_a_handoff_already_done_survives_a_later_model_outage(make_ai):
     await h.say("hola")
     await h.say("quiero hablar con una persona")
     assert h.chatwoot.statuses[1] == "open" and store.get_state(h.db, 1).step != "menu"
-    assert not any("no está disponible ahora" in t for t in h.chatwoot.guest_texts())
+    assert not any(AI_FALLBACK_NOTICE in t for t in h.chatwoot.guest_texts())
     assert llm.calls == [], "no hace falta consultar al modelo para avisar a recepción"
 
 
@@ -249,7 +250,7 @@ async def test_the_deadline_also_covers_the_work_before_the_first_model_call(mak
     h, llm = make_ai([say("no debería llegar")], replace(ai_settings, ai_turn_timeout_s=0.05))
     await h.say("hola")
     await h.say("¿cómo llego al hotel?")
-    assert any("no está disponible ahora" in t for t in h.chatwoot.guest_texts())
+    assert any(AI_FALLBACK_NOTICE in t for t in h.chatwoot.guest_texts())
     assert llm.calls == []
 
 
@@ -267,7 +268,7 @@ async def test_the_whole_ai_turn_has_a_deadline_and_falls_back_to_the_menu(make_
     started = time.monotonic()
     await h.say("quiero reservar")
     assert time.monotonic() - started < 2
-    assert any("no está disponible ahora" in t for t in h.chatwoot.guest_texts())
+    assert any(AI_FALLBACK_NOTICE in t for t in h.chatwoot.guest_texts())
     assert store.get_state(h.db, 1).step == "menu"
 
 
@@ -275,7 +276,7 @@ async def test_llm_outage_degrades_to_the_guided_menu(make_ai):
     h, _ = make_ai([LlmUnavailable("http 503")])
     await h.say("hola")
     await h.say("quiero reservar")
-    assert any("no está disponible ahora" in t for t in h.chatwoot.guest_texts())
+    assert any(AI_FALLBACK_NOTICE in t for t in h.chatwoot.guest_texts())
     assert h.chatwoot.messages[-1]["options"], "queda el menú de botones"
     assert store.get_state(h.db, 1).step == "menu"
 

@@ -108,3 +108,19 @@ def test_blank_knob_values_count_as_unconfigured(monkeypatch, name, field, defau
 def test_knob_values_surrounding_whitespace_are_still_parsed(monkeypatch, name, field, value, expected):
     monkeypatch.setenv(name, value)
     assert getattr(Settings.from_env(), field) == expected
+
+
+def test_sampling_settings_come_from_the_environment(monkeypatch):
+    monkeypatch.delenv("LLM_TEMPERATURE", raising=False)
+    monkeypatch.delenv("LLM_TOP_P", raising=False)
+    default = Settings.from_env()
+    assert default.llm_temperature == 0.3 and default.llm_top_p is None
+    monkeypatch.setenv("LLM_TEMPERATURE", "0.7")
+    monkeypatch.setenv("LLM_TOP_P", "0.8")
+    tuned = Settings.from_env()
+    assert tuned.llm_temperature == 0.7 and tuned.llm_top_p == 0.8
+    # El compose pasa `${VAR:-}`: en blanco cuenta como sin configurar.
+    monkeypatch.setenv("LLM_TEMPERATURE", " ")
+    monkeypatch.setenv("LLM_TOP_P", "")
+    blank = Settings.from_env()
+    assert blank.llm_temperature == 0.3 and blank.llm_top_p is None

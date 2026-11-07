@@ -25,6 +25,12 @@ def int_env(env: dict[str, str], name: str, default: int) -> int:
     return int(raw) if raw else default
 
 
+def float_env(env: dict[str, str], name: str, default: float | None) -> float | None:
+    """Decimal opcional del entorno, con la misma regla que `int_env`: ausente o en blanco usa el valor por defecto."""
+    raw = (env.get(name) or "").strip()
+    return float(raw) if raw else default
+
+
 @dataclass(frozen=True)
 class Settings:
     hotel_data_path: str = "../data/hotel.yaml"
@@ -72,6 +78,9 @@ class Settings:
     # Tope del turno completo (reintentos y herramientas incluidos): pasado ese plazo se vuelve al menú guiado
     ai_turn_timeout_s: float = 12.0
     llm_max_tokens: int = 500
+    # Muestreo: temperatura fija salvo `LLM_TEMPERATURE`; `top_p` solo se envía si `LLM_TOP_P` está definido
+    llm_temperature: float = 0.3
+    llm_top_p: float | None = None
     # Voz de la demo (opcional): sin clave y sin voz elegida, la demo sigue solo con texto
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = ""
@@ -116,6 +125,8 @@ class Settings:
             # Un modelo local en CPU puede necesitar más de 25 s por turno.
             llm_timeout_s=float(env.get("LLM_TIMEOUT_S", cls.llm_timeout_s)),
             ai_turn_timeout_s=float(env.get("AI_TURN_TIMEOUT_S", cls.ai_turn_timeout_s)),
+            llm_temperature=float_env(env, "LLM_TEMPERATURE", cls.llm_temperature),
+            llm_top_p=float_env(env, "LLM_TOP_P", cls.llm_top_p),
             elevenlabs_api_key=env.get("ELEVENLABS_API_KEY", ""),
             elevenlabs_voice_id=env.get("ELEVENLABS_VOICE_ID", ""),
             elevenlabs_voice_id_en=env.get("ELEVENLABS_VOICE_ID_EN", ""),

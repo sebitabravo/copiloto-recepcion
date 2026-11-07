@@ -32,6 +32,7 @@ from copiloto.textutil import (
     MAX_CHILDREN,
     MAX_NIGHTS,
     is_local_host,
+    is_local_url,
     money,
     nights_over_limit,
     normalize,
@@ -93,6 +94,8 @@ COMMERCIAL_TERMS = (
 PHOTO_TERMS = ("foto", "fotos", "galeria", "imagenes", "habitaciones", "tipos de habitacion")
 LOCATION_TERMS = ("ubicacion", "donde", "direccion", "como llegar", "mapa", "llegar", "queda")
 FALLBACK_LIMIT = 3
+# Sin jerga de sistema: el huésped lee una disculpa humana y sigue con el menú de botones.
+AI_FALLBACK_NOTICE = "Perdona, se me cortó la conexión justo ahora. Te dejo las opciones para que sigas al tiro."
 AI_CONVERSATION_CAP = 60
 
 
@@ -306,14 +309,20 @@ class Copiloto:
     async def _welcome(self, ctx: Context) -> None:
         name = self.hotel.hotel["name"]
         if self.agent is not None:
+            # Con el modelo local ningún tercero recibe el texto: decirlo al revés sería mentir al huésped.
+            provider = (
+                "El modelo de un tercero procesa lo que me escribes. "
+                if not is_local_url(self.settings.llm_base_url)
+                else ""
+            )
             intro = (
-                f"¡Hola! Soy el asistente de recepción del {name} (demo). Uso inteligencia artificial de un "
-                "tercero para entenderte, así que no escribas datos personales reales. "
+                f"¡Hola! Soy la recepción del {name} por chat, un asistente virtual con inteligencia artificial. "
+                f"{provider}Esto es una demostración, así que no escribas datos personales reales. "
             )
         else:
             intro = (
-                f"¡Hola! Soy el Copiloto de Recepción del {name} (demo). Resuelvo al tiro las consultas "
-                "frecuentes y paso tu solicitud a recepción, que es quien valida y cierra cada reserva. "
+                f"¡Hola! Qué bueno que escribes al {name}. Te ayudo con la ubicación, las habitaciones, la "
+                "disponibilidad y los servicios; recepción valida y cierra cada reserva. "
             )
         await self._say(ctx, intro + self._privacy_line(ctx))
         await self._show_location(ctx)
@@ -839,7 +848,7 @@ class Copiloto:
             ai_sessions.save(self.db, session, ctx.now)
             trace("fallback")
             record_event(self.db, ctx.conversation_id, "ai_fallback", self.clock(), {"reason": reason})
-            await self._say(ctx, "Mi asistente inteligente no está disponible ahora, así que sigo con el menú guiado.")
+            await self._say(ctx, AI_FALLBACK_NOTICE)
             await self._send_menu(ctx)
             return
         ai_sessions.save(self.db, session, ctx.now)

@@ -49,9 +49,12 @@ class LlmClient:
         self._extra = {"thinking": {"type": "disabled"}} if "deepseek" in base_url else {}
 
     async def chat(self, messages: list[dict], tools: list[dict] | None = None, max_tokens: int = 500,
-                   temperature: float = 0.3, tool_choice: str = "auto") -> LlmReply:
+                   temperature: float = 0.3, tool_choice: str = "auto", top_p: float | None = None) -> LlmReply:
+        # Solo parámetros del estándar de OpenAI: top_k, min_p y similares son propios de cada servidor.
         body = {"model": self._model, "messages": messages, "max_tokens": max_tokens,
                 "temperature": temperature, "stream": False, **self._extra}
+        if top_p is not None:
+            body["top_p"] = top_p
         if tools:
             body["tools"] = tools
             body["tool_choice"] = tool_choice

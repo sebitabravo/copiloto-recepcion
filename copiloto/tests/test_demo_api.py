@@ -48,6 +48,12 @@ def test_chat_runs_the_agent_and_returns_the_contract(ai_settings, harness):
     assert body["quick_replies"] and body["usage"]["messages_left"] == 29
 
 
+def test_demo_reply_is_plain_text_with_chilean_amounts(ai_settings, harness):
+    llm = FakeLlm([call("check_availability", **STAY), say("**Doble con Jacuzzi**: $85,000 la noche")])
+    body = chat(client_for(ai_settings, harness, llm), "2 adultos y 1 niño del 15 al 18 de noviembre").json()
+    assert body["reply"] == "Doble con Jacuzzi: $85.000 la noche"
+
+
 def test_demo_booking_is_created_in_the_simulated_pms_with_a_booking_event(ai_settings, harness):
     avail = call("check_availability", **STAY)
     book = call("create_booking", call_id="c2", guest_name="Camila Rojas", room_code="doble_con_jacuzzi",
