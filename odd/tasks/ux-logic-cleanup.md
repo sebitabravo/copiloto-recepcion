@@ -85,3 +85,11 @@ L3 (revisión estricta, misma sesión):
     subcadena, retención pisando `Settings` inyectado, cabeceras de nginx incompletas y alias de la
     métrica SLA. Diferidos con motivo: columna `contact_ref` (migración destructiva), cierre de clientes
     HTTP en `wa_bridge` (preexistente), CORS `127.0.0.1` vs `localhost` (configuración del servidor).
+
+L4 (diseño, misma sesión):
+    La landing se percibía como demo y no como producto. Se sincronizó el sistema de diseño del proyecto
+    en `design/system.md` y `design/system.html` (tokens verbatim de `landing/demo.css` y
+    `copiloto/src/copiloto/static/theme.css`, con sus derivas documentadas). Tres direcciones en
+    `design/landing-profesional/`: `01-tour-producto.html` (tour con evidencia),
+    `02-sala-de-control.html` (todo de un vistazo) y `03-cuatro-actos.html` (editorial). Queda elegir
+    una dirección antes del handoff; no se modificó código de producción.

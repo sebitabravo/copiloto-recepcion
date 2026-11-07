@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Copiloto de Recepción · Dirección A — Tour de producto</title>
+<style>
+  :root{
+    --bg:#f3ebdf; --bg-2:#eae0cf; --card:#fcf8f1; --card-2:#f6efe3;
+    --ink:#211a12; --ink-2:#423325; --muted:#6b5943; --line:#ded0b9;
+    --line-soft:rgb(46 32 18 / 9%); --accent:#8d5a2b; --accent-2:#35513f;
+    --accent-ink:#fffaf2; --glow:#dfae7f; --ok:#2c6340; --ok-bg:#e6eee2;
+    --error:#9c2a22; --bezel:#241a12;
+    --wa-bg:#efeae2; --wa-in:#ffffff; --wa-out:#d9fdd3; --wa-header:#f0f2f5;
+    --wa-ink:#111b21; --wa-muted:#667781; --wa-line:#e2ddd4; --wa-link:#006b58;
+    --font-display:"Iowan Old Style","Palatino Linotype",Georgia,serif;
+    --font-ui:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    --font-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+    --shadow-sm:0 1px 2px rgb(50 33 16 / 6%), 0 6px 18px rgb(50 33 16 / 5%);
+    --shadow-md:0 2px 6px rgb(50 33 16 / 6%), 0 18px 42px rgb(50 33 16 / 9%);
+    --shadow-lg:0 40px 90px -30px rgb(50 33 16 / 34%);
+    --ease:cubic-bezier(.2,.8,.3,1);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#14100b; --bg-2:#1a1410; --card:#201a13; --card-2:#261e16;
+      --ink:#f0e6d5; --ink-2:#d6c7b1; --muted:#a4947d; --line:#3f3427;
+      --line-soft:rgb(255 240 220 / 8%); --accent:#dcaa6d; --accent-2:#9fd0ae;
+      --accent-ink:#14100b; --glow:#6a4a2a; --ok:#66bb6a; --ok-bg:#22301f;
+      --error:#ffc0b8; --bezel:#2e2418; --wa-bg:#0b141a; --wa-in:#202c33;
+      --wa-out:#005c4b; --wa-header:#202c33; --wa-ink:#e9edef; --wa-muted:#8696a0;
+      --wa-line:#2a3942; --wa-link:#7ee0c6;
+      --shadow-sm:0 1px 2px rgb(0 0 0 / 30%);
+      --shadow-md:0 2px 6px rgb(0 0 0 / 30%), 0 18px 42px rgb(0 0 0 / 40%);
+      --shadow-lg:0 40px 90px -30px rgb(0 0 0 / 70%);
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 var(--font-ui);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:clip}
+  @keyframes aurora{from{transform:translate3d(-2%,0,0) scale(1)}to{transform:translate3d(2%,-2%,0) scale(1.06)}}
+  @keyframes stack-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+  @keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  @keyframes message-in{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+  @keyframes fade-up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @keyframes pulse-dot{0%,100%{box-shadow:0 0 0 3px rgb(37 211 102 / 18%)}50%{box-shadow:0 0 0 6px rgb(37 211 102 / 6%)}}
+  h1,h2,h3,p,dl,dd,figure{margin:0}
+  ul,ol{margin:0;padding:0;list-style:none}
+  a{color:inherit;text-decoration:none}
+  :focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:4px}
+  .skip{position:absolute;left:-999px;top:8px;z-index:50;background:var(--card);color:var(--ink);
+    padding:10px 16px;border-radius:999px;border:1px solid var(--line);font-size:.85rem}
+  .skip:focus{left:16px}
+  .wrap{width:min(1180px,calc(100% - 48px));margin-inline:auto}
+
+  /* topbar */
+  .topbar{position:sticky;top:0;z-index:20;background:color-mix(in oklab,var(--bg) 88%,transparent);
+    backdrop-filter:blur(14px);border-bottom:1px solid var(--line-soft)}
+  .topbar-in{display:flex;align-items:center;gap:24px;height:72px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:-.01em}
+  .brand-mark{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;
+    background:linear-gradient(160deg,color-mix(in oklab,var(--accent) 82%,#fff),var(--accent));
+    color:var(--accent-ink);font-family:var(--font-display);font-size:1.05rem}
+  .brand small{font-weight:500;color:var(--muted);font-size:.78rem;letter-spacing:.01em}
+  .brand-divider{width:1px;height:18px;background:var(--line)}
+  nav.main{display:flex;gap:6px;margin-left:auto}
+  nav.main a{padding:8px 12px;border-radius:999px;font-size:.86rem;color:var(--ink-2);min-height:44px;
+    display:inline-flex;align-items:center;transition:background .2s var(--ease),color .2s var(--ease)}
+  nav.main a:hover{background:var(--card-2);color:var(--ink)}
+  .btn{display:inline-flex;align-items:center;gap:10px;min-height:48px;padding:11px 22px;border-radius:999px;
+    border:1px solid var(--line);background:var(--card);color:var(--ink);font:600 .9rem var(--font-ui);
+    transition:transform .2s var(--ease),box-shadow .2s var(--ease),background .2s var(--ease)}
+  .btn:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+  .btn.primary{border-color:transparent;color:var(--accent-ink);
+    background:linear-gradient(160deg,color-mix(in oklab,var(--accent) 88%,#fff),var(--accent));
+    box-shadow:inset 0 1px 0 rgb(255 255 255 / 22%),0 10px 26px -12px var(--accent)}
+  .btn.ghost{background:transparent}
+  .topbar .btn{min-height:40px;padding:8px 18px;font-size:.85rem}
+
+  /* hero */
+  .hero{position:relative;isolation:isolate;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:56px;
+    align-items:center;padding:64px 0 40px}
+  .hero::before{content:"";position:absolute;z-index:-1;inset:-16% -12% auto -12%;height:560px;
+    background:radial-gradient(ellipse at 28% 22%,color-mix(in oklab,var(--glow) 62%,transparent),transparent 62%),
+               radial-gradient(ellipse at 82% 8%,color-mix(in oklab,var(--accent) 18%,transparent),transparent 58%);
+    filter:blur(8px);animation:aurora 18s ease-in-out infinite alternate}
+  .hero::after{content:"";position:absolute;z-index:-1;inset:0;pointer-events:none;
+    background-image:radial-gradient(circle at 1px 1px,rgb(46 32 18 / 7%) 1px,transparent 0);
+    background-size:22px 22px;mask-image:radial-gradient(ellipse at 50% 40%,#000 20%,transparent 72%)}
+  .hero > *{animation:fade-up .7s var(--ease) both}
+  .hero > *:nth-child(2){animation-delay:.12s}
+  .eyebrow{font-size:.71rem;letter-spacing:.19em;text-transform:uppercase;color:var(--accent);font-weight:650}
+  h1{font-family:var(--font-display);font-weight:400;font-size:clamp(2.7rem,5.6vw,4.2rem);
+    line-height:.99;letter-spacing:-.02em;margin:18px 0 0}
+  h1 em{font-style:italic;color:var(--accent)}
+  .lede{margin-top:22px;font-size:1.06rem;line-height:1.62;color:var(--ink-2);max-width:48ch}
+  .hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+  .fineprint{margin-top:18px;font-size:.78rem;color:var(--muted)}
+
+  /* composed product frame */
+  .stage{position:relative;padding:14px 0}
+  .frame{position:relative;border:1px solid var(--line);border-radius:26px;background:var(--card);
+    box-shadow:var(--shadow-lg);overflow:hidden;transform:perspective(1600px) rotateY(-7deg) rotateX(3deg);
+    transform-origin:62% 42%;transition:transform .7s var(--ease)}
+  .stage:hover .frame{transform:perspective(1600px) rotateY(-3deg) rotateX(1.2deg) translateY(-4px)}
+  .float{position:absolute;z-index:2;display:inline-flex;align-items:center;gap:8px;
+    background:color-mix(in oklab,var(--card) 88%,transparent);border:1px solid var(--line);
+    border-radius:999px;padding:7px 12px;box-shadow:var(--shadow-sm);backdrop-filter:blur(8px);
+    font:500 .66rem var(--font-mono);color:var(--ink-2);animation:stack-float 12s ease-in-out infinite}
+  .float.tool{left:-20px;top:7%}
+  .float.tool b{color:var(--ok);font-weight:700}
+  .float.ticket{right:-22px;bottom:-30px;flex-direction:column;align-items:flex-start;gap:2px;
+    border-radius:14px;padding:10px 14px;animation-delay:-4s;border-left:3px solid var(--ok)}
+  .float.ticket b{font-family:var(--font-ui);font-size:.72rem;color:var(--ink)}
+  .float.ticket span{font-size:.6rem;color:var(--muted)}
+  .float.ticket em{font:600 .8rem var(--font-ui);font-style:normal;color:var(--ok)}
+  .frame-bar{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);
+    background:var(--card-2)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--line)}
+  .addr{margin-left:8px;font:500 .72rem var(--font-mono);color:var(--muted);
+    background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+  .split{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr)}
+  .guest{background:var(--wa-bg);border-right:1px solid var(--line);padding:16px 14px;
+    background-image:radial-gradient(circle at 1px 1px,rgb(0 0 0 / 4%) 1px,transparent 0);background-size:17px 17px}
+  .gh{display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--wa-line)}
+  .gh .av{width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);
+    display:grid;place-items:center;font-family:var(--font-display);font-size:.8rem}
+  .gh b{font-size:.78rem;color:var(--wa-ink)}
+  .gh span{display:flex;align-items:center;gap:5px;font-size:.66rem;color:var(--wa-muted)}
+  .sd{width:6px;height:6px;border-radius:50%;background:#25d366;box-shadow:0 0 0 3px rgb(37 211 102 / 18%);
+    animation:pulse-dot 2.6s ease-in-out infinite}
+  .msg{max-width:92%;margin-top:10px;padding:8px 11px;border-radius:10px 10px 10px 2px;background:var(--wa-in);
+    color:var(--wa-ink);font-size:.78rem;line-height:1.5;box-shadow:0 1px 1px rgb(11 20 26 / 13%);
+    animation:message-in .28s var(--ease) both}
+  .msg:nth-of-type(2){animation-delay:.1s}
+  .msg:nth-of-type(3){animation-delay:.2s}
+  .msg:nth-of-type(4){animation-delay:.3s}
+  .msg.out{margin-left:auto;border-radius:10px 10px 2px 10px;background:var(--wa-out)}
+  .msg time{display:block;margin-top:4px;font-size:.58rem;color:var(--wa-muted);text-align:right;
+    font-variant-numeric:tabular-nums}
+  .panel{padding:16px 16px 18px;display:flex;flex-direction:column;gap:12px}
+  .panel-head{display:flex;align-items:center;justify-content:space-between}
+  .panel-head b{font-size:.82rem;letter-spacing:-.01em}
+  .chip{font:600 .62rem var(--font-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+    border:1px dashed var(--line);border-radius:999px;padding:3px 9px}
+  .row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:9px 0;
+    border-top:1px solid var(--line-soft)}
+  .row:first-of-type{border-top:0}
+  .row b{font-size:.76rem;font-weight:600;display:block}
+  .row .sub{display:block;font-size:.66rem;color:var(--muted)}
+  .risk{font:600 .6rem var(--font-mono);border-radius:999px;padding:3px 8px;align-self:center;
+    font-variant-numeric:tabular-nums}
+  .risk.ok{color:var(--ok);background:var(--ok-bg)}
+  .risk.warn{color:#8a5200;background:#fbeed2}
+  .risk.bad{color:var(--error);background:#fbeae4}
+  .evidence{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--bg-2)}
+  .evidence-in{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0}
+  .stat{padding:26px 24px;border-left:1px solid var(--line-soft)}
+  .stat:first-child{border-left:0;padding-left:0}
+  .stat dt{font-family:var(--font-display);font-size:1.9rem;line-height:1.1;letter-spacing:-.01em}
+  .stat dt small{font-family:var(--font-ui);font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:0}
+  .stat dd{margin-top:4px;font-size:.8rem;color:var(--ink-2)}
+  .stat dd em{display:block;font-style:normal;font-size:.7rem;color:var(--muted);margin-top:3px}
+
+  /* ticker */
+  .ticker{border-bottom:1px solid var(--line);background:var(--bg-2);overflow:hidden;
+    mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+  .ticker-track{display:flex;width:max-content;gap:40px;padding:11px 0;animation:ticker 42s linear infinite}
+  .ticker-track span{font:600 .68rem var(--font-mono);letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);white-space:nowrap;display:inline-flex;align-items:center;gap:40px}
+  .ticker-track span::after{content:"·";color:var(--accent)}
+
+  /* generic section */
+  .section{padding:76px 0}
+  .section-head{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.8fr);gap:40px;align-items:end;
+    margin-bottom:36px}
+  h2{font-family:var(--font-display);font-weight:400;font-size:clamp(1.85rem,3.4vw,2.6rem);
+    line-height:1.05;letter-spacing:-.015em;margin-top:12px}
+  .section-head p{font-size:.95rem;color:var(--ink-2);max-width:46ch}
+
+  /* pipeline */
+  .pipeline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;
+    border:1px solid var(--line);border-radius:22px;background:var(--card);box-shadow:var(--shadow-sm);overflow:hidden}
+  .step{padding:22px 20px;border-left:1px solid var(--line-soft);display:flex;flex-direction:column;gap:8px}
+  .step:first-child{border-left:0}
+  .step .num{font-family:var(--font-display);font-size:1.5rem;color:var(--accent);line-height:1}
+  .step h3{font-size:.92rem;font-weight:600;letter-spacing:-.01em}
+  .step p{font-size:.78rem;color:var(--muted);line-height:1.5}
+  .artifact{margin-top:auto;font:600 .6rem var(--font-mono);letter-spacing:.06em;text-transform:uppercase;
+    color:var(--accent-2);border:1px dashed var(--line);border-radius:999px;padding:4px 9px;align-self:flex-start}
+
+  /* backoffice cards */
+  .band{background:var(--bg-2);border-block:1px solid var(--line)}
+  .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}
+  .shot{border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,var(--card),var(--card-2));
+    padding:18px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;transition:transform .3s var(--ease)}
+  .shot:hover{transform:translateY(-4px)}
+  .shot header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .shot h3{font-size:.86rem;font-weight:600}
+  .tag{font:600 .58rem var(--font-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+    border:1px solid var(--line);border-radius:6px;padding:2px 6px}
+  .queue li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;
+    padding:8px 0;border-top:1px solid var(--line-soft);font-size:.72rem}
+  .queue li:first-child{border-top:0}
+  .queue b{font-weight:600}
+  .queue span{color:var(--muted);font-variant-numeric:tabular-nums;font-family:var(--font-mono);font-size:.64rem}
+  .note{border-left:3px solid var(--accent);background:color-mix(in oklab,var(--accent) 7%,var(--card));
+    border-radius:8px;padding:10px 12px;font-size:.72rem;line-height:1.5;color:var(--ink-2)}
+  .labels{display:flex;gap:6px;flex-wrap:wrap}
+  .lbl{font:600 .58rem var(--font-mono);letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;
+    border-radius:999px;background:var(--card);border:1px solid var(--line);color:var(--muted)}
+  .rooms li{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;
+    padding:7px 0;border-top:1px solid var(--line-soft);font-size:.72rem}
+  .rooms li:first-child{border-top:0}
+  .avail{width:8px;height:8px;border-radius:50%}
+  .avail.y{background:var(--ok)}
+  .avail.n{background:var(--line)}
+  .rooms em{font-style:normal;font-family:var(--font-mono);font-size:.62rem;color:var(--muted)}
+
+  /* does / does not */
+  .two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+  .list{border:1px solid var(--line);border-radius:18px;background:var(--card);padding:6px 22px}
+  .list h3{font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    padding:18px 0 10px;border-bottom:1px solid var(--line-soft)}
+  .list li{display:flex;gap:12px;padding:13px 0;border-top:1px solid var(--line-soft);font-size:.86rem;
+    align-items:flex-start;line-height:1.5}
+  .list li:first-of-type{border-top:0}
+  .mark{flex:none;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:.62rem;
+    font-weight:700;margin-top:2px}
+  .mark.yes{background:var(--ok-bg);color:var(--ok)}
+  .mark.no{background:#fbeae4;color:var(--error)}
+  .listicon{color:var(--muted);font-size:.78rem}
+
+  /* cta */
+  .cta{margin-top:20px;background:var(--ink);color:var(--bg);border-radius:26px;padding:56px;
+    display:grid;grid-template-columns:minmax(0,1.1fr) auto;gap:36px;align-items:center}
+  .cta h2{color:var(--bg);margin-top:0}
+  .cta p{margin-top:12px;color:color-mix(in oklab,var(--bg) 76%,var(--ink));font-size:.95rem;max-width:46ch}
+  .cta .actions{display:flex;gap:12px;flex-wrap:wrap}
+  .cta .btn{background:transparent;border-color:color-mix(in oklab,var(--bg) 30%,transparent);color:var(--bg)}
+  .cta .btn.primary{background:var(--bg);color:var(--ink);border-color:transparent;
+    box-shadow:0 10px 26px -12px rgb(0 0 0 / 60%)}
+
+  footer{padding:40px 0 56px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
+    color:var(--muted);font-size:.78rem;border-top:1px solid var(--line);margin-top:64px}
+  footer nav{display:flex;gap:18px;flex-wrap:wrap}
+  footer a{border-bottom:1px solid transparent}
+  footer a:hover{border-bottom-color:var(--line);color:var(--ink)}
+
+  @media (max-width:1000px){
+    .hero{grid-template-columns:1fr;gap:40px;padding-top:40px}
+    .evidence-in{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .stat:nth-child(3){border-left:0;padding-left:0}
+    .stat{border-top:1px solid var(--line-soft)}
+    .stat:nth-child(-n+2){border-top:0}
+    .pipeline{grid-template-columns:1fr}
+    .step{border-left:0;border-top:1px solid var(--line-soft)}
+    .step:first-child{border-top:0}
+    .grid3,.two{grid-template-columns:1fr}
+    .section-head{grid-template-columns:1fr;gap:14px;align-items:start}
+    nav.main{display:none}
+    .cta{grid-template-columns:1fr;padding:36px}
+  }
+  @media (max-width:620px){
+    .wrap{width:calc(100% - 36px)}
+    .split{grid-template-columns:1fr}
+    .guest{border-right:0;border-bottom:1px solid var(--line)}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none !important;transition:none !important}
+    html{scroll-behavior:auto}
+    .frame{transform:none}
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Saltar al contenido</a>
+
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand" href="#main">
+      <span class="brand-mark" aria-hidden="true">B</span>
+      <span>Bordeluz <small>· Copiloto de recepción</small></span>
+    </a>
+    <span class="brand-divider" aria-hidden="true"></span>
+    <nav class="main" aria-label="Navegación principal">
+      <a href="#producto">Producto</a>
+      <a href="#recorrido">Recorrido</a>
+      <a href="#recepcion">Recepción</a>
+      <a href="#limites">Límites</a>
+    </nav>
+    <a class="btn primary" href="#demo">Abrir la demo</a>
+  </div>
+</header>
+
+<main id="main">
+  <section class="wrap hero" id="producto">
+    <div>
+      <p class="eyebrow">Prototipo académico · INNOVA3</p>
+      <h1>La recepción que <em>conversa, consulta y confirma.</em></h1>
+      <p class="lede">El huésped pregunta por chat y recibe la ubicación primero, respuestas con sello de hora
+        del PMS y una derivación con contexto. La reserva la confirma una persona: el copiloto nunca la cierra solo.</p>
+      <div class="hero-actions">
+        <a class="btn primary" href="#demo">Probar como huésped</a>
+        <a class="btn ghost" href="#recepcion">Ver la recepción</a>
+      </div>
+      <p class="fineprint">Datos y precios ficticios · 20 habitaciones simuladas · Sin conexión a WhatsApp real</p>
+    </div>
+
+    <figure class="stage" aria-label="Vista compuesta: conversación del huésped y cola de recepción">
+      <span class="float tool"><b>✓</b> get_hotel_info · 31 ms</span>
+      <span class="float ticket"><b>Reserva #8213</b><span>Doble con Jacuzzi · 3 noches</span><em>$186.000</em></span>
+      <div class="frame">
+      <div class="frame-bar">
+        <span class="dot" aria-hidden="true"></span><span class="dot" aria-hidden="true"></span><span class="dot" aria-hidden="true"></span>
+        <span class="addr">copiloto.bordeluz.demo · turno 15:04</span>
+      </div>
+      <div class="split">
+        <div class="guest">
+          <div class="gh">
+            <span class="av" aria-hidden="true">B</span>
+            <div><b>Hotel Boutique Bordeluz</b><span><i class="sd" aria-hidden="true"></i>copiloto en línea</span></div>
+          </div>
+          <p class="msg out">¿Tienen habitación para el 15 de marzo?<time>15:04 ✓✓</time></p>
+          <p class="msg">Sí, queda la Doble con Jacuzzi. Según lectura del PMS a las 15:04 hay 3 disponibles.
+            ¿Cuántas personas viajan?<time>15:04</time></p>
+          <p class="msg out">2 adultos, 3 noches<time>15:05 ✓✓</time></p>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><b>Cola de recepción</b><span class="chip">en vivo</span></div>
+          <ul>
+            <li class="row"><div><b>Javiera P.</b><span class="sub">Disponibilidad · 15 mar</span></div><span class="risk ok">0:42</span></li>
+            <li class="row"><div><b>Rodrigo M.</b><span class="sub">Derivada · pide 2 noches</span></div><span class="risk warn">2:14</span></li>
+            <li class="row"><div><b>Sin nombre</b><span class="sub">FAQ resuelta · sin derivar</span></div><span class="risk ok">—</span></li>
+          </ul>
+        </div>
+      </div>
+      </div>
+    </figure>
+  </section>
+
+  <section class="evidence" aria-label="Cifras del prototipo">
+    <dl class="wrap evidence-in">
+      <div class="stat"><dt>0,53 s</dt><dd>Mediana de respuesta a preguntas frecuentes<em>meta &lt; 10 s</em></dd></div>
+      <div class="stat"><dt>180 s</dt><dd>Cumplimiento comercial antes de escalar<em>ámbar a los 120 s</em></dd></div>
+      <div class="stat"><dt>20</dt><dd>Habitaciones simuladas en el PMS<em>12 tipos reales del hotel</em></dd></div>
+      <div class="stat"><dt>90 días</dt><dd>Retención de datos con seudonimización<em>Ley 21.719</em></dd></div>
+    </dl>
+  </section>
+
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker-track">
+      <span>Ubicación primero</span><span>PMS con sello de hora</span><span>SLA 180 s</span><span>Nota privada</span><span>Confirmación humana</span><span>20 habitaciones</span><span>90 días de retención</span>
+      <span>Ubicación primero</span><span>PMS con sello de hora</span><span>SLA 180 s</span><span>Nota privada</span><span>Confirmación humana</span><span>20 habitaciones</span><span>90 días de retención</span>
+    </div>
+  </div>
+
+  <section class="wrap section" id="recorrido">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">Un turno completo</p>
+        <h2>Cinco pasos, del saludo a la confirmación</h2>
+      </div>
+      <p>Cada paso deja un artefacto verificable: la etiqueta, la nota privada, el cronómetro o la reserva.
+        Nada de esto vive solo en la conversación.</p>
+    </div>
+    <ol class="pipeline">
+      <li class="step"><span class="num">01</span><h3>El huésped escribe</h3>
+        <p>Chat web o simulación de WhatsApp. Lo primero es la ubicación y el aviso de privacidad.</p>
+        <span class="artifact">mensaje</span></li>
+      <li class="step"><span class="num">02</span><h3>El copiloto entiende</h3>
+        <p>Resuelve preguntas frecuentes o elige la herramienta: hotel, disponibilidad, reserva, derivar.</p>
+        <span class="artifact">traza de herramienta</span></li>
+      <li class="step"><span class="num">03</span><h3>Lee el PMS</h3>
+        <p>Consulta cupos y precios y responde con la hora exacta de la lectura.</p>
+        <span class="artifact">sello de hora</span></li>
+      <li class="step"><span class="num">04</span><h3>Deriva con contexto</h3>
+        <p>Nota privada, etiqueta comercial, equipo de recepción y cronómetro de SLA.</p>
+        <span class="artifact">nota + etiqueta</span></li>
+      <li class="step"><span class="num">05</span><h3>Recepción confirma</h3>
+        <p>Una persona valida en el PMS; la reserva queda registrada y medida.</p>
+        <span class="artifact">reserva confirmada</span></li>
+    </ol>
+  </section>
+
+  <section class="band" id="recepcion">
+    <div class="wrap section">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Del otro lado</p>
+          <h2>Así se ve desde recepción</h2>
+        </div>
+        <p>Tres pantallas reales del prototipo. La cola prioriza por riesgo, el detalle muestra el cronómetro
+          y el PMS confirma la reserva con token de personal.</p>
+      </div>
+      <div class="grid3">
+        <article class="shot">
+          <header><h3>Cola del turno</h3><span class="tag">panel</span></header>
+          <ul class="queue">
+            <li><b>Javiera P.</b><span>0:42</span><span class="risk ok">ok</span></li>
+            <li><b>Rodrigo M.</b><span>2:14</span><span class="risk warn">riesgo</span></li>
+            <li><b>Camila S.</b><span>3:06</span><span class="risk bad">fuera</span></li>
+            <li><b>Sin nombre</b><span>—</span><span class="risk ok">faq</span></li>
+          </ul>
+          <p style="font-size:.7rem;color:var(--muted)">Ordenada por riesgo de SLA, no por llegada.</p>
+        </article>
+        <article class="shot">
+          <header><h3>Detalle de la conversación</h3><span class="tag">screen</span></header>
+          <div class="labels"><span class="lbl">comercial</span><span class="lbl">recepción</span><span class="lbl">2 noches</span></div>
+          <p class="note"><b>Pre-información del copiloto</b><br>15 mar → 18 mar · 2 adultos · 1 habitación.
+            Disponibilidad leída 15:04. Pendiente de confirmación.</p>
+          <p style="font-size:.7rem;color:var(--muted)">La nota viaja al PMS antes de abrir la reserva.</p>
+        </article>
+        <article class="shot">
+          <header><h3>PMS simulado</h3><span class="tag">admin</span></header>
+          <ul class="rooms">
+            <li><i class="avail y" aria-hidden="true"></i><b>Doble con Jacuzzi</b><em>3 libres</em></li>
+            <li><i class="avail y" aria-hidden="true"></i><b>Single Doble Jardín</b><em>5 libres</em></li>
+            <li><i class="avail n" aria-hidden="true"></i><b>Suite Molco</b><em>0 libres</em></li>
+            <li><i class="avail y" aria-hidden="true"></i><b>Familiar 4</b><em>2 libres</em></li>
+          </ul>
+          <p style="font-size:.7rem;color:var(--muted)">Confirma con token de personal; el bot no escribe solo.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap section" id="limites">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">Alcance declarado</p>
+        <h2>Qué decide y qué no</h2>
+      </div>
+      <p>Un prototipo que promete de menos es más confiable que uno que promete de más. Esto es lo que el
+        sistema hace hoy y lo que deja explícitamente en manos de una persona.</p>
+    </div>
+    <div class="two">
+      <div class="list">
+        <h3>Hace</h3>
+        <ul>
+          <li><span class="mark yes" aria-hidden="true">✓</span><span>Responde ubicación, servicios y preguntas frecuentes aprobadas.</span></li>
+          <li><span class="mark yes" aria-hidden="true">✓</span><span>Consulta disponibilidad y precios del PMS con sello de hora.</span></li>
+          <li><span class="mark yes" aria-hidden="true">✓</span><span>Propone una reserva y espera la confirmación explícita.</span></li>
+          <li><span class="mark yes" aria-hidden="true">✓</span><span>Deriva con nota privada, etiqueta y cronómetro de SLA.</span></li>
+        </ul>
+      </div>
+      <div class="list">
+        <h3>No hace</h3>
+        <ul>
+          <li><span class="mark no" aria-hidden="true">–</span><span>No confirma una reserva sin una persona en el PMS.</span></li>
+          <li><span class="mark no" aria-hidden="true">–</span><span>No promete cupos si el PMS no responde: deriva.</span></li>
+          <li><span class="mark no" aria-hidden="true">–</span><span>No reserva por voz ni por WhatsApp en este prototipo.</span></li>
+          <li><span class="mark no" aria-hidden="true">–</span><span>No usa el número real del hotel: el canal es no oficial.</span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="fineprint" style="margin-top:18px;max-width:80ch">Pxsol no tiene API pública documentada: el adaptador
+      habla un contrato abierto y la integración real requiere credenciales del hotel. El procesamiento es
+      <em>a lo más una vez</em> en esta demo y no hay coordinación entre procesos.</p>
+  </section>
+
+  <section class="wrap">
+    <div class="cta" id="demo">
+      <div>
+        <h2>Pruébalo como huésped y como recepción</h2>
+        <p>El simulador corre contra el servidor real de la demo. Si algo no está levantado, lo dice: no inventa
+          un resultado.</p>
+      </div>
+      <div class="actions">
+        <a class="btn primary" href="#main">Abrir el simulador</a>
+        <a class="btn" href="#recepcion">Ver el panel</a>
+      </div>
+    </div>
+    <footer>
+      <span>Prototipo académico INNOVA3 · Hotel Boutique Bordeluz · datos ficticios</span>
+      <nav aria-label="Enlaces del prototipo">
+        <a href="#main">Privacidad</a><a href="#main">Métricas</a><a href="#main">PMS</a><a href="#main">Documentación</a>
+      </nav>
+    </footer>
+  </section>
+</main>
+</body>
+</html>

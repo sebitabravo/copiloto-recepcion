@@ -1,0 +1,28 @@
+{
+  "title": "Landing profesional del Copiloto",
+  "brief": "Rehacer la landing para que se sienta producto y no demo: un solo canal primario y el turno completo visible (huésped, copiloto, PMS, recepción) con evidencia real, conservando el lenguaje visual que ya funciona (teléfono en 3D, chips flotantes, brillo cálido y animaciones).",
+  "feature": "odd/tasks/ux-logic-cleanup.md",
+  "artboards": [
+    {
+      "file": "01-tour-producto.html",
+      "title": "Tour de producto con evidencia",
+      "tradeoff": "Cobertura completa y narrativa ordenada; página larga y con más secciones que mantener.",
+      "width": 1440,
+      "height": 2947
+    },
+    {
+      "file": "02-sala-de-control.html",
+      "title": "Sala de control",
+      "tradeoff": "Muestra todo de un vistazo y se siente software real; densa, menos narrativa y exige reordenar en móvil.",
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "file": "03-cuatro-actos.html",
+      "title": "Cuatro actos",
+      "tradeoff": "La más editorial y premium; el demo queda detrás de un CTA, menos manos a la obra.",
+      "width": 1440,
+      "height": 2947
+    }
+  ]
+}
