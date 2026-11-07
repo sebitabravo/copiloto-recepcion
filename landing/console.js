@@ -105,9 +105,13 @@
   // Estado del acceso automático: off | starting | ready | no-session | unavailable | rate | error
   let demoSession = demoOn ? 'starting' : 'off';
   let sessionRequested = false;
+  // El servidor respondió al sondeo inicial que el modo demo está apagado: el interruptor queda
+  // deshabilitado con explicación en vez de dejar que el POST falle más adelante.
+  let demoDisabledOnServer = false;
 
   const BANNER_ON = 'Modo demo: los datos son ficticios y las credenciales se aplican solas. Al apagarlo vuelves al flujo manual.';
   const BANNER_OFF = 'Modo demo desactivado: entra a recepción con la contraseña del panel y el PMS pide el token del personal.';
+  const BANNER_SERVER_OFF = 'La demo está deshabilitada en el servidor: recepción y el PMS se abren con sus credenciales propias.';
   const SESSION_LABELS = {
     ready: 'Sesión de demo lista',
     starting: 'Preparando sesión…',
@@ -120,8 +124,9 @@
 
   function syncChrome() {
     demoSwitch.setAttribute('aria-checked', String(demoOn));
+    demoSwitch.disabled = demoDisabledOnServer;
     banner.classList.toggle('is-off', !demoOn);
-    bannerText.textContent = demoOn ? BANNER_ON : BANNER_OFF;
+    bannerText.textContent = demoDisabledOnServer ? BANNER_SERVER_OFF : (demoOn ? BANNER_ON : BANNER_OFF);
     const label = SESSION_LABELS[demoSession];
     const pill = get('recepcion-session');
     if (pill) pill.textContent = label || '';
@@ -152,6 +157,22 @@
     syncChrome();
     renderRecepcionGates();
     if (demoSession === 'ready' && currentTab === 1) refreshQueue();
+  }
+
+  // Sondeo único al cargar: GET /api/demo/session informa si el modo demo está disponible. Con la
+  // demo apagada en el servidor el interruptor se deshabilita con explicación en el banner, en vez
+  // de esperar a que el POST falle al entrar a Recepción. Sin respuesta del copiloto, el flujo actual
+  // (POST + estados de error) queda intacto.
+  async function probeDemoAvailability() {
+    try {
+      const response = await api('/api/demo/session');
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data && data.demo === false) {
+        demoDisabledOnServer = true;
+        syncChrome();
+      }
+    } catch (_) { /* La sesión y sus estados se deciden igual con el flujo de siempre. */ }
   }
 
   demoSwitch.addEventListener('click', () => {
@@ -456,4 +477,5 @@
   selectTab(0);
   renderRecepcionGates();
   if (demoOn) requestDemoSession();
+  probeDemoAvailability();
 })();

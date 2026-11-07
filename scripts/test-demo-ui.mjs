@@ -6,6 +6,8 @@ import vm from 'node:vm';
 const source = readFileSync(new URL('../landing/demo.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../landing/demo.html', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../landing/demo.css', import.meta.url), 'utf8');
+const indexHtml = readFileSync(new URL('../landing/index.html', import.meta.url), 'utf8');
+const consoleSource = readFileSync(new URL('../landing/console.js', import.meta.url), 'utf8');
 
 test('proposal-only tool trace does not claim booking registration', async () => {
   const ui = await app({}, [{
@@ -260,4 +262,18 @@ test('voice panel reuses the demo url resolver so a LAN visit reaches the copilo
     'http://192.168.1.50:8100/api/demo/status');
   // Sin resolutor disponible (demo.js no cargó), la URL cruda sigue siendo el respaldo.
   assert.equal(await voiceRequests(null), 'http://localhost:8100/api/demo/status');
+});
+
+test('dead landing hooks disappear and the demo gate reads as a state', () => {
+  // .how-visual ya no existe en ninguna página: el selector muerto no vuelve a demo.js.
+  assert.doesNotMatch(source, /how-visual/);
+  // El paralaje escribía --rx/--ry en #hero-stage, oculto en /demo y sin demo.js en /: nunca se ejecutaba.
+  assert.doesNotMatch(source, /hero-stage|--rx|--ry/);
+  // class="cta-section" no tenía regla: la portada no deja ganchos huérfanos.
+  assert.doesNotMatch(indexHtml, /cta-section/);
+  // El estado «sin sesión» de la consola es un estado visual, no texto suelto.
+  assert.match(css, /\.console-state\.gate/);
+  // La consola sondea GET /api/demo/session al cargar y deshabilita el interruptor si el servidor apagó la demo.
+  assert.match(consoleSource, /\/api\/demo\/session/);
+  assert.match(consoleSource, /demoSwitch\.disabled =/);
 });

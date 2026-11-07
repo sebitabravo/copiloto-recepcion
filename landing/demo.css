@@ -500,7 +500,6 @@ nav .nav-cta:hover { background: var(--accent); color: var(--accent-ink); }
   border-radius: 26px;
   background: var(--card);
   box-shadow: var(--shadow-lg);
-  /* El paralaje del puntero escribe --rx/--ry en #hero-stage; aquí se heredan. */
   transform: perspective(1600px) rotateY(calc(-7deg + var(--ry, 0deg))) rotateX(calc(3deg + var(--rx, 0deg)));
   transform-origin: 62% 42%;
   transition: transform .7s cubic-bezier(.2, .8, .3, 1);
@@ -2244,6 +2243,10 @@ details.tech code { display: block; margin-bottom: 6px; color: var(--accent); fo
 
 .demo-switch:hover { color: var(--ink); background: var(--line-soft); }
 
+/* Con la demo apagada en el servidor el interruptor queda fuera de servicio: se lee como tal. */
+.demo-switch:disabled { opacity: .55; cursor: not-allowed; }
+.demo-switch:disabled:hover { color: var(--muted); background: var(--card); }
+
 .demo-switch-track {
   position: relative;
   flex: none;
@@ -2409,6 +2412,13 @@ details.tech code { display: block; margin-bottom: 6px; color: var(--accent); fo
 
 .console-state.rate {
   border: 1px solid var(--line);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Estado de acceso (modo demo apagado o sin sesión): mismo lenguaje que error/rate, tono de guía. */
+.console-state.gate {
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--line));
   background: var(--accent-soft);
   color: var(--accent);
 }

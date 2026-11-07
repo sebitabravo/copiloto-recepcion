@@ -682,32 +682,8 @@
     window.addEventListener('resize', requestSync);
   }
 
-  // Paralaje de la escena del hero: solo con puntero fino y sin movimiento reducido.
-  const heroStage = get('hero-stage');
-  if (heroStage && !reducedMotion.matches && window.matchMedia('(hover:hover) and (pointer:fine)').matches) {
-    let frame = 0;
-    let pointerX = 0;
-    let pointerY = 0;
-    const applyParallax = () => {
-      frame = 0;
-      heroStage.style.setProperty('--ry', `${(pointerX * 10).toFixed(2)}deg`);
-      heroStage.style.setProperty('--rx', `${(-pointerY * 8).toFixed(2)}deg`);
-    };
-    heroStage.addEventListener('pointermove', event => {
-      const bounds = heroStage.getBoundingClientRect();
-      pointerX = (event.clientX - bounds.left) / bounds.width - 0.5;
-      pointerY = (event.clientY - bounds.top) / bounds.height - 0.5;
-      if (!frame) frame = window.requestAnimationFrame(applyParallax);
-    });
-    heroStage.addEventListener('pointerleave', () => {
-      pointerX = 0;
-      pointerY = 0;
-      if (!frame) frame = window.requestAnimationFrame(applyParallax);
-    });
-  }
-
   // Pausa de animaciones fuera de pantalla: el hero sostiene siete animaciones infinitas.
-  const animatedSections = document.querySelectorAll('.hero-shell, .how-visual');
+  const animatedSections = document.querySelectorAll('.hero-shell');
   if (animatedSections.length && 'IntersectionObserver' in window) {
     const motionObserver = new IntersectionObserver(entries => {
       entries.forEach(entry => entry.target.classList.toggle('is-offscreen', !entry.isIntersecting));
