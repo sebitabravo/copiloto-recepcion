@@ -120,7 +120,7 @@ test('server proposal is visible in chat before an explicit one-shot confirmatio
   const ui = await app({}, [{reply: 'Revisa la propuesta.', events: [proposal], quick_replies: ['Sí, confirmo la reserva']}]);
   await ui.send('Mi nombre ficticio es Huésped Ficticio');
   assert.equal(ui.sent.length, 1);
-  assert.equal(ui.get('actions-panel').hidden, true);
+  assert.equal(ui.get('actions-panel').hidden, false);
   const text = ui.get('messages').textContent;
   for (const value of ['Huésped Ficticio', 'Suite Jardín', 'suite', '2027-03-15', '2027-03-18', '3 noches', '2 adultos', '1 niños', '240.000']) assert.ok(text.includes(value), value);
   const buttons = ui.get('messages').querySelectorAll('button').filter(el => el.textContent === 'Sí, confirmo la reserva');
@@ -176,10 +176,10 @@ test('existing availability results, booking tickets and optional trace remain u
   await ui.send('Consulta');
   assert.match(ui.get('timeline').textContent, /Suite Jardín.*queda 1.*80.000.*240.000/);
   assert.match(ui.get('timeline').textContent, /Reserva #7 creada en el PMS simulado/);
-  assert.equal(ui.get('actions-panel').hidden, true);
-  await ui.get('toggle-actions').emit('click');
   assert.equal(ui.get('actions-panel').hidden, false);
-  assert.match(ui.get('toggle-actions').textContent, /Ocultar acciones/);
+  await ui.get('toggle-actions').emit('click');
+  assert.equal(ui.get('actions-panel').hidden, true);
+  assert.match(ui.get('toggle-actions').textContent, /Ver acciones/);
   assert.equal(ui.scripts().length, 0, 'Chatwoot SDK stays unloaded during simulator use');
 });
 

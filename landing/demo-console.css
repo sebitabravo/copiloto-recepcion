@@ -1,0 +1,205 @@
+/* Consola de demo: composición de dos columnas, piel WhatsApp y pantalla de llamada.
+   Se carga después de demo.css y solo afecta a /demo. */
+
+.tab-panel { padding-top: 28px; }
+
+.demo-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  gap: 56px;
+  align-items: start;
+  padding: 8px 0 34px;
+}
+.demo-copy h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(2.2rem, 4.2vw, 3.4rem);
+  line-height: 1.02;
+  letter-spacing: -.02em;
+  margin: 14px 0 0;
+}
+.demo-copy h1 em { font-style: italic; color: var(--accent); }
+.demo-copy .lede { margin-top: 18px; max-width: 48ch; font-size: 1rem; line-height: 1.6; color: var(--ink-2); }
+.demo-points { margin: 26px 0 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+.demo-points li { display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: start; }
+.demo-points b { display: block; font-size: .9rem; font-weight: 600; }
+.demo-points div span { font-size: .8rem; color: var(--muted); }
+.dot-mark {
+  width: 22px; height: 22px; border-radius: 50%; background: var(--ok-bg); color: var(--ok);
+  display: grid; place-items: center; font-size: .66rem; font-weight: 700; margin-top: 2px;
+}
+.eyebrow-tight { margin-top: 30px; }
+.scenario-buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.scenario-buttons button {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  font: 500 .82rem var(--font-ui); cursor: pointer;
+  transition: border-color .2s var(--ease), transform .2s var(--ease);
+}
+.scenario-buttons button span[aria-hidden] { font: 600 .64rem var(--font-mono); color: var(--accent); }
+.scenario-buttons button:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
+.scenario-buttons button:disabled { opacity: .55; cursor: not-allowed; }
+#scenario-status { margin-top: 10px; font-size: .78rem; color: var(--muted); }
+.demo-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 22px; }
+.demo-meta .text-button { font-size: .78rem; }
+.demo-copy .disclaimer, .demo-copy .notice { margin-top: 14px; }
+
+/* Teléfono con piel WhatsApp */
+.demo-phone { display: flex; flex-direction: column; gap: 10px; }
+.demo-phone .device { width: 100%; max-width: 400px; margin-inline: auto; }
+.demo-phone .phone { border: 7px solid var(--bezel); border-radius: 34px; }
+.wa-status {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 16px 4px; background: #075e54; color: #d7ebe5;
+  font-size: .66rem; font-weight: 600;
+}
+.wa-status-icons { letter-spacing: .1em; font-size: .6rem; opacity: .85; }
+.wa-header {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px 10px;
+  background: #008069; color: #fff;
+}
+.wa-back { font-size: 1.5rem; line-height: 1; opacity: .9; margin-top: -2px; }
+.wa-avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: #fff; color: #008069;
+  display: grid; place-items: center; font: 700 .9rem var(--font-ui); flex: none;
+}
+.wa-contact { min-width: 0; }
+.wa-contact strong {
+  display: block; font-size: .82rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wa-sub { display: flex; align-items: center; gap: 5px; font-size: .66rem; color: #d6ece6; }
+.wa-sub .status-dot { width: 6px; height: 6px; background: #9fd0be; box-shadow: none; }
+.wa-sub .status-dot.ready { background: #25d366; box-shadow: 0 0 0 2px rgb(37 211 102 / 22%); }
+.wa-actions { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.wa-icon {
+  width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%;
+  background: transparent; border: 0; color: #eaf6f2; font-size: 1.05rem; cursor: default;
+}
+.wa-call { cursor: pointer; }
+.wa-call:hover { background: rgb(255 255 255 / 16%); }
+
+.messages {
+  height: clamp(340px, 50vh, 470px);
+  padding: 12px 10px;
+  background: var(--wa-bg);
+  background-image: radial-gradient(circle at 1px 1px, rgb(0 0 0 / 4%) 1px, transparent 0);
+  background-size: 18px 18px;
+}
+.chat-date {
+  width: max-content; margin: 2px auto 10px; padding: 4px 10px; border-radius: 8px;
+  background: #e1f3fb; color: #4a6b74; font-size: .6rem; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase;
+}
+.message { display: flex; margin-bottom: 6px; }
+.message.user { justify-content: flex-end; }
+.bubble {
+  max-width: 86%; padding: 6px 9px; border-radius: 8px;
+  background: var(--wa-in); color: var(--wa-ink);
+  box-shadow: 0 1px .5px rgb(11 20 26 / 13%);
+  font-size: .82rem; line-height: 1.35;
+}
+.message.assistant .bubble { border-top-left-radius: 0; }
+.message.user .bubble { background: var(--wa-out); border-top-right-radius: 0; }
+.bubble p { margin: 0; }
+.message-time {
+  display: flex; justify-content: flex-end; align-items: center; gap: 4px;
+  margin-top: 2px; font-size: .58rem; color: var(--wa-muted); font-variant-numeric: tabular-nums;
+}
+.message-time .ticks { color: #53bdeb; }
+
+.composer {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center; gap: 6px; padding: 8px 10px; background: var(--wa-header);
+  border-top: 1px solid var(--wa-line); border-radius: 0;
+}
+.composer textarea {
+  grid-column: auto; min-height: 38px; max-height: 92px; padding: 8px 12px;
+  border: 0; border-radius: 999px; background: #fff; font-size: .8rem; line-height: 1.35;
+}
+.wa-emoji { color: var(--wa-muted); display: grid; place-items: center; }
+.composer-bottom { display: flex; align-items: center; }
+.composer #char-count { position: absolute; left: -9999px; }
+.send-button {
+  width: 40px; height: 40px; border-radius: 50%; border: 0; background: #00a884; color: #fff;
+  display: grid; place-items: center; cursor: pointer;
+}
+.send-button:hover:not(:disabled) { background: #019475; }
+.send-button:disabled { opacity: .55; cursor: not-allowed; }
+.composer #input-help { grid-column: 1 / -1; margin: 0 0 0 8px; font-size: .6rem; color: var(--wa-muted); }
+
+.device-caption { font-size: .72rem; color: var(--muted); text-align: center; line-height: 1.5; }
+.device-caption .text-button { font-size: .72rem; margin-left: 6px; }
+.demo-phone #reset-help { font-size: .68rem; color: var(--muted); text-align: center; }
+
+/* Llamada dentro del teléfono */
+.call-screen {
+  position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column;
+  padding: 14px 14px 10px; border-radius: 27px; background: #0b141a; color: #e9edef;
+}
+.call-screen[hidden] { display: none; }
+.call-top { text-align: center; font-size: .58rem; letter-spacing: .14em; text-transform: uppercase; color: #8696a0; }
+.call-body { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 14px; }
+.call-avatar {
+  width: 78px; height: 78px; border-radius: 50%; background: #008069; color: #fff;
+  display: grid; place-items: center; font-family: var(--font-display); font-size: 1.9rem;
+}
+.call-name { font-size: .95rem; font-weight: 600; }
+.call-timer { font: 500 .76rem var(--font-mono); color: #8696a0; }
+.call-state { font-size: .78rem; color: #d1d7db; text-align: center; }
+.call-note { font-size: .62rem; color: #8696a0; }
+.voice-log {
+  width: 100%; flex: 1; min-height: 0; overflow-y: auto; margin: 8px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 6px; list-style: none;
+}
+.voice-line { background: #202c33; border-radius: 8px; padding: 6px 9px; font-size: .7rem; line-height: 1.4; max-width: 92%; }
+.voice-line strong { display: block; font-size: .58rem; color: #53bdeb; margin-bottom: 1px; font-weight: 600; }
+.voice-line.guest { background: #005c4b; align-self: flex-end; }
+.voice-line.system { background: #182229; color: #8696a0; font-size: .64rem; }
+.call-actions { display: flex; align-items: center; justify-content: center; gap: 14px; padding-top: 8px; }
+.call-round {
+  width: 46px; height: 46px; border-radius: 50%; border: 0; background: #202c33; color: #e9edef;
+  display: grid; place-items: center; cursor: pointer;
+}
+.call-round:hover { background: #2a3942; }
+.call-hangup { background: #ea4335; color: #fff; }
+.call-hangup:hover { background: #d93025; }
+.call-lang { display: flex; flex-direction: column; gap: 2px; font-size: .56rem; color: #8696a0; }
+.call-lang select { background: #202c33; color: #e9edef; border: 0; border-radius: 6px; padding: 4px 6px; font-size: .62rem; }
+.voice-typed { display: flex; gap: 6px; width: 100%; }
+.voice-typed input {
+  flex: 1; min-width: 0; background: #202c33; border: 0; border-radius: 999px;
+  padding: 8px 12px; color: #e9edef; font-size: .7rem;
+}
+.call-support { font-size: .64rem; color: #ffb4a9; text-align: center; }
+.call-fineprint { font-size: .55rem; color: #667781; text-align: center; margin: 6px 0 0; line-height: 1.4; }
+
+/* Traza de herramientas y estado en vivo */
+.trace-block { padding: 30px 0 10px; border-top: 1px solid var(--line); }
+.trace-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 18px; margin-bottom: 16px; flex-wrap: wrap; }
+.trace-head h2 { font-family: var(--font-display); font-weight: 400; font-size: clamp(1.4rem, 2.2vw, 1.8rem); line-height: 1.1; margin-top: 6px; }
+.trace-block .thinking, .trace-block .card { background: transparent; border: 0; box-shadow: none; padding: 0; }
+.timeline-empty { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.4fr); gap: 24px; align-items: start; }
+.timeline-empty > p { font-size: .84rem; color: var(--muted); }
+.ghost-trace { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }
+.ghost-trace li { border: 1px dashed var(--line); border-radius: 12px; padding: 12px 14px; background: color-mix(in oklab, var(--card) 60%, transparent); }
+.ghost-trace b { display: block; font-size: .8rem; }
+.ghost-trace em { font-style: normal; font-size: .7rem; color: var(--muted); }
+.live-block { padding: 34px 0 10px; border-top: 1px solid var(--line); margin-top: 26px; }
+
+@media (max-width: 1000px) {
+  .demo-hero { grid-template-columns: 1fr; gap: 32px; }
+  .demo-copy .lede { max-width: none; }
+  .demo-phone { order: -1; }
+  .timeline-empty { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .demo-copy h1 { font-size: 2rem; }
+  .ghost-trace { grid-template-columns: 1fr; }
+  .demo-phone .device { max-width: 100%; }
+  .messages { height: 380px; }
+  .trace-head { align-items: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scenario-buttons button { transition: none; }
+}

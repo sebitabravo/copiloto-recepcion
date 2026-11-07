@@ -28,6 +28,16 @@
   let callVersion = 0;
   let pending = null;
   let settlePlayback = null;
+  let timerId = 0;
+  let startedAt = 0;
+  function tickTimer() {
+    const label = get('call-timer');
+    if (!label) return;
+    const seconds = Math.floor((Date.now() - startedAt) / 1000);
+    label.textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+  }
+  function startTimer() { startedAt = Date.now(); tickTimer(); window.clearInterval(timerId); timerId = window.setInterval(tickTimer, 1000); }
+  function stopTimer() { window.clearInterval(timerId); timerId = 0; }
 
   function create(tag, className, text) {
     const element = document.createElement(tag);
@@ -191,6 +201,8 @@
   }
   async function startCall() {
     inCall = true;
+    if (panel) panel.hidden = false;
+    startTimer();
     callVersion += 1;
     const version = callVersion;
     log.replaceChildren();
@@ -217,6 +229,8 @@
   function hangUp() {
     callVersion += 1;
     inCall = false;
+    stopTimer();
+    if (panel) panel.hidden = true;
     busy = false;
     if (pending) { pending.abort(); pending = null; }
     if (recognition && listening) recognition.abort();
@@ -238,8 +252,11 @@
   fetch(`${baseUrl}/api/demo/status`, {credentials:'omit', cache:'no-store'})
     .then(response => response.json())
     .then(status => {
-      if (status.voice !== true) return;
-      panel.hidden = false;
+      if (status.voice !== true) {
+        // Sin voz configurada el icono sigue disponible: la pantalla de llamada explicará el estado real.
+        get('voice-support').hidden = true;
+        return;
+      }
       get('voice-support').hidden = Boolean(Recognition);
       updateControls();
     })
