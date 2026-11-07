@@ -54,6 +54,9 @@ Medido en este equipo: **38 s** el primer turno (el servidor arma la caché del 
 en caliente. El modelo acierta ubicación y consultas con herramienta, pero **se equivoca en preguntas
 frecuentes aprobadas** y no interpreta fechas en lenguaje natural.
 
+Ojo: el **e2e recrea el copiloto con la configuración base** y deja la IA apagada (`mode: off`). Si quieres
+mostrarla, corre `./scripts/demo.sh ia` **después** del e2e (o del `up`), no antes.
+
 Por eso: el recorrido del miércoles va con el **flujo guiado** (correcto y rápido, validado por el e2e).
 Si quieres mostrar la IA, calienta el modelo con una pregunta de ubicación antes de presentar y evita
 las de disponibilidad.
