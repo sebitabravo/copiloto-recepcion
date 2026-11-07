@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../landing/demo.js', import.meta.url), 'utf8');
-const html = readFileSync(new URL('../landing/index.html', import.meta.url), 'utf8');
+const html = readFileSync(new URL('../landing/demo.html', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../landing/demo.css', import.meta.url), 'utf8');
 
 test('proposal-only tool trace does not claim booking registration', async () => {
