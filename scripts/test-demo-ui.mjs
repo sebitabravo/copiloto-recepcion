@@ -104,13 +104,15 @@ test('guided availability stops before room selection, name or confirmation', as
   assert.match(ui.get('scenario-status').textContent, /elige.*nombre.*propuesta.*confirma/i);
 });
 
-test('booking guidance uses effective capability, including full mode without permission', async () => {
-  for (const status of [{mode: 'full', autonomous_booking: false}, {mode: 'assisted', autonomous_booking: false}, {ai_enabled: false, autonomous_booking: false}]) {
+test('the availability script is available in every mode and never books on its own', async () => {
+  // Es una consulta que se detiene antes de reservar: no depende del permiso de reserva autónoma.
+  for (const status of [{mode: 'full', autonomous_booking: false}, {mode: 'assisted', autonomous_booking: false},
+    {ai_enabled: false, autonomous_booking: false}, {mode: 'full', autonomous_booking: true}]) {
     const ui = await app(status);
-    assert.equal(ui.scenarios[1].disabled, true);
-    await ui.scenarios[1].emit('click');
-    assert.deepEqual(ui.sent, []);
-    assert.doesNotMatch(ui.get('messages').textContent, /reserva una habitación/);
+    assert.equal(ui.scenarios[1].disabled, false);
+    await ui.scenarios[1].emit('click'); await ui.settle();
+    assert.equal(ui.sent.length, 3);
+    assert.ok(ui.sent.every(text => !/confirma/i.test(text)));
   }
 });
 

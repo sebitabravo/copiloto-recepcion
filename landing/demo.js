@@ -92,10 +92,10 @@
     get('send').disabled = blocked || !input.value.trim() || input.value.length > 400;
     get('reset').disabled = busy || scenarioRunning;
     document.querySelectorAll('[data-scenario]').forEach(button => {
-      button.disabled = blocked || (button.dataset.scenario === 'booking' && !autonomousBooking);
+      button.disabled = blocked;
     });
     messageList.querySelectorAll('.quick-replies button').forEach(button => { button.disabled = blocked; });
-    if (proposalButton) proposalButton.disabled = blocked || !autonomousBooking;
+    if (proposalButton) proposalButton.disabled = blocked;
     get('char-count').textContent = `${input.value.length}/400`;
     // El indicador de escritura vive dentro del historial para caer al final de la conversación.
     const typing = get('typing');
@@ -238,7 +238,8 @@
       const bookingScenario = document.querySelector('[data-scenario="booking"]');
       const bookingLabel = bookingScenario.querySelector('.scenario-label') || bookingScenario;
       bookingScenario.hidden = false;
-      bookingLabel.textContent = autonomousBooking ? 'Consultar disponibilidad · continuar manualmente' : 'Guion de disponibilidad no disponible en este modo';
+      // El guion consulta disponibilidad y se detiene antes de reservar: está disponible en todos los modos.
+      bookingLabel.textContent = 'Consultar disponibilidad · sin crear reserva';
       setConnectionLabel(aiEnabled ? 'asistente con IA' : 'flujo guiado');
       get('status-dot').classList.add('ready');
       if (!turns) get('messages-left').textContent = `Mensajes restantes: ${data.messages_per_session ?? '—'}`;
@@ -539,7 +540,7 @@
     }
   }
   async function runScenario(name) {
-    if (busy || scenarioRunning || coolingDown() || (name === 'booking' && !autonomousBooking)) return;
+    if (busy || scenarioRunning || coolingDown()) return;
     const scenarios = {
       info:['¿Cómo llego al hotel?', '¿Tienen piscina y qué otros servicios ofrecen?'],
       booking:['Quiero consultar disponibilidad, sin crear una reserva', exampleDates(), '2 adultos y 1 niño'],
