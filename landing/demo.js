@@ -27,16 +27,21 @@
   const privacyLink = get('privacy-link');
   if (privacyLink) privacyLink.href = resolveUrl(config.privacyUrl || `${copilotoUrl}/privacidad`);
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const aiInitialText = 'Hola, soy el asistente de recepción de Hotel Bordeluz (demo con IA). Pregúntame por la ubicación, los servicios o reserva una habitación.';
+  // Saludos en dos ideas (C1): una línea en blanco separa las burbujas, como escribe una persona.
+  const greetingOpen = 'Hola, bienvenido a Hotel Bordeluz.';
+  const aiInitialText = `${greetingOpen}\n\nSoy el asistente de recepción, una IA: te ayudo con ubicación, servicios y reservas de prueba. Antes de reservar te muestro una propuesta y solo la creo si la confirmas.`;
   const aiInitialReplies = ['¿Cómo llego?', '¿Tienen piscina?', 'Quiero reservar para 2 adultos'];
-  const guidedInitialText = 'Hola, soy el asistente de recepción de Hotel Bordeluz. En este modo respondo preguntas sobre la ubicación, los servicios y las políticas del hotel.';
+  const assistedInitialText = `${greetingOpen}\n\nSoy el asistente de recepción, una IA: te ayudo con ubicación, servicios y disponibilidad. Las reservas las confirma una persona del equipo.`;
+  const guidedInitialText = `${greetingOpen}\n\nSoy el asistente de recepción y hoy respondo con respuestas guiadas, sin IA: te ayudo con ubicación, servicios y políticas del hotel. Las reservas las confirma una persona del equipo.`;
   const guidedInitialReplies = ['¿Cómo llego?', '¿Tienen piscina?', '¿Cuál es el horario de check-in?'];
-  const pendingInitialText = 'Hola, soy el asistente de recepción de Hotel Bordeluz. Pregúntame por la ubicación o los servicios del hotel.';
+  const pendingInitialText = `${greetingOpen}\n\nSoy el asistente de recepción: te ayudo con la ubicación y los servicios del hotel.`;
   let aiEnabled = null;
   let autonomousBooking = false;
   let proposalButton = null;
   const input = get('message-input');
   const messageList = get('messages');
+  // El aviso de privacidad vive dentro del historial: se guarda la referencia porque reiniciar lo desmonta.
+  const disclaimerNote = get('ai-disclaimer');
   const sessionKey = 'bordeluz-demo-session';
   const money = new Intl.NumberFormat('es-CL', {style:'currency', currency:'CLP', maximumFractionDigits:0});
   const timeFormat = new Intl.DateTimeFormat('es-CL', {hour:'2-digit', minute:'2-digit', hourCycle:'h23'});
@@ -51,6 +56,9 @@
   let lastAssistant = null;
   let pinned = true;
   let turns = 0;
+  // Mientras se revelan las burbujas de una respuesta, el indicador de escritura solo aparece entre ellas.
+  let revealing = false;
+  let betweenBubbles = false;
   const CONFIRMATION_TEXT = 'Sí, confirmo la reserva';
 
   function setConnectionLabel(text) {
@@ -97,10 +105,11 @@
     messageList.querySelectorAll('.quick-replies button').forEach(button => { button.disabled = blocked; });
     if (proposalButton) proposalButton.disabled = blocked;
     get('char-count').textContent = `${input.value.length}/400`;
-    // El indicador de escritura vive dentro del historial para caer al final de la conversación.
+    // El indicador de escritura vive dentro del historial y siempre cae al final de la conversación.
     const typing = get('typing');
-    typing.hidden = !busy;
-    if (busy && typing.parentElement !== messageList) {
+    const showTyping = busy && (!revealing || betweenBubbles);
+    typing.hidden = !showTyping;
+    if (showTyping && messageList.lastElementChild !== typing) {
       messageList.append(typing);
       scrollToLatest();
     }
@@ -134,23 +143,80 @@
     updateControls();
     scrollToLatest();
   }
-  function addMessage(role, text, replies = []) {
+  // C1: una línea en blanco separa ideas; cada idea es una burbuja (máximo 3, el resto va en la última).
+  function splitReply(text) {
+    const parts = String(text).split(/\n[ \t]*\n/).map(part => part.trim()).filter(Boolean);
+    if (parts.length <= 3) return parts.length ? parts : [String(text)];
+    return [parts[0], parts[1], parts.slice(2).join('\n\n')];
+  }
+  // C2: negrita al estilo WhatsApp (*texto*; también el **texto** de Markdown que se le escape al modelo).
+  // Solo se crean nodos de texto y <b>: nada del servidor se interpreta como HTML.
+  const boldPattern = /\*\*(\S(?:[^*\n]*\S)?)\*\*|\*(\S(?:[^*\n]*\S)?)\*/g;
+  function appendFormatted(parent, text) {
+    const value = String(text);
+    let last = 0;
+    for (const match of value.matchAll(boldPattern)) {
+      if (match.index > last) parent.append(document.createTextNode(value.slice(last, match.index)));
+      parent.append(create('b', '', match[1] ?? match[2]));
+      last = match.index + match[0].length;
+    }
+    if (last < value.length) parent.append(document.createTextNode(value.slice(last)));
+  }
+  const plainText = text => String(text).replace(boldPattern, (_, double, single) => double ?? single);
+  // Pausa de escritura proporcional al largo de la siguiente burbuja, con tope de 1,2 s.
+  const bubblePause = text => Math.min(1200, String(text).length * 12);
+  function addBubble(role, text, continued = false) {
     if (role === 'assistant') get('typing').hidden = true;
-    const message = create('article', `message ${role}`);
+    const message = create('article', `message ${role}${continued ? ' continued' : ''}`);
     const bubble = create('div', 'bubble');
-    bubble.append(create('p', '', text));
+    const paragraph = create('p');
+    if (role === 'assistant') appendFormatted(paragraph, text);
+    else paragraph.textContent = text;
+    bubble.append(paragraph);
     const time = create('span', 'message-time', clockLabel());
     if (role === 'user') time.append(create('span', 'ticks', '✓✓'));
     bubble.append(time);
     message.append(bubble);
     messageList.append(message);
-    if (role === 'assistant') {
-      lastAssistant = message;
-      suggestions(message, replies);
-      // Una región separada anuncia solo la respuesta nueva, nunca el historial completo.
-      get('assistant-announcement').textContent = text;
-    }
+    if (role === 'assistant') lastAssistant = message;
     scrollToLatest();
+    return message;
+  }
+  // Versión inmediata (saludo y mensajes del huésped): todas las burbujas de una vez.
+  function addMessage(role, text, replies = []) {
+    if (role !== 'assistant') return addBubble(role, text);
+    const parts = splitReply(text);
+    let message = null;
+    parts.forEach((part, index) => { message = addBubble('assistant', part, index > 0); });
+    suggestions(message, replies);
+    // Una región separada anuncia solo la respuesta nueva, nunca el historial completo.
+    get('assistant-announcement').textContent = plainText(parts.join(' '));
+    return message;
+  }
+  // Respuesta del asistente: las burbujas llegan una tras otra con el indicador de escritura entre ellas.
+  async function revealReply(text, replies) {
+    const parts = splitReply(text);
+    // El lector de pantalla recibe la respuesta completa de una vez, sin esperar las pausas visuales.
+    get('assistant-announcement').textContent = plainText(parts.join(' '));
+    revealing = true;
+    let message = null;
+    try {
+      for (let index = 0; index < parts.length; index += 1) {
+        if (index > 0 && !reducedMotion.matches) {
+          betweenBubbles = true;
+          updateControls();
+          await pause(bubblePause(parts[index]));
+          betweenBubbles = false;
+        }
+        message = addBubble('assistant', parts[index], index > 0);
+        updateControls();
+      }
+    } finally {
+      revealing = false;
+      betweenBubbles = false;
+    }
+    // Las respuestas rápidas cuelgan de la última burbuja.
+    suggestions(message, replies);
     return message;
   }
   function showChatError(text, retry) {
@@ -208,19 +274,19 @@
   }
   function initialGreeting() {
     if (autonomousBooking) return {text:aiInitialText, replies:aiInitialReplies};
-    if (aiEnabled === true) return {text:'Hola, soy el asistente de recepción con IA de Hotel Bordeluz. Puedo orientar tu consulta, pero en esta demo no tengo permiso para crear reservas.', replies:guidedInitialReplies};
+    if (aiEnabled === true) return {text:assistedInitialText, replies:guidedInitialReplies};
     if (aiEnabled === false) return {text:guidedInitialText, replies:guidedInitialReplies};
     return {text:pendingInitialText, replies:guidedInitialReplies};
   }
   function updateInitialGreeting() {
     // La carga de estado no debe reemplazar mensajes ni sugerencias de una conversación iniciada.
     if (messageList.querySelector('.user')) return;
-    const first = messageList.querySelector('.assistant');
-    if (!first) return;
+    const previous = messageList.querySelectorAll('.assistant');
+    if (!previous.length) return;
+    // El saludo puede cambiar de cantidad de burbujas: se reemplaza entero, no solo su texto.
+    previous.forEach(element => element.remove());
     const greeting = initialGreeting();
-    first.querySelector('.bubble p').textContent = greeting.text;
-    suggestions(first, greeting.replies);
-    get('assistant-announcement').textContent = greeting.text;
+    addMessage('assistant', greeting.text, greeting.replies);
   }
   async function loadStatus() {
     get('status-error').hidden = true;
@@ -229,8 +295,11 @@
       aiEnabled = data.ai_enabled === true;
       autonomousBooking = aiEnabled && data.autonomous_booking === true;
       get('model-label').textContent = aiEnabled ? `Modelo: ${data.model || 'DeepSeek'}` : 'Flujo guiado · sin IA';
-      get('ai-disclaimer').hidden = !aiEnabled;
+      disclaimerNote.hidden = !aiEnabled;
       get('guided-banner').hidden = aiEnabled;
+      // «Registra una reserva» solo se promete donde el servidor puede reservar (modo full).
+      const bookingTrace = get('trace-booking');
+      if (bookingTrace) bookingTrace.hidden = data.mode !== 'full';
       get('capability').hidden = !aiEnabled;
       get('capability').textContent = !aiEnabled ? '' : autonomousBooking ?
         'Puede crear reservas en el PMS simulado solo después de mostrar una propuesta y recibir tu confirmación explícita.' :
@@ -239,7 +308,7 @@
       const bookingLabel = bookingScenario.querySelector('.scenario-label') || bookingScenario;
       bookingScenario.hidden = false;
       // El guion consulta disponibilidad y se detiene antes de reservar: está disponible en todos los modos.
-      bookingLabel.textContent = 'Consultar disponibilidad · sin crear reserva';
+      bookingLabel.textContent = 'Disponibilidad sin reservar';
       setConnectionLabel(aiEnabled ? 'asistente con IA' : 'flujo guiado');
       get('status-dot').classList.add('ready');
       if (!turns) get('messages-left').textContent = `Mensajes restantes: ${data.messages_per_session ?? '—'}`;
@@ -249,7 +318,9 @@
       autonomousBooking = false;
       // Sin estado del servidor, la escritura queda habilitada solo con el descargo de IA visible:
       // la privacidad antes de preguntar no puede desaparecer justo cuando el backend cae.
-      get('ai-disclaimer').hidden = false;
+      disclaimerNote.hidden = false;
+      const bookingTrace = get('trace-booking');
+      if (bookingTrace) bookingTrace.hidden = true;
       get('status-error').hidden = false;
       get('status-error').querySelector('span').textContent = error.message;
       get('model-label').textContent = 'Conexión pendiente';
@@ -463,9 +534,14 @@
       const data = await request('/api/demo/chat', {session_id:sessionId, message});
       if (typeof data.reply !== 'string') throw {message:'La respuesta llegó incompleta. Reintenta en un momento.'};
       turns += 1;
-      addMessage('assistant', data.reply, data.quick_replies);
-      get('response-time').textContent = `Respuesta en ${typeof data.usage?.llm_ms === 'number' ?
-        (data.usage.llm_ms / 1000).toLocaleString('es-CL', {maximumFractionDigits:2}) : '—'} s`;
+      await revealReply(data.reply, data.quick_replies);
+      // El tiempo de respuesta solo se muestra cuando el servidor lo midió: nunca «Respuesta en — s».
+      const llmMs = data.usage?.llm_ms;
+      const responseTime = get('response-time');
+      if (typeof llmMs === 'number' && Number.isFinite(llmMs)) {
+        responseTime.textContent = `Respuesta en ${(llmMs / 1000).toLocaleString('es-CL', {maximumFractionDigits:2})} s`;
+        responseTime.hidden = false;
+      }
       get('messages-left').textContent = `Mensajes restantes: ${data.usage?.messages_left ?? '—'}`;
       // La respuesta ya está en pantalla: se libera el composer antes de animar la traza.
       busy = false;
@@ -489,12 +565,12 @@
   function clearConversation() {
     invalidateProposal();
     messageList.replaceChildren();
-    messageList.append(create('div', 'chat-date', 'Hoy'));
+    messageList.append(create('div', 'chat-date', 'Hoy'), disclaimerNote);
     get('timeline').replaceChildren();
     get('timeline-empty').hidden = false;
     actionCount = 0;
     updateActionsToggle();
-    get('response-time').textContent = 'Respuesta en — s';
+    get('response-time').hidden = true;
     get('messages-left').textContent = 'Mensajes restantes: —';
     get('scenario-status').textContent = '';
     input.value = '';

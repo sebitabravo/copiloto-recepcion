@@ -65,8 +65,10 @@ las de disponibilidad.
 
 `/demo` abre en **Huésped**; las pestañas de arriba cambian de perspectiva sin salir de la página:
 
-- **Huésped**: el chat tipo WhatsApp y, debajo, la traza de lo que hizo el asistente.
-- **Recepción**: la cola real con espera y riesgo de SLA (solo lectura).
+- **Huésped**: el chat tipo WhatsApp y, debajo, la traza de lo que hizo el asistente. Las respuestas
+  llegan en una o dos burbujas seguidas (una idea por burbuja), con el indicador de escritura entre ellas.
+- **Recepción**: la cola real con espera y riesgo de SLA (solo lectura), con un resumen por riesgo arriba.
+  Los visitantes anónimos de Chatwoot se muestran como «Visitante web · 123» y las esperas largas en horas.
 - **Admin**: el PMS simulado y el enlace a métricas, con el modo demo resolviendo el acceso.
 
 El **icono de llamada** de la cabecera del teléfono abre una llamada dentro del teléfono: estado,
@@ -78,8 +80,8 @@ cronómetro, transcripción y colgar. Si el navegador no reconoce voz, la misma 
 | --- | --- | --- |
 | 1. Portada | Recorres la página hasta el CTA | Hero compuesto, cifras con contexto, recorrido de cinco pasos, pantallas de recepción y límites declarados |
 | 2. Huésped | "Probar la demo" → pestaña Huésped → escribes **hola** | Aviso de privacidad primero y **ubicación** antes de cualquier pregunta |
-| 3. Consulta | **¿tienen piscina?** y luego **quiero reservar** con fechas y 2 adultos | Respuesta en segundos y «Disponible según lectura del PMS a las HH:MM · pendiente de confirmación» |
-| 4. Canal real | En la consola, botón **Escribir a recepción** → envías **quiero reservar** | Widget real de Chatwoot: misma respuesta del copiloto, pero esta conversación sí entra al sistema |
+| 3. Consulta | Guion **02 · Disponibilidad sin reservar** (o **¿tienen piscina?** y luego **quiero reservar** con fechas y 2 adultos) | Respuesta en segundos y «Disponible según lectura del PMS a las HH:MM · pendiente de confirmación» |
+| 4. Canal real | En la consola, **Escribir a recepción** → **Abrir el chat de recepción** → envías **quiero reservar** | Widget real de Chatwoot: misma respuesta del copiloto, pero esta conversación sí entra al sistema |
 | 5. Recepción | Pestaña Recepción (y bandeja en http://localhost:3000) | La conversación del canal real llega con nota privada, etiqueta comercial y cronómetro de SLA (verde → ámbar 120 s → rojo 180 s) |
 | 6. Confirmación | Panel → **Confirmar en el PMS** → token de personal | Reserva creada; vuelves a la pestaña Admin y está en el PMS y en las métricas |
 | 7. Cierre | Métricas | Conversión, cumplimiento < 180 s y costo por consulta |

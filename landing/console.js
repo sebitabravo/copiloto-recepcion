@@ -10,6 +10,7 @@
   const resolve = typeof window.resolveDemoUrl === 'function' ? window.resolveDemoUrl : value => value;
   const baseUrl = resolve(copilotoUrl).replace(/\/+$/, '');
   const pmsBase = resolve('http://localhost:8200').replace(/\/+$/, '');
+  const chatwootBase = resolve(config.chatwootUrl || 'http://localhost:3000').replace(/\/+$/, '');
 
   /* ---------- utilidades ---------- */
 
@@ -24,6 +25,20 @@
     if (!Number.isFinite(total) || total < 0) return '—';
     const seconds = Math.round(total);
     return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  };
+  // C3: una espera de una hora o más se lee en horas y minutos («10 h 38 min»), nunca «636:16».
+  const fmtWait = value => {
+    const total = Number(value);
+    if (!Number.isFinite(total) || total < 3600) return fmtSeconds(value);
+    const minutes = Math.floor(total / 60);
+    return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+  };
+  // C3: Chatwoot bautiza a los visitantes anónimos como «cool-mountain-791»; se muestran como lo que son.
+  const guestLabel = (name, id) => {
+    const value = typeof name === 'string' ? name.trim() : '';
+    const anonymous = /^[a-záéíóúñ]+-[a-záéíóúñ]+-(\d+)$/i.exec(value);
+    if (anonymous) return `Visitante web · ${anonymous[1]}`;
+    return value || (id === undefined || id === null ? 'Conversación sin nombre' : `Conversación ${id}`);
   };
   const dateLabel = value => {
     if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -109,9 +124,10 @@
   // deshabilitado con explicación en vez de dejar que el POST falle más adelante.
   let demoDisabledOnServer = false;
 
-  const BANNER_ON = 'Modo demo: los datos son ficticios y las credenciales se aplican solas. Al apagarlo vuelves al flujo manual.';
-  const BANNER_OFF = 'Modo demo desactivado: entra a recepción con la contraseña del panel y el PMS pide el token del personal.';
-  const BANNER_SERVER_OFF = 'La demo está deshabilitada en el servidor: recepción y el PMS se abren con sus credenciales propias.';
+  // Un solo aviso de modo demo: el de privacidad vive dentro del chat, junto a donde se escribe.
+  const BANNER_ON = 'Modo demo: recepción y el PMS se abren sin contraseña. Apágalo para entrar como el personal.';
+  const BANNER_OFF = 'Modo demo apagado: recepción pide la contraseña del panel y el PMS el token del personal.';
+  const BANNER_SERVER_OFF = 'Demo deshabilitada en el servidor: recepción y el PMS se abren con sus credenciales propias.';
   const SESSION_LABELS = {
     ready: 'Sesión de demo lista',
     starting: 'Preparando sesión…',
@@ -132,6 +148,9 @@
     if (pill) pill.textContent = label || '';
     if (adminLoaded) loadAdminFrame();
     get('admin-metrics').href = `${baseUrl}/metricas`;
+    // Los enlaces del pie salen de config.js: el HTML público no fija hosts (C5).
+    const links = {'footer-inbox': chatwootBase, 'footer-pms': `${pmsBase}/admin`, 'footer-metrics': `${baseUrl}/metricas`};
+    for (const [id, href] of Object.entries(links)) { const link = get(id); if (link) link.href = href; }
   }
 
   async function requestDemoSession({retry = false} = {}) {
@@ -197,6 +216,7 @@
   const recepcionQueue = get('recepcion-queue');
   const recepcionDetail = get('recepcion-detail');
   const recepcionDetailBody = get('recepcion-detail-body');
+  const recepcionSummary = get('recepcion-summary');
   let selectedId = null;
   let queuePoll = 0;
 
@@ -213,6 +233,7 @@
   function setState(kind, message, actions = []) {
     recepcionDetail.hidden = selectedId === null;
     recepcionQueue.hidden = true;
+    if (recepcionSummary) recepcionSummary.hidden = true;
     recepcionState.hidden = false;
     recepcionState.className = `console-state ${kind || ''}`.trim();
     recepcionState.replaceChildren(create('p', '', message));
@@ -288,6 +309,30 @@
     }
   }
 
+  // Riesgo de una espera frente a las metas del servidor: bad (vencida), warn (por vencer) u ok.
+  function waitRisk(seconds, amber, red) {
+    if (seconds === null || seconds === undefined || !Number.isFinite(Number(seconds))) return null;
+    if (Number.isFinite(red) && seconds >= red) return 'bad';
+    if (Number.isFinite(amber) && seconds >= amber) return 'warn';
+    return 'ok';
+  }
+
+  // Resumen sobre la cola: cuántas conversaciones hay y cuántas por nivel de riesgo.
+  function renderSummary(items, amber, red) {
+    if (!recepcionSummary) return;
+    const counts = {bad: 0, warn: 0, ok: 0};
+    for (const item of items) {
+      const risk = waitRisk(item.waiting_s, amber, red);
+      if (risk) counts[risk] += 1;
+    }
+    recepcionSummary.replaceChildren(create('b', '', plural(items.length, 'conversación', 'conversaciones')));
+    const labels = {bad: plural(counts.bad, 'vencida', 'vencidas'), warn: `${counts.warn} por vencer`, ok: `${counts.ok} en plazo`};
+    for (const kind of ['bad', 'warn', 'ok']) {
+      if (counts[kind]) recepcionSummary.append(create('span', `risk ${kind}`, labels[kind]));
+    }
+    recepcionSummary.hidden = false;
+  }
+
   function renderQueue(items, data) {
     const amber = Number(data && data.amber_s);
     const red = Number(data && data.red_s);
@@ -295,13 +340,14 @@
     recepcionDetail.hidden = true;
     recepcionQueue.hidden = false;
     recepcionQueue.replaceChildren();
+    renderSummary(items.filter(item => item && typeof item === 'object'), amber, red);
     for (const item of items) {
       if (!item || typeof item !== 'object') continue;
       const row = document.createElement('li');
       const button = create('button', 'console-row');
       button.type = 'button';
       const identity = create('span', 'console-row-name');
-      identity.append(create('b', '', (typeof item.contact_name === 'string' && item.contact_name.trim()) || `Conversación ${item.conversation_id}`));
+      identity.append(create('b', '', guestLabel(item.contact_name, item.conversation_id)));
       const meta = [];
       if (typeof item.step === 'string' && item.step) meta.push(STEP_LABELS[item.step] || item.step);
       if (typeof item.prebooking === 'string' && item.prebooking) meta.push(PREBOOKING_LABELS[item.prebooking] || item.prebooking);
@@ -309,12 +355,12 @@
       identity.append(create('span', 'sub', meta.join(' · ')));
       button.append(identity);
       const wait = create('span', 'risk');
-      if (item.waiting_s === null || item.waiting_s === undefined) {
+      const risk = waitRisk(item.waiting_s, amber, red);
+      if (!risk) {
         wait.textContent = '—';
       } else {
-        wait.textContent = fmtSeconds(item.waiting_s);
-        if (Number.isFinite(red) && item.waiting_s >= red) wait.classList.add('bad');
-        else if (Number.isFinite(amber) && item.waiting_s >= amber) wait.classList.add('warn');
+        wait.textContent = fmtWait(item.waiting_s);
+        if (risk !== 'ok') wait.classList.add(risk);
       }
       button.append(wait);
       button.addEventListener('click', () => showDetail(item.conversation_id));
@@ -331,12 +377,12 @@
     const red = Number(sla.red_s) || 180;
     const amber = Number(sla.amber_s) || Math.round(red / 1.5);
     if (sla.stopped_at) {
-      return elapsed < red ? {label: `Respondido a tiempo · ${fmtSeconds(elapsed)}`, css: 'ok'} :
-        {label: `Respondido fuera de meta · ${fmtSeconds(elapsed)}`, css: 'bad'};
+      return elapsed < red ? {label: `Respondido a tiempo · ${fmtWait(elapsed)}`, css: 'ok'} :
+        {label: `Respondido fuera de meta · ${fmtWait(elapsed)}`, css: 'bad'};
     }
-    if (elapsed >= red) return {label: `Plazo vencido: responder ya · ${fmtSeconds(elapsed)}`, css: 'bad'};
-    if (elapsed >= amber) return {label: `Por vencer · ${fmtSeconds(elapsed)}`, css: 'warn'};
-    return {label: `En plazo · ${fmtSeconds(elapsed)}`, css: 'ok'};
+    if (elapsed >= red) return {label: `Plazo vencido: responder ya · ${fmtWait(elapsed)}`, css: 'bad'};
+    if (elapsed >= amber) return {label: `Por vencer · ${fmtWait(elapsed)}`, css: 'warn'};
+    return {label: `En plazo · ${fmtWait(elapsed)}`, css: 'ok'};
   }
 
   async function showDetail(id, {quiet = false} = {}) {
@@ -380,9 +426,9 @@
     const titleWrap = create('div');
     titleWrap.append(
       create('p', 'eyebrow', 'Detalle de la conversación'),
-      create('h3', '', (typeof snapshot.contact_name === 'string' && snapshot.contact_name.trim()) || 'Conversación sin nombre')
+      create('h3', '', guestLabel(snapshot.contact_name))
     );
-    heading.append(titleWrap, create('span', `risk ${sla.css || ''}`.trim(), sla.label));
+    heading.append(titleWrap, create('span', `risk risk-badge ${sla.css || ''}`.trim(), sla.label));
     recepcionDetailBody.append(heading);
 
     const dl = create('dl', 'detail-list');
@@ -398,7 +444,7 @@
     if (prebooking && typeof prebooking === 'object') {
       if (prebooking.status === 'active') {
         const remaining = Number(prebooking.expires_at) - Number(snapshot.now);
-        prebookingText = Number.isFinite(remaining) ? `Activa · vence en ${fmtSeconds(remaining)}` : 'Activa';
+        prebookingText = Number.isFinite(remaining) ? `Activa · vence en ${fmtWait(remaining)}` : 'Activa';
       } else {
         prebookingText = PREBOOKING_LABELS[prebooking.status] || prebooking.status;
       }
@@ -406,7 +452,7 @@
     detailRow(dl, 'Pre-reserva', prebookingText);
     recepcionDetailBody.append(dl);
 
-    const notesTitle = create('h3', '', 'Notas privadas del turno');
+    const notesTitle = create('h3', 'console-notes-title', 'Notas privadas del turno');
     recepcionDetailBody.append(notesTitle);
     const notes = create('ol', 'console-notes');
     const noteItems = Array.isArray(snapshot && snapshot.notes) ? snapshot.notes : [];

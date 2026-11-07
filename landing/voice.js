@@ -67,8 +67,12 @@
     typed.hidden = !inCall;
     talk.disabled = busy;
     typedInput.disabled = busy;
-    talk.textContent = listening ? 'Escuchando… toca para enviar' : 'Tocar para hablar';
+    // El botón es un icono redondo: el texto va en aria-label y title, nunca reemplaza al micrófono.
+    const talkLabel = listening ? 'Escuchando… toca para enviar' : 'Tocar para hablar';
+    talk.setAttribute('aria-label', talkLabel);
+    talk.setAttribute('title', talkLabel);
     talk.setAttribute('aria-pressed', String(listening));
+    talk.classList.toggle('is-listening', listening);
   }
   const canSpeakBrowser = Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
   function stopAudio() {
@@ -132,12 +136,12 @@
       setState('Hablando…');
       await play(data.audio_b64, data.audio_format);
     } else if (canSpeakBrowser && spokenText) {
-      setState('Hablando (voz del navegador)…');
+      setState('Hablando…');
       await speakBrowser(spokenText, language);
     } else if (data.voice_error) {
       addLine('Sistema', 'Sin audio por ahora: puedes leer la respuesta.', 'system');
     }
-    if (version === callVersion) setState('Tu turno: toca para hablar o escribe abajo.');
+    if (version === callVersion) setState(Recognition ? 'Tu turno: toca el micrófono o escribe abajo.' : 'Tu turno: escribe abajo.');
   }
   async function send(text) {
     const message = text.trim();
