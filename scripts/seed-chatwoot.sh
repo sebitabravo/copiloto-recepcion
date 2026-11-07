@@ -31,12 +31,15 @@ website_token="$(sed -n 's/^CHATWOOT_WEBSITE_TOKEN=//p' "$runtime")"
 # Las URLs públicas respetan lo configurado en .env (set -a arriba); en local quedan los localhost.
 public_url="${COPILOTO_PUBLIC_URL:-http://localhost:8100}"
 chatwoot_url="${CHATWOOT_PUBLIC_URL:-http://localhost:3000}"
+pms_url="${PMS_PUBLIC_URL:-http://localhost:8200}"
+# privacyUrl va en la misma origen de la portada: Nginx pasa /privacidad al copiloto (infra/landing/nginx.conf).
 cat >landing/config.js <<EOF
 window.COPILOTO_CONFIG = {
   chatwootUrl: "${chatwoot_url}",
   copilotoUrl: "${public_url}",
+  pmsUrl: "${pms_url}",
   websiteToken: "${website_token}",
-  privacyUrl: "${public_url}/privacidad",
+  privacyUrl: "/privacidad",
 };
 EOF
 echo "Seed OK. Variables runtime escritas ($(wc -l <"$runtime" | tr -d ' ') claves)."

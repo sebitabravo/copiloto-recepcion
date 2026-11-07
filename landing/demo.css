@@ -1,11 +1,12 @@
-/* Fuentes propias en woff2, subset latin. display: optional evita el salto de layout cuando
-   la fuente llega tarde: la página usa la de respaldo y no cambia después. */
+/* Fuentes propias en woff2, subset latin. display: swap pinta el texto de inmediato con la de
+   respaldo y cambia a la propia al llegar; el HTML precarga las que usa la primera vista para que
+   ese cambio ocurra antes del primer pintado y no mueva el layout. */
 @font-face {
   font-family: "Instrument Serif";
   src: url("fonts/instrument-serif-normal.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
-  font-display: optional;
+  font-display: swap;
 }
 
 @font-face {
@@ -13,7 +14,7 @@
   src: url("fonts/instrument-serif-italic.woff2") format("woff2");
   font-weight: 400;
   font-style: italic;
-  font-display: optional;
+  font-display: swap;
 }
 
 @font-face {
@@ -21,7 +22,7 @@
   src: url("fonts/inter-normal.woff2") format("woff2");
   font-weight: 400 700;
   font-style: normal;
-  font-display: optional;
+  font-display: swap;
 }
 
 /* Sistema visual: papel cálido, tipografía editorial y profundidad 3D.
@@ -64,6 +65,8 @@
   --font-display: "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
   --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  /* Ritmo vertical de la portada: un solo espacio entre secciones. */
+  --section-space: clamp(60px, 8vw, 88px);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -181,6 +184,9 @@ textarea:focus-visible,
   outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
+
+/* Destinos de "Saltar al contenido": reciben el foco por programa, no lo dibujan. */
+main[tabindex="-1"]:focus { outline: none; }
 
 .wrap { width: 100%; max-width: 1180px; margin: auto; padding-inline: 24px; }
 
@@ -423,6 +429,7 @@ nav .nav-cta:hover { background: var(--accent); color: var(--accent-ink); }
 /* ---------- Cifras con contexto ---------- */
 
 .evidence {
+  padding: 0;
   border-top: 1px solid var(--line);
   background: var(--bg-2);
 }
@@ -513,7 +520,8 @@ nav .nav-cta:hover { background: var(--accent); color: var(--accent-ink); }
   animation: stack-float 12s ease-in-out infinite;
 }
 
-.float.tool { left: -18px; top: 6%; }
+/* Cuelga del borde superior del marco: así no tapa la barra de dirección. */
+.float.tool { left: -18px; top: -14px; }
 
 .float.tool b { color: var(--ok); font-weight: 700; }
 
@@ -738,12 +746,11 @@ nav .nav-cta:hover { background: var(--accent); color: var(--accent-ink); }
 
 /* ---------- Secciones ---------- */
 
-main > section {
-  padding: 76px 0;
-  border-top: 1px solid var(--line);
-}
+/* Un solo ritmo entre secciones: el espacio separa, sin filetes que dupliquen la pausa. */
+main > section { padding-block: var(--section-space); }
 
-main > section:first-of-type { border-top: 0; }
+/* El cierre se apoya en la sección anterior: un solo espacio entre su contenido y la tarjeta. */
+main > #probar { padding-top: 0; }
 
 .section-heading {
   display: flex;
@@ -1429,12 +1436,18 @@ textarea::placeholder { color: var(--wa-muted); }
 
 /* ---------- Recepción: tres vistas del prototipo ---------- */
 
-/* Banda con fondo propio: se extiende hasta el borde del contenido sin desbordar. */
+/* Banda a sangre: el fondo llega a los bordes de la ventana y el contenido sigue alineado al
+   contenedor. border-image pinta fuera de la caja sin crear desborde horizontal. */
 #recepcion {
-  margin-inline: -24px;
-  padding-inline: 24px;
-  background: linear-gradient(180deg, var(--bg-2), var(--bg));
+  border-image: linear-gradient(180deg,
+    var(--line) 0 1px,
+    var(--bg-2) 1px,
+    color-mix(in oklab, var(--bg-2) 60%, var(--bg)) calc(100% - 1px),
+    var(--line) calc(100% - 1px)) fill 0 / / 0 100vmax;
 }
+
+/* Sobre --bg-2 el bronce queda en 4,4:1; un punto más oscuro alcanza AA en texto pequeño. */
+#recepcion .eyebrow { color: color-mix(in oklab, var(--accent) 84%, var(--ink)); }
 
 .grid3 {
   display: grid;
@@ -1875,6 +1888,9 @@ body.is-hidden * {
 @media (max-width: 1000px) {
   /* Una columna desde mil: con dos, la copia queda tan angosta que las cifras se cortan. */
   .hero { grid-template-columns: minmax(0, 1fr); gap: 34px; padding-block: 34px 54px; }
+  /* Con el marco a todo el ancho, el chip de herramienta sube sobre él en vez de colgar del borde. */
+  .stage { padding-top: 48px; }
+  .float.tool { top: 4px; left: 0; }
   .evidence-in { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stat:nth-child(3) { border-left: 0; padding-left: 0; }
   .stat { border-top: 1px solid var(--line-soft); }
@@ -1907,14 +1923,13 @@ body.is-hidden * {
   .demo-stage { padding: 16px; }
   .card { padding: 20px; border-radius: 18px; }
   .button { padding-inline: 18px; }
-  .evidence-in { grid-template-columns: minmax(0, 1fr); }
-  .stat { padding-inline: 0; border-left: 0; border-top: 1px solid var(--line-soft); }
-  .stat:first-child { border-top: 0; }
-  .float.tool { left: -4px; }
+  /* Cifras en 2 × 2: apiladas de a una ocupaban casi una pantalla. */
+  .stat { padding: 18px 14px; }
+  .stat:nth-child(odd) { padding-left: 0; }
+  .stat dt { font-size: 1.6rem; }
   .float.ticket { right: -4px; }
   .split { grid-template-columns: minmax(0, 1fr); }
   .guest { border-right: 0; border-bottom: 1px solid var(--line); }
-  #recepcion { margin-inline: -18px; padding-inline: 18px; }
   .cta { padding: 30px 22px; }
 }
 

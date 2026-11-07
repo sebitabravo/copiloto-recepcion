@@ -1,0 +1,6 @@
+# Nginx reemplaza el marcador de URL pública al servir (PUBLIC_SITE_URL en infra/docker-compose.yml).
+User-agent: *
+Allow: /
+Disallow: /config.js
+
+Sitemap: __PUBLIC_SITE_URL__/sitemap.xml

@@ -5,11 +5,64 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Copiloto de Recepción · Hotel Bordeluz</title>
 <meta name="description" content="El copiloto de recepción de Hotel Bordeluz: ubicación primero, respuestas con la hora de lectura del PMS simulado y confirmación humana de cada reserva. Prueba la demo en vivo.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%238d5a2b'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%23fff8ef' text-anchor='middle'%3EB%3C/text%3E%3C/svg%3E">
-<!-- Fuentes propias: sin viaje a otro origen, y el serif del titular llega antes del primer pintado. -->
+<!-- Nginx completa las URLs absolutas al servir con PUBLIC_SITE_URL (infra/docker-compose.yml, docs/seo.md). -->
+<link rel="canonical" href="__PUBLIC_SITE_URL__/">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#f3ebdf" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14100b" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Copiloto de Recepción · Hotel Bordeluz">
+<meta property="og:locale" content="es_CL">
+<meta property="og:url" content="__PUBLIC_SITE_URL__/">
+<meta property="og:title" content="La recepción que conversa, consulta y confirma">
+<meta property="og:description" content="Copiloto de recepción con IA para Hotel Bordeluz: ubicación primero, PMS con hora de lectura y confirmación humana de cada reserva. Prototipo académico con datos ficticios.">
+<meta property="og:image" content="__PUBLIC_SITE_URL__/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:alt" content="Copiloto de Recepción de Hotel Bordeluz: conversación del huésped y cola de recepción">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="La recepción que conversa, consulta y confirma">
+<meta name="twitter:description" content="Copiloto de recepción con IA para Hotel Bordeluz. Prototipo académico con datos ficticios: pruébalo como huésped.">
+<meta name="twitter:image" content="__PUBLIC_SITE_URL__/og-image.png">
+<meta name="twitter:image:alt" content="Copiloto de Recepción de Hotel Bordeluz: conversación del huésped y cola de recepción">
+<link rel="icon" href="favicon.svg?v=20261107a" type="image/svg+xml">
+<!-- Fuentes propias: sin viaje a otro origen. Se precargan solo las tres que pinta la primera vista
+     (titular en serif normal e itálica, texto en Inter). -->
 <link rel="preload" href="fonts/instrument-serif-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="demo.css?v=20261106b">
+<link rel="preload" href="fonts/inter-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="demo.css?v=20261107a">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "__PUBLIC_SITE_URL__/#website",
+      "url": "__PUBLIC_SITE_URL__/",
+      "name": "Copiloto de Recepción · Hotel Bordeluz",
+      "description": "Prototipo académico de un copiloto de recepción con IA para un hotel boutique. Datos y precios ficticios.",
+      "inLanguage": "es-CL"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "__PUBLIC_SITE_URL__/#software",
+      "name": "Copiloto de Recepción",
+      "applicationCategory": "BusinessApplication",
+      "applicationSubCategory": "Atención de recepción hotelera",
+      "operatingSystem": "Web",
+      "url": "__PUBLIC_SITE_URL__/demo",
+      "image": "__PUBLIC_SITE_URL__/og-image.png",
+      "description": "Prototipo académico (INNOVA3, INACAP): responde por chat la ubicación y las preguntas frecuentes, consulta el PMS simulado con hora de lectura y deriva a recepción; una persona confirma cada reserva. Datos ficticios, sin conexión a un hotel real.",
+      "inLanguage": "es",
+      "isAccessibleForFree": true,
+      "offers": {"@type": "Offer", "price": "0", "priceCurrency": "CLP"},
+      "isPartOf": {"@id": "__PUBLIC_SITE_URL__/#website"}
+    }
+  ]
+}
+</script>
 </head>
 <body>
 <a class="skip" href="#main">Saltar al contenido</a>
@@ -70,12 +123,12 @@
     </figure>
   </div>
 
-  <section class="evidence" aria-label="Cifras del prototipo con contexto">
+  <section class="evidence" aria-label="Datos verificables del prototipo">
     <dl class="wrap evidence-in">
-      <div class="stat"><dt>4</dt><dd>herramientas, según modo y permisos<em>hotel, disponibilidad, reserva y derivación</em></dd></div>
-      <div class="stat"><dt>1</dt><dd>confirmación humana por reserva<em>el copiloto propone; una persona confirma en el PMS</em></dd></div>
-      <div class="stat"><dt>0</dt><dd>reservas sin revisar la propuesta<em>la confirmación explícita es obligatoria</em></dd></div>
-      <div class="stat"><dt>100%</dt><dd>datos ficticios de demostración<em>no son métricas de huéspedes reales</em></dd></div>
+      <div class="stat"><dt>180&nbsp;s</dt><dd>para que recepción responda<em>cronómetro en ámbar a los 120&nbsp;s y en rojo a los 180&nbsp;s</em></dd></div>
+      <div class="stat"><dt>12</dt><dd>tipos de habitación en el PMS simulado<em>20 habitaciones con cupos y tarifas ficticias</em></dd></div>
+      <div class="stat"><dt>11</dt><dd>respuestas frecuentes verificadas<em>cada una con fuente y fecha de revisión</em></dd></div>
+      <div class="stat"><dt>$0</dt><dd>en licencias de software<em>Chatwoot Community, FastAPI, SQLite y llama.cpp</em></dd></div>
     </dl>
   </section>
 
@@ -142,11 +195,11 @@
       </article>
     </div>
     <p class="prototype-links">Estos paneles son reales en la demo:
-      <a href="http://localhost:3000" target="_blank" rel="noopener">Bandeja de recepción</a>
+      <a href="/demo" data-service="inbox" target="_blank" rel="noopener">Bandeja de recepción</a>
       <span aria-hidden="true">·</span>
-      <a href="http://localhost:8200/admin" target="_blank" rel="noopener">PMS simulado</a>
+      <a href="/demo" data-service="pms" target="_blank" rel="noopener">PMS simulado</a>
       <span aria-hidden="true">·</span>
-      <a href="http://localhost:8100/metricas" target="_blank" rel="noopener">Métricas</a>
+      <a href="/demo" data-service="metrics" target="_blank" rel="noopener">Métricas</a>
     </p>
   </section>
 
@@ -181,7 +234,7 @@
     <p class="fineprint limits-fineprint">La integración con el PMS real del hotel requiere credenciales y un adaptador propio. En esta demo cada proceso es de una sola pasada y todos los datos son ficticios.</p>
   </section>
 
-  <section aria-label="Cerrar: probar la demo">
+  <section id="probar" aria-label="Cerrar: probar la demo">
     <div class="cta">
       <div>
         <h2>Pruébalo como huésped</h2>
@@ -206,16 +259,16 @@
       <a href="#recorrido">Recorrido</a>
       <a href="#recepcion">Recepción</a>
       <a href="#limites">Límites</a>
-      <a href="http://localhost:3000" target="_blank" rel="noopener">Bandeja de recepción</a>
-      <a href="http://localhost:8200/admin" target="_blank" rel="noopener">PMS simulado</a>
-      <a href="http://localhost:8100/metricas" target="_blank" rel="noopener">Métricas</a>
-      <a href="http://localhost:8100/privacidad" target="_blank" rel="noopener">Aviso de privacidad</a>
+      <a href="/demo" data-service="inbox" target="_blank" rel="noopener">Bandeja de recepción</a>
+      <a href="/demo" data-service="pms" target="_blank" rel="noopener">PMS simulado</a>
+      <a href="/demo" data-service="metrics" target="_blank" rel="noopener">Métricas</a>
+      <a href="/privacidad">Aviso de privacidad</a>
     </nav>
     <div class="footer-legal"><p><strong>Proyecto de portafolio · INNOVA3, INACAP.</strong> Todos los datos de huéspedes son ficticios. Precios y disponibilidad del PMS son simulados. No es el sitio oficial del hotel ni un canal de reserva real.</p></div>
   </div>
 </footer>
 
-<script src="config.js?v=20261106b" defer></script>
-<script src="site.js?v=20261106b" defer></script>
+<script src="config.js?v=20261107a" defer></script>
+<script src="site.js?v=20261107a" defer></script>
 </body>
 </html>

@@ -26,6 +26,35 @@ accesibilidad volvió a 100 al corregir el contraste de la cabecera y de la traz
 Oportunidad abierta (portada): 244 ms de CSS bloqueante. Es el costo de servir una hoja sin build; se
 resuelve en la fase 2 del ADR (`docs/adr/0001-front-estatico.md`), no antes de la entrega.
 
+## Portada: qué cambió en esta pasada
+
+- **Cifras verificables en vez de relleno.** La franja de datos ya no dice "4 herramientas / 1 / 0 /
+  100% datos ficticios": muestra el SLA de 180 s con cronómetro (`copiloto/src/copiloto/config.py`,
+  `sla_red_s=180`, ámbar a los 120 s), los 12 tipos de habitación y 20 habitaciones del PMS simulado
+  (`data/hotel.yaml`, `pms_mock/tests/test_pms.py`), las 11 respuestas frecuentes verificadas, cada una
+  con fuente y fecha de revisión (`data/hotel.yaml`) y el costo $0 en licencias
+  (`docs/stack-abierto.md`). En móvil la rejilla es 2 × 2 en vez de una cifra por pantalla.
+- **Banda de `#recepcion` a sangre.** El fondo llega a los bordes de la ventana con `border-image`
+  (sin `margin-inline` negativo, que era lo que desalineaba la banda) y el contenido sigue alineado al
+  contenedor. El bronce del *eyebrow* se oscurece un punto sobre `--bg-2` para no bajar de AA.
+- **Ritmo vertical con un solo token** (`--section-space`). Se fueron los filetes entre secciones —que
+  duplicaban la pausa— y el relleno doble antes de `#limites` y del CTA.
+- **Móvil 390 px:** el chip `get_hotel_info · 31 ms` se apoya sobre el marco en vez de tapar la barra de
+  dirección del mock; de 360 a 1440 px no hay desborde horizontal.
+- **Rendimiento:** `font-display: swap` en las tres fuentes (antes `optional`, que dejaba el serif
+  fuera si llegaba tarde) y precarga de las tres que pinta la primera vista. Caché larga e inmutable
+  para fuentes y recursos con `?v=`, `no-cache` para HTML y `no-store` para `config.js`; gzip para
+  texto y cabeceras de seguridad con `Permissions-Policy: microphone=(self)`.
+- **SEO:** canonical, Open Graph, Twitter card, `theme-color`, JSON-LD, favicon SVG, `robots.txt` y
+  `sitemap.xml`; URL pública en `PUBLIC_SITE_URL`. Detalle y comprobaciones en `docs/seo.md`.
+- **Sin `localhost` en el HTML público:** los enlaces a bandeja, PMS y métricas salen de `config.js`
+  (`landing/site.js`) con respaldo a `/demo`; el aviso de privacidad vive en la misma origen
+  (`/privacidad`, proxied por Nginx al copiloto).
+
+Accesibilidad y navegación comprobadas después del cambio: `:focus-visible` con anillo de 3 px, áreas
+táctiles de 44 px en navegación y botones, `prefers-reduced-motion` desactiva animaciones y revelado, y
+la consola del navegador queda sin errores en 360, 390, 768, 1000 y 1440 px.
+
 ## Presupuesto
 
 | Área | Umbral | Por qué |
@@ -60,12 +89,13 @@ No las cubre Lighthouse y se hacen en el navegador antes de una entrega:
 2. Consola, pestaña Huésped: escribir "hola" devuelve aviso de privacidad y ubicación.
 3. Consola, pestaña Recepción: con el modo demo encendido carga la cola real; apagado, muestra el camino manual.
 4. Consola, pestaña Admin: el PMS entra con `?demo=1` sin pedir token; métricas abre.
-5. Sin desbordes horizontales entre 380 y 1440 px, y objetivos táctiles ≥ 44 px en la consola
-   (medido: 0 desbordes y 0 objetivos pequeños en 380/620/1000/1440).
+5. Sin desbordes horizontales entre 360 y 1440 px, y objetivos táctiles ≥ 44 px en la consola
+   (medido: 0 desbordes y 0 objetivos pequeños en 360/390/768/1000/1440).
 6. `prefers-reduced-motion`: sin animaciones.
 
 ## Deuda declarada
 
-- Sin build: no hay hashing de assets. Las fuentes se cachean una semana y el HTML no se cachea.
+- Sin build: no hay hashing de assets. Las fuentes y los recursos con `?v=` se cachean un año; el HTML
+  no se cachea. Cambiar un CSS obliga a subir el `?v=` del HTML a mano.
 - `landing/demo.css` concentra portada y consola; la fase 2 lo divide por página.
 - Sin presupuesto automatizado en CI: hoy es una comprobación manual documentada aquí.

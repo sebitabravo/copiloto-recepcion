@@ -4,6 +4,36 @@
 (() => {
   'use strict';
 
+  // Enlaces a los servicios de la demo (bandeja, PMS, métricas): salen de config.js, que genera
+  // scripts/seed-chatwoot.sh. Sin config se derivan del host de la página con los puertos del stack;
+  // sin JS quedan apuntando a la consola /demo, que también los enlaza.
+  const config = window.COPILOTO_CONFIG || {};
+  const pageHost = port => `${location.protocol}//${location.hostname}:${port}`;
+  const trim = value => String(value).replace(/\/+$/, '');
+  // Demo por LAN: misma regla que demo.js. Si la página no corre en localhost pero la config sí
+  // apunta ahí, se usa el host y el protocolo de la página conservando puerto y ruta.
+  const resolve = raw => {
+    try {
+      const url = new URL(raw, location.href);
+      const local = host => host === 'localhost' || host === '127.0.0.1';
+      if (!local(location.hostname) && local(url.hostname)) {
+        url.hostname = location.hostname;
+        url.protocol = location.protocol;
+      }
+      return url.toString();
+    } catch (_) { return null; }
+  };
+  const copiloto = trim(config.copilotoUrl || pageHost(8100));
+  const services = {
+    inbox: config.chatwootUrl || pageHost(3000),
+    pms: `${trim(config.pmsUrl || pageHost(8200))}/admin`,
+    metrics: `${copiloto}/metricas`,
+  };
+  document.querySelectorAll('a[data-service]').forEach(link => {
+    const href = services[link.dataset.service] && resolve(services[link.dataset.service]);
+    if (href && /^https?:/.test(href)) link.href = href;
+  });
+
   // Barra fija: borde y progreso de lectura cuando la página ya se desplazó.
   const topbar = document.getElementById('topbar');
   const progress = document.getElementById('scroll-progress');

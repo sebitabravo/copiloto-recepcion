@@ -268,9 +268,17 @@ services:
 
   landing:
     image: nginx:alpine
+    environment:
+      # URL pública de la portada: canónicos, Open Graph, JSON-LD, robots.txt y sitemap.xml (sin barra final)
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:8080}
+      # Servicio que atiende /privacidad en la misma origen de la portada
+      COPILOTO_UPSTREAM: ${COPILOTO_UPSTREAM:-http://copiloto:8100}
+      # envsubst solo toca estas dos: las variables propias de Nginx quedan intactas
+      NGINX_ENVSUBST_FILTER: ^(PUBLIC_SITE_URL|COPILOTO_UPSTREAM)$$
     volumes:
       - ./landing:/usr/share/nginx/html:ro
-      - ./infra/landing/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Plantilla: la imagen oficial la pasa por envsubst a /etc/nginx/conf.d/default.conf al arrancar
+      - ./infra/landing/nginx.conf:/etc/nginx/templates/default.conf.template:ro
     ports:
       - "${BIND_ADDR:-127.0.0.1}:8080:80"
     restart: unless-stopped
