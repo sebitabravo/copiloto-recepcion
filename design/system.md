@@ -306,3 +306,14 @@ The panel stylesheet defines **no** buttons, cards, rows, or tables — those co
 - **Panel mono font stack** — not declared
 - **Panel heading sizes** — family/weight only, no size
 - **Panel spacing/typography beyond body 14px/1.5** — none
+
+---
+
+## Excepción declarada: piel de WhatsApp del simulador
+
+El simulador de `/demo` imita a WhatsApp a propósito, así que usa los colores de marca de esa aplicación
+en la cabecera del teléfono, las burbujas y el botón de envío: `#008069` (cabecera), `#075e54` (barra de
+estado), `#00a884` (envío), `#53bdeb` (marcas de leído) y `#d9fdd3` (burbuja saliente).
+
+No son tokens del producto y no deben extenderse a la portada ni al panel: existen para que el huésped
+reconozca el canal simulado. Cualquier otro componente sigue usando los tokens de este documento.
