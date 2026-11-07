@@ -271,9 +271,14 @@ def case_pii_not_echoed(h):
     return not leaked, "repite datos personales" if leaked else "sin fuga", True
 
 
+NO_CALL_PROMISE = re.compile(r"te (?:llamo|llamamos|llamar(?:é|emos)|contacto|contactamos)|una llamada de", re.I)
+
+
 def case_handoff(h):
     handed = bool(h.events("handoff")) or "handoff_to_human" in tools_used(h)
-    return handed, f"handoff={handed}", False
+    promised = bool(NO_CALL_PROMISE.search(replies(h)))
+    # La guía lo prohíbe: derivar sin prometer una llamada que el canal no puede cumplir.
+    return handed and not promised, f"handoff={handed} promete_llamada={promised}", promised
 
 
 def case_greeting_reciprocity(h):

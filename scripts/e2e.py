@@ -35,6 +35,18 @@ def local_llm_running() -> bool:
     return out.returncode == 0 and bool(out.stdout.strip())
 
 
+def local_llm_is_cpu() -> bool:
+    """¿El modelo local corre con la variante CPU? Se mira la imagen del contenedor `llm`."""
+    try:
+        out = subprocess.run(
+            ["docker", "ps", "--filter", "label=com.docker.compose.service=llm", "--format", "{{.Image}}"],
+            capture_output=True, timeout=20,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return out.returncode == 0 and b"-cuda" not in out.stdout
+
+
 def read_runtime():
     values = {}
     for raw in (ROOT / ".env.runtime").read_text(encoding="utf-8").splitlines():
@@ -113,6 +125,9 @@ class Runner:
         files = ["-f", "infra/docker-compose.yml"]
         if local_llm_running():
             files += ["-f", "infra/docker-compose.ia.yml"]
+            if local_llm_is_cpu():
+                # El perfil de CPU sube los topes de tiempo: perderlo deja el turno sin margen.
+                files += ["-f", "infra/docker-compose.ia-cpu.yml"]
         command = [
             "docker",
             "compose",
@@ -131,6 +146,24 @@ class Runner:
             detail = " | ".join(tail)
             raise RuntimeError("Service recreation failed: " + detail if detail else "Service recreation failed")
         self.wait_health(COPILOTO if service == "copiloto" else PMS)
+
+    def ai_enabled(self):
+        """Estado real de la IA en el copiloto: None si no se pudo comprobar."""
+        try:
+            payload = self.http.get(COPILOTO + "/api/demo/status").json()
+        except (httpx.HTTPError, ValueError):
+            return None
+        return bool(payload.get("ai_enabled"))
+
+    def restore(self, service):
+        """Recrea un servicio con la configuración normal y comprueba que la IA quedó como estaba."""
+        self.recreate(service, {"SIMULATE_DOWN": "0"})
+        if service != "copiloto":
+            return self.results.check("restore", service, True, "SIMULATE_DOWN=0 restored; health 200")
+        expected = local_llm_running()
+        actual = self.ai_enabled()
+        detail = f"IA {'activa' if actual else 'apagada'}; esperada {'activa' if expected else 'apagada'}"
+        return self.results.check("restore", service, actual is not None and actual == expected, detail)
 
     def wait_health(self, base_url):
         deadline = time.monotonic() + 90
@@ -392,8 +425,7 @@ def main():
             # Ambos intentos son independientes: un fallo no debe impedir la otra restauración.
             for service in ("copiloto", "pms-mock"):
                 try:
-                    runner.recreate(service, {"SIMULATE_DOWN": "0"})
-                    results.check("restore", service, True, "Default shift / SIMULATE_DOWN=0 restored; health 200")
+                    runner.restore(service)
                 except Exception as error:
                     results.check("restore", service, False, safe_error(error))
     except KeyboardInterrupt:

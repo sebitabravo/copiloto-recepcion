@@ -66,13 +66,21 @@ case "$cmd" in
   smoke) ./scripts/smoke-docker.sh ;;
   ia)
     compose_ia=(docker compose -f infra/docker-compose.yml -f infra/docker-compose.ia.yml)
-    # GPU NVIDIA visible para Docker: el modelo corre en ella. Si no, la variante CPU (LLM_GPU=0 la fuerza).
-    if [ "${LLM_GPU:-auto}" != 0 ] && MSYS_NO_PATHCONV=1 docker run --rm --gpus all --entrypoint /app/llama-server \
-        ghcr.io/ggml-org/llama.cpp:server-cuda-b12169 --list-devices 2>/dev/null | grep -q CUDA0; then
+    # La detección no oculta sus errores: si Docker falla, el mensaje lo dice en vez de culpar a la GPU.
+    gpu_probe="$(MSYS_NO_PATHCONV=1 docker run --rm --gpus all --entrypoint /app/llama-server \
+      ghcr.io/ggml-org/llama.cpp:server-cuda-b12169 --list-devices 2>&1)"
+    if [ "${LLM_GPU:-auto}" != 0 ] && printf '%s' "$gpu_probe" | grep -q CUDA0; then
       echo "GPU NVIDIA detectada: el modelo corre en la GPU."
     else
       compose_ia+=(-f infra/docker-compose.ia-cpu.yml)
-      echo "Sin GPU NVIDIA en Docker: el modelo corre en CPU (más lento)."
+      if [ "${LLM_GPU:-auto}" = 0 ]; then
+        echo "LLM_GPU=0: el modelo corre en CPU (más lento)."
+      elif printf '%s' "$gpu_probe" | grep -qE "error|cannot|failed|denied"; then
+        echo "Docker no pudo probar la GPU; el modelo corre en CPU. Detalle:"
+        printf '%s\n' "$gpu_probe" | tail -3
+      else
+        echo "Sin GPU NVIDIA en Docker: el modelo corre en CPU (más lento)."
+      fi
     fi
     compose_ia+=(--project-directory .)
     echo "Levantando el modelo local (la primera vez descarga ~2,5 GB dentro de Docker)…"
