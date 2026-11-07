@@ -266,6 +266,7 @@
   const unavailableText = 'El PMS no responde; reintenta en un momento';
   const tokenError = 'Token inválido, revísalo con quien administra el sistema';
   let staffToken = '';
+  let cookieAuth = false;
   let roomTypes = [];
   let conversationId = null;
   let availabilityKey = null;
@@ -309,6 +310,7 @@
   function logout(message = '') {
     sessionVersion += 1;
     staffToken = '';
+    cookieAuth = false;
     saveToken('');
     get('token').value = '';
     get('token').type = 'password';
@@ -385,7 +387,7 @@
       `${count} ${count === 1 ? 'noche' : 'noches'}` : 'Elige las fechas de la estadía';
     get('party-summary').textContent = partyLabel(Number(fields.adults.value), Number(fields.children.value));
     get('reviewed').disabled = availabilityKey !== signature() || created;
-    get('submit').disabled = submitting || created || !staffToken || Object.keys(errors).length > 0 ||
+    get('submit').disabled = submitting || created || (!staffToken && !cookieAuth) || Object.keys(errors).length > 0 ||
       !get('reviewed').checked || availabilityKey !== signature();
     get('check-availability').disabled = submitting || created || !roomTypes.length;
     document.querySelectorAll('[data-step]').forEach(button => {
@@ -516,6 +518,38 @@
       if (error.status !== 401 && session === sessionVersion) get('table-status').textContent = error.message;
     } finally { get('refresh').disabled = false; }
   }
+  function enterWorkspace(bookings, types, token) {
+    if (token) { staffToken = token; saveToken(token); }
+    else cookieAuth = true;
+    get('token').value = '';
+    roomTypes = types;
+    const selectedCode = fields.room_code.value;
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Selecciona una habitación';
+    fields.room_code.replaceChildren(placeholder);
+    for (const type of roomTypes) {
+      const option = document.createElement('option');
+      option.value = type.code;
+      option.textContent = `${type.name} · ${type.m2} m² · hasta ${type.max_adults} ${type.max_adults === 1 ? 'adulto' : 'adultos'} + ${type.max_children} ${type.max_children === 1 ? 'niño' : 'niños'}`;
+      fields.room_code.append(option);
+    }
+    if (!prefilled) {
+      prefill();
+      prefilled = true;
+    } else {
+      fields.room_code.value = selectedCode;
+      adjustCapacity();
+      adjustDates();
+    }
+    renderBookings(bookings);
+    get('access').hidden = true;
+    get('workspace').hidden = false;
+    get('session').hidden = false;
+    get('table-status').textContent = `${bookings.length} ${bookings.length === 1 ? 'reserva registrada' : 'reservas registradas'}`;
+    updateForm();
+    fields.guest_name.focus();
+  }
   async function login(token) {
     if (!token) return;
     get('login').disabled = true;
@@ -525,39 +559,22 @@
       const bookings = await api('/api/v1/bookings', {}, token);
       const types = await api('/api/v1/room-types', {}, token);
       if (session !== sessionVersion) return;
-      staffToken = token;
-      saveToken(token);
-      get('token').value = '';
-      roomTypes = types;
-      const selectedCode = fields.room_code.value;
-      const placeholder = document.createElement('option');
-      placeholder.value = '';
-      placeholder.textContent = 'Selecciona una habitación';
-      fields.room_code.replaceChildren(placeholder);
-      for (const type of roomTypes) {
-        const option = document.createElement('option');
-        option.value = type.code;
-        option.textContent = `${type.name} · ${type.m2} m² · hasta ${type.max_adults} ${type.max_adults === 1 ? 'adulto' : 'adultos'} + ${type.max_children} ${type.max_children === 1 ? 'niño' : 'niños'}`;
-        fields.room_code.append(option);
-      }
-      if (!prefilled) {
-        prefill();
-        prefilled = true;
-      } else {
-        fields.room_code.value = selectedCode;
-        adjustCapacity();
-        adjustDates();
-      }
-      renderBookings(bookings);
-      get('access').hidden = true;
-      get('workspace').hidden = false;
-      get('session').hidden = false;
-      get('table-status').textContent = `${bookings.length} ${bookings.length === 1 ? 'reserva registrada' : 'reservas registradas'}`;
-      updateForm();
-      fields.guest_name.focus();
+      enterWorkspace(bookings, types, token);
     } catch (error) {
       if (error.status !== 401) get('access-error').textContent = error.message;
     } finally { get('login').disabled = false; }
+  }
+  async function cookieLogin() {
+    // Modo demo: la cookie de personal (HttpOnly) autoriza la sesión sin token en el navegador.
+    const session = sessionVersion;
+    try {
+      const response = await fetch('/api/v1/bookings', {headers:{'X-Staff-Token':''}, cache:'no-store'});
+      if (!response.ok) return;
+      const bookings = await response.json();
+      const types = await api('/api/v1/room-types', {}, '');
+      if (session !== sessionVersion) return;
+      enterWorkspace(bookings, types, '');
+    } catch (_) { /* Sin sesión de demo queda el formulario de acceso normal. */ }
   }
   function resetBooking() {
     form.reset();
@@ -649,6 +666,7 @@
   let storedToken = '';
   try { storedToken = sessionStorage.getItem(storageKey) || ''; } catch (_) { /* Almacenamiento no disponible. */ }
   if (storedToken) login(storedToken);
+  else cookieLogin();
 })();
 </script>
 </body>

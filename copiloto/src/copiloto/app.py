@@ -17,7 +17,7 @@ from dataclasses import replace
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.middleware.gzip import GZipMiddleware
@@ -195,6 +195,7 @@ def create_app(
         allow_origins=[settings.landing_origin],
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
+        allow_credentials=True,
         max_age=600,
     )
     # Las páginas del panel y las métricas viajan comprimidas.
@@ -344,6 +345,33 @@ def create_app(
         if who is None:
             return JSONResponse({"detail": "Sesión requerida"}, status_code=401)
         return {"name": who}
+
+    @app.post("/api/demo/session", dependencies=limited)
+    async def demo_session_create(request: Request):
+        """Modo demo sin credenciales en el navegador (L8-L9): la sesión firmada del panel se crea aquí.
+
+        Acepta cuerpo vacío con el mismo tope que el login; con la demo apagada responde 403 y sin cookie.
+        Nunca devuelve el token ni ningún secreto: la sesión viaja solo en la cookie HttpOnly.
+        """
+        await read_capped(request, 4096)
+        if not settings.demo_enabled:
+            raise HTTPException(status_code=403, detail="demo_disabled")
+        name = "Recepción (demo)"
+        response = Response(status_code=204)
+        response.set_cookie(
+            PANEL_COOKIE,
+            panel_session(name, int(clock()) + PANEL_SESSION_HOURS * 3600),
+            max_age=PANEL_SESSION_HOURS * 3600,
+            httponly=True,
+            samesite="lax",
+            secure=urlsplit(settings.public_url).scheme == "https",
+        )
+        return response
+
+    @app.get("/api/demo/session", dependencies=limited)
+    async def demo_session_info(request: Request):
+        """La página de la demo pregunta si el modo demo está disponible y quién es la sesión; sin secretos."""
+        return {"demo": settings.demo_enabled, "name": panel_identity(request)}
 
     @app.get("/api/panel/queue", dependencies=limited)
     async def panel_queue(request: Request):

@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import logging
 import os
@@ -11,12 +12,25 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import yaml
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Response
-from fastapi.responses import HTMLResponse
+from fastapi import BackgroundTasks, Cookie, Depends, FastAPI, Header, HTTPException, Query, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 DEFAULT_HOTEL_PATH = Path(__file__).resolve().parents[3] / "data" / "hotel.yaml"
+
+# Mismo criterio de verdad que copiloto.config._TRUTHY: la entrada de demo está apagada por defecto.
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+STAFF_COOKIE = "staff_session"
+
+
+def demo_mode_enabled() -> bool:
+    return os.getenv("DEMO_MODE", "").strip().lower() in _TRUTHY
+
+
+def staff_cookie_value(expected: str) -> str:
+    """Valor de la cookie de personal: un HMAC derivado del STAFF_TOKEN; el token nunca viaja en claro."""
+    return hmac.new(expected.encode(), b"staff-session-v1", hashlib.sha256).hexdigest()
 
 
 class RoomType(BaseModel):
@@ -144,10 +158,19 @@ class BookingRequest(Stay):
         return value.strip()
 
 
-def require_staff(x_staff_token: Annotated[str | None, Header()] = None) -> None:
+def require_staff(
+    x_staff_token: Annotated[str | None, Header()] = None,
+    staff_session: Annotated[str | None, Cookie()] = None,
+) -> None:
     expected = os.getenv("STAFF_TOKEN")
-    if not expected or not x_staff_token or not hmac.compare_digest(x_staff_token.encode(), expected.encode()):
+    if not expected:
         raise HTTPException(status_code=401, detail="Valid staff token required")
+    if x_staff_token and hmac.compare_digest(x_staff_token.encode(), expected.encode()):
+        return
+    # Modo demo: la cookie firmada en el servidor a partir del token también autoriza; el header sigue mandando.
+    if staff_session and hmac.compare_digest(staff_session.encode(), staff_cookie_value(expected).encode()):
+        return
+    raise HTTPException(status_code=401, detail="Valid staff token required")
 
 
 def emit_event(url: str, event: dict) -> None:
@@ -279,7 +302,16 @@ def create_app() -> FastAPI:
         return [{**dict(row), "simulated": bool(row["simulated"])} for row in rows]
 
     @application.get("/admin", response_class=HTMLResponse)
-    def admin():
+    def admin(demo: Annotated[str | None, Query()] = None):
+        if demo == "1":
+            # Entrada de demo (sin credenciales en el navegador): la cookie de personal se firma aquí a
+            # partir del STAFF_TOKEN. El token nunca va en la URL, el cuerpo ni el HTML. Sin demo, 404.
+            expected = os.getenv("STAFF_TOKEN")
+            if demo_mode_enabled() and expected:
+                redirect = RedirectResponse("/admin", status_code=303)
+                redirect.set_cookie(STAFF_COOKIE, staff_cookie_value(expected), httponly=True, samesite="lax")
+                return redirect
+            raise HTTPException(status_code=404, detail="Not Found")
         return Path(__file__).with_name("admin.html").read_text(encoding="utf-8")
 
     @application.get("/favicon.ico", include_in_schema=False)

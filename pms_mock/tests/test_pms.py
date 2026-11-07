@@ -9,7 +9,7 @@ import httpx
 import pytest
 import yaml
 from fastapi.testclient import TestClient
-from pms_mock.main import DEFAULT_HOTEL_PATH, create_app
+from pms_mock.main import DEFAULT_HOTEL_PATH, create_app, initialize
 
 TOKEN = {"X-Staff-Token": "test-staff-token"}
 DATES = {"checkin": "2026-11-01", "checkout": "2026-11-04", "adults": 1, "children": 0}
@@ -32,6 +32,22 @@ def payload(code="single_doble_vista_jardin", **changes):
 
 def book(client, **changes):
     return client.post("/api/v1/bookings", headers=TOKEN, json=payload(**changes))
+
+
+def make_demo_client(tmp_path, monkeypatch, demo=None):
+    """Igual que el fixture client, pero con control explícito de DEMO_MODE (None = sin la variable)."""
+    monkeypatch.setenv("PMS_DB_PATH", str(tmp_path / "test.sqlite"))
+    monkeypatch.setenv("STAFF_TOKEN", "test-staff-token")
+    monkeypatch.delenv("SIMULATE_DOWN", raising=False)
+    monkeypatch.delenv("COPILOTO_EVENTS_URL", raising=False)
+    monkeypatch.delenv("HOTEL_DATA_PATH", raising=False)
+    if demo is None:
+        monkeypatch.delenv("DEMO_MODE", raising=False)
+    else:
+        monkeypatch.setenv("DEMO_MODE", demo)
+    app = create_app()
+    initialize(app.state.database_path, app.state.room_types)
+    return TestClient(app)
 
 
 def inventory(client, **changes):
@@ -305,6 +321,58 @@ def test_booking_source_defaults_to_personal_and_accepts_ia(client):
     assert stored[created.json()["booking_id"]] == "ia"
     bad = client.post("/api/v1/bookings", json={**payload, "source": "otro"}, headers=TOKEN)
     assert bad.status_code == 422
+
+
+@pytest.mark.parametrize("flag", ["1", "true", "yes", "on"])
+def test_demo_entry_sets_an_httponly_staff_cookie_and_authorizes(tmp_path, monkeypatch, flag):
+    client = make_demo_client(tmp_path, monkeypatch, demo=flag)
+    response = client.get("/admin", params={"demo": "1"}, follow_redirects=False)
+    assert response.status_code == 303 and response.headers["location"].endswith("/admin")
+    cookie_header = response.headers["set-cookie"]
+    assert "staff_session=" in cookie_header and "HttpOnly" in cookie_header
+    assert "test-staff-token" not in cookie_header and "test-staff-token" not in response.text
+    cookies = httpx.Cookies()
+    cookies.extract_cookies(response)
+    assert cookies.get("staff_session")
+    client.cookies.update(cookies)
+    listed = client.get("/api/v1/bookings")
+    assert listed.status_code == 200 and listed.json() == []
+    created = client.post("/api/v1/bookings", json=payload())
+    assert created.status_code == 201
+
+
+@pytest.mark.parametrize("flag", ["0", "false", "", "off"])
+def test_demo_entry_is_refused_when_demo_mode_is_off(tmp_path, monkeypatch, flag):
+    client = make_demo_client(tmp_path, monkeypatch, demo=flag)
+    response = client.get("/admin", params={"demo": "1"})
+    assert response.status_code == 404
+    assert "staff_session" not in response.headers.get("set-cookie", "")
+    assert client.get("/api/v1/bookings").status_code == 401
+
+
+def test_demo_entry_defaults_to_off_without_the_env_var(tmp_path, monkeypatch):
+    client = make_demo_client(tmp_path, monkeypatch, demo=None)
+    assert client.get("/admin", params={"demo": "1"}).status_code == 404
+
+
+def test_a_forged_staff_cookie_never_authorizes(tmp_path, monkeypatch):
+    client = make_demo_client(tmp_path, monkeypatch, demo="1")
+    client.cookies.set("staff_session", "forged")
+    assert client.get("/api/v1/bookings").status_code == 401
+    assert client.post("/api/v1/bookings", json=payload()).status_code == 401
+
+
+def test_demo_mode_keeps_plain_admin_and_the_header_token_path(tmp_path, monkeypatch):
+    client = make_demo_client(tmp_path, monkeypatch, demo="1")
+    assert client.get("/admin").status_code == 200
+    assert client.get("/api/v1/bookings", headers=TOKEN).status_code == 200
+    assert client.post("/api/v1/bookings", headers=TOKEN, json=payload()).status_code == 201
+
+
+def test_admin_page_will_accept_a_cookie_session_without_showing_a_token(tmp_path, monkeypatch):
+    client = make_demo_client(tmp_path, monkeypatch, demo="1")
+    html = client.get("/admin").text
+    assert "X-Staff-Token" in html and "test-staff-token" not in html
 
 
 def test_existing_database_without_source_column_is_migrated(tmp_path, monkeypatch):

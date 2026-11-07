@@ -89,6 +89,7 @@ services:
       HOTEL_DATA_PATH: /app/data/hotel.yaml
       PMS_DB_PATH: /var/lib/pms/pms.sqlite
       STAFF_TOKEN: ${STAFF_TOKEN}
+      DEMO_MODE: ${DEMO_ENABLED:-1}
       COPILOTO_EVENTS_URL: http://copiloto:8100/webhooks/pms
       COPILOTO_EVENTS_TOKEN: ${PMS_EVENTS_SECRET}
       SIMULATE_DOWN: ${SIMULATE_DOWN:-0}
