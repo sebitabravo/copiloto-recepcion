@@ -2,7 +2,7 @@
  *
  * Sustituye window.fetch SOLO para /api/*: la interfaz real (demo-shared/guest/inbox) corre igual contra
  * un servidor simulado en el navegador con el MISMO contrato que copiloto (solicitudes, tomar, responder,
- * cerrar, inventario de prueba). El estado vive en localStorage, así que el chat en una pestaña y la
+ * cerrar, lectura del PMS simulado). El estado vive en localStorage, así que el chat en una pestaña y la
  * bandeja en otra del mismo sitio comparten el caso. No hay IA, ni PMS, ni Chatwoot, ni datos de nadie:
  * el canal se rotula «WhatsApp simulado · versión estática» y el flujo es guiado, con textos preparados.
  */
@@ -10,7 +10,16 @@
   'use strict';
   if (window.__STATIC_DEMO__) return;
   const KEY = 'copiloto-static-demo-v2';
-  const HOTEL = 'Hostería Demo Villarrica';
+  const HOTEL = 'Hotel Boutique Bordeluz';
+  const LOCATION = 'Estamos en el sector Molco, camino Villarrica-Pucón Km 12.5, frente a la playa Calfurray. Quedamos entre Villarrica y Pucón (12,5 km a cada una), a pocos metros de la playa.';
+  // Parte del catálogo del PMS simulado (data/hotel.yaml) con cupos y tarifas ficticias.
+  const ROOMS = [
+    {code: 'single_doble_vista_jardin', name: 'Habitación Single Doble Vista Jardín', adults: 2, children: 0, price: 65000, units: 3},
+    {code: 'doble_vista_piscina', name: 'Habitación Doble Vista Piscina', adults: 2, children: 1, price: 75000, units: 2},
+    {code: 'doble_con_jacuzzi', name: 'Habitación Doble con Jacuzzi', adults: 2, children: 1, price: 80000, units: 2},
+    {code: 'triple_vista_parcial_lago', name: 'Habitación Triple Vista Parcial Lago', adults: 3, children: 2, price: 90000, units: 2},
+    {code: 'cuadruple_terraza_vista_al_lago', name: 'Habitación Cuádruple Terraza Vista al Lago', adults: 4, children: 3, price: 100000, units: 1}
+  ];
   const TZ = 'America/Santiago';
   const SHIFT = {start: '08:00', end: '22:00'};
   const MONTHS = {ene: 1, enero: 1, feb: 2, febrero: 2, mar: 3, marzo: 3, abr: 4, abril: 4, may: 5, mayo: 5,
@@ -23,13 +32,15 @@
   const LONG_MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre',
     'octubre', 'noviembre', 'diciembre'];
   const MENU = ['Ubicación', 'Consultar fechas', 'Preguntas frecuentes', 'Hablar con recepción'];
+  // Respuestas aprobadas: las mismas de data/hotel.yaml que usa el copiloto.
   const FAQ = [
-    [/donde|ubicaci|direcci|como llego|llegar/, 'Cerca de la costanera de Villarrica. Estamos a dos cuadras del lago y a 10 minutos caminando del centro.', 'ubicacion'],
-    [/check.?in|check.?out|hora de llegada/, 'El check-in es desde las 15:00 y el check-out hasta las 11:00.', 'checkin'],
-    [/desayun/, 'El desayuno está incluido y se sirve de 8:00 a 10:30.', 'desayuno'],
-    [/estaciona|parking|auto/, 'Hay estacionamiento sin costo dentro de la hostería, sujeto a espacio.', 'estacionamiento'],
-    [/mascota|perro|gato/, 'No recibimos mascotas por ahora. Si viajas con un perro de asistencia, recepción te orienta.', 'mascotas'],
-    [/wifi|internet/, 'Todas las habitaciones tienen WiFi sin costo.', 'wifi']
+    [/donde|ubicaci|direcci|como llego|llegar/, `Ubicación: ${LOCATION}`, 'ubicacion'],
+    [/piscina|pileta|nadar/, 'Tenemos piscina temperada, disponible durante todo el año y incluida en tu estadía.', 'piscina'],
+    [/check.?in|check.?out|hora de llegada/, 'El check-in es desde las 15:00 y el check-out hasta las 12:00. Early check-in o late check-out dependen de disponibilidad y tienen costo.', 'checkin'],
+    [/desayun/, 'Todas las habitaciones incluyen desayuno continental (buffet en temporada alta), en un comedor con vista al lago.', 'desayuno'],
+    [/estaciona|parking|auto/, 'Las habitaciones cuentan con estacionamiento.', 'estacionamiento'],
+    [/mascota|perro|gato/, 'La política de mascotas no está publicada en nuestro sitio. Recepción te confirma si es posible.', 'mascotas'],
+    [/wifi|internet/, 'Las habitaciones tienen WiFi, aire acondicionado y calefacción, baño privado en suite y televisor.', 'wifi']
   ];
   const LABELS = {pendiente: 'Pendiente de recepción', en_atencion: 'En atención', respondida: 'Respondida', cerrada: 'Cerrada'};
   const REASONS = {commercial: 'Consulta de fechas', human_requested: 'Pidió hablar con recepción'};
@@ -127,15 +138,39 @@
   const openRequest = (db, conv) => db.requests.filter(r => r.conversation_id === conv.id && r.status !== 'cerrada').pop();
   const event = (db, conv, kind, payload = {}) => db.events.push({conversation_id: conv.id, kind, ts: now(), payload});
 
+  const money = value => `$${value.toLocaleString('es-CL')}`;
+  function readAt() {
+    const t = localParts(now());
+    const pad = n => String(n).padStart(2, '0');
+    return `${t.y}-${pad(t.m)}-${pad(t.d)}T${pad(t.h)}:${pad(t.min)}:00`;
+  }
+  // Lectura simulada del PMS: capacidad del catálogo y un cupo menos en las noches del 20 y 21 de noviembre.
+  function reading(d) {
+    const busy = d.checkin <= '2026-11-21' && d.checkout > '2026-11-20';
+    const offers = ROOMS.filter(room => room.adults >= d.adults && room.children >= (d.children || 0))
+      .map(room => ({code: room.code, name: room.name, available_units: room.units - (busy ? 1 : 0),
+        nightly_price_clp: room.price}))
+      .filter(offer => offer.available_units > 0);
+    return {read_at: readAt(), offers};
+  }
   function summary(db, conv) {
     const d = conv.data;
     const nights = Math.round((new Date(d.checkout) - new Date(d.checkin)) / 86400000);
+    const pms = reading(d);
+    d.read_at = pms.read_at;
     conv.step = 'confirm';
-    say(db, conv, ['Revisa tu solicitud antes de enviarla:', `• Llegada: ${short(d.checkin)}`,
+    const r = pms.read_at;
+    const when = `${r.slice(11, 16)} del ${r.slice(8, 10)}-${r.slice(5, 7)}-${r.slice(0, 4)}`;
+    const availability = pms.offers.length
+      ? [`Disponible según lectura del PMS a las ${when} (PMS simulado):`,
+        ...pms.offers.slice(0, 3).map(o => `• ${o.name.replace(/^Habitación /, '')}: ${money(o.nightly_price_clp)} por noche · quedan ${o.available_units}`),
+        'Es una lectura preliminar: recepción confirma cupo y precio, y nada queda reservado todavía.'].join('\n')
+      : `Según lectura del PMS a las ${when} no veo cupo para esas fechas y huéspedes. Recepción revisará alternativas.`;
+    const stay = ['Revisa tu solicitud antes de enviarla:', `• Llegada: ${short(d.checkin)}`,
       `• Salida: ${short(d.checkout)} (${nights} ${nights === 1 ? 'noche' : 'noches'})`,
-      `• Huéspedes: ${d.adults} ${d.adults === 1 ? 'adulto' : 'adultos'}, ${d.children} ${d.children === 1 ? 'niño' : 'niños'}`,
-      '', 'Si algo no está bien, corrígelo antes de enviar.'].join('\n'),
-    ['Enviar a recepción', 'Corregir fechas', 'Corregir huéspedes']);
+      `• Huéspedes: ${d.adults} ${d.adults === 1 ? 'adulto' : 'adultos'}, ${d.children} ${d.children === 1 ? 'niño' : 'niños'}`];
+    say(db, conv, [stay.join('\n'), availability, 'Si algo no está bien, corrígelo antes de enviar.'].join('\n\n'),
+      ['Enviar a recepción', 'Corregir fechas', 'Corregir huéspedes']);
   }
   function afterDates(db, conv) {
     const d = conv.data;
@@ -160,7 +195,7 @@
     db.seq.req += 1;
     const t = now();
     const d = conv.data;
-    const request = {id: db.seq.req, code: `VLL-${String(db.seq.req).padStart(3, '0')}`, conversation_id: conv.id,
+    const request = {id: db.seq.req, code: `BDL-${String(db.seq.req).padStart(3, '0')}`, conversation_id: conv.id,
       channel: 'demo', channel_label: 'WhatsApp simulado · versión estática', reason, reason_label: REASONS[reason],
       in_shift: shift, commercial_at: d.commercial_at || t, created_at: t, checkin: d.checkin || null,
       checkout: d.checkout || null, adults: d.adults ?? null, children: d.children ?? null, status: 'pendiente',
@@ -174,7 +209,8 @@
       `Fechas: ${d.checkin ? `${d.checkin} → ${d.checkout}` : 'sin fechas capturadas'}`,
       `Huéspedes: ${d.adults ? `${d.adults} adultos, ${d.children ?? '?'} niños` : 'sin huéspedes capturados'}`,
       `Motivo: ${REASONS[reason]}`].join('\n'));
-    const pending = d.checkin ? ' · Disponibilidad por verificar: recepción revisa los cupos y te confirma.' : '';
+    const pending = d.read_at ? ' · La lectura del PMS es preliminar: recepción confirma cupo y precio.'
+      : d.checkin ? ' · Disponibilidad por verificar: recepción revisa los cupos y te confirma.' : '';
     say(db, conv, shift
       ? `Solicitud enviada a recepción. Te responderán por aquí.\n\nN.º ${request.code}${pending}`
       : `Solicitud guardada: N.º ${request.code}. Recepción atiende de 08:00 a 22:00 (hora de Chile) y te responderá por aquí desde las ${nextOpening()}.`);
@@ -182,7 +218,7 @@
   function guided(db, conv, text, scenario) {
     const plain = norm(text);
     if (conv.step === 'start') {
-      say(db, conv, `Hola, soy el asistente virtual de ${HOTEL}. Te oriento con la ubicación, preguntas frecuentes y fechas; una persona de recepción revisa los cupos y confirma cada reserva. Es un chat de prueba con datos ficticios: no escribas datos personales reales.`);
+      say(db, conv, `Hola, soy el asistente virtual de ${HOTEL}. Te oriento con la ubicación, preguntas frecuentes y fechas; una persona de recepción revisa los cupos y confirma cada reserva. Es un chat de prueba: no escribas datos personales reales.`);
       conv.step = 'menu';
     }
     const faq = FAQ.find(([pattern]) => pattern.test(plain));
@@ -196,8 +232,8 @@
       return summary(db, conv);
     }
     if (/recepcion|persona|humano/.test(plain) && !/horario de recepcion/.test(plain)) return handoff(db, conv, 'human_requested', scenario);
-    if (plain === 'preguntas frecuentes') { conv.step = 'menu'; return say(db, conv, 'Elige un tema o escríbeme tu pregunta:', ['Horario de check-in', 'Desayuno', 'Estacionamiento', 'Mascotas']); }
-    if (plain === 'ubicacion') { conv.data.seen_location = true; return say(db, conv, 'Ubicación: Cerca de la costanera de Villarrica. A dos cuadras del lago y a 10 minutos caminando del centro (dato ficticio).'); }
+    if (plain === 'preguntas frecuentes') { conv.step = 'menu'; return say(db, conv, 'Elige un tema o escríbeme tu pregunta:', ['Piscina', 'Desayuno', 'Horario de check-in', 'Estacionamiento']); }
+    if (plain === 'ubicacion') { conv.data.seen_location = true; return say(db, conv, `Ubicación: ${LOCATION}`); }
     if (conv.step === 'ask_dates') return dates(db, conv, text);
     if (conv.step === 'ask_adults') { parseGuests(/adult/.test(plain) ? text : `${plain} adultos`, conv.data); return afterDates(db, conv); }
     if (conv.step === 'ask_children') {
@@ -212,7 +248,7 @@
     if (/consultar fechas|reserv|disponib|fechas/.test(plain) || parseStay(text)) {
       conv.data.commercial_at = conv.data.commercial_at || now();
       conv.step = 'ask_dates';
-      if (!conv.data.seen_location) { conv.data.seen_location = true; say(db, conv, 'Antes de tus fechas, te cuento dónde estamos: Cerca de la costanera de Villarrica. A dos cuadras del lago (dato ficticio).'); }
+      if (!conv.data.seen_location) { conv.data.seen_location = true; say(db, conv, `Antes de tus fechas, te cuento dónde estamos: ${LOCATION}`); }
       if (parseStay(text)) return dates(db, conv, text);
       return say(db, conv, '¿Para qué fechas? Escríbeme llegada y salida, por ejemplo «20 al 22 de noviembre» o «20/11 al 22/11».');
     }
@@ -354,19 +390,17 @@
         event(db, conv, 'request_closed', {request_id: r.id});
       } else if (action === 'inventory') {
         if (!r.checkin) return conflict('La solicitud no tiene fechas: pídeselas al huésped');
-        const t = localParts(now());
-        const readAt = `${t.y}-${String(t.m).padStart(2, '0')}-${String(t.d).padStart(2, '0')}T${String(t.h).padStart(2, '0')}:${String(t.min).padStart(2, '0')}:00`;
         let result;
-        if (body && body.simulate_down) result = {ok: false, reason: 'El inventario no respondió (caída simulada)'};
-        else if (r.checkin < '2026-11-01' || r.checkout > '2027-04-01') result = {ok: false, reason: 'Sin dato de inventario para esas fechas: cupo desconocido'};
+        if (body && body.simulate_down) result = {ok: false, reason: 'el PMS no respondió (caída simulada)'};
         else {
-          const busy = r.checkin <= '2026-11-21' && r.checkout > '2026-11-20';
-          const offers = [{code: 'doble', name: 'Habitación Doble', available_units: busy ? 1 : 3, nightly_price_clp: 58000}];
-          if (!busy && (r.adults || 1) <= 2) offers.push({code: 'twin', name: 'Habitación Twin', available_units: 2, nightly_price_clp: 54000});
-          result = {ok: true, source: 'Inventario de prueba (ficticio)', read_at: readAt, simulated: true, offers};
+          const pms = reading(r);
+          result = {ok: true, source: 'PMS simulado', read_at: pms.read_at, simulated: true, offers: pms.offers};
         }
-        add(db, conv, 'note', result.ok ? `Inventario de prueba · lectura ${readAt.slice(11, 16)}: ${result.offers.map(o => `${o.name}: ${o.available_units} libre(s)`).join(', ')}. Preliminar: no bloquea cupos.`
-          : `Inventario de prueba sin dato (${result.reason}). Cupo desconocido: no informar disponibilidad.`, {author: me});
+        const offersText = result.ok
+          ? result.offers.map(o => `${o.name}: ${o.available_units} libre(s)`).join(', ') || 'sin cupo' : '';
+        add(db, conv, 'note', result.ok
+          ? `PMS simulado · lectura ${result.read_at.slice(11, 16)}: ${offersText}. Preliminar: no bloquea cupos.`
+          : `PMS sin lectura (${result.reason}). Cupo desconocido: no informar disponibilidad.`, {author: me});
         write();
         return json({...result, request: requestView(db, r, me)});
       }

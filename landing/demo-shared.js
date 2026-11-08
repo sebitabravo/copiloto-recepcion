@@ -137,6 +137,30 @@
     return node;
   }
 
+  // Texto corto para un enlace: «Abrir en Google Maps» en vez de la URL completa.
+  function linkLabel(url) {
+    if (/^https:\/\/www\.google\.[a-z.]+\/maps/i.test(url)) return 'Abrir en Google Maps';
+    try { return new URL(url).hostname.replace(/^www\./, ''); } catch (_) { return url; }
+  }
+
+  // Párrafo con las URL http(s) como enlaces seguros: nodos de texto y <a>, nunca HTML del servidor.
+  function richParagraph(text) {
+    const paragraph = el('p');
+    const value = String(text);
+    let last = 0;
+    for (const match of value.matchAll(/https?:\/\/[^\s<>"']+/g)) {
+      if (match.index > last) paragraph.append(document.createTextNode(value.slice(last, match.index)));
+      const link = el('a', '', linkLabel(match[0]));
+      link.href = match[0];
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      paragraph.append(link);
+      last = match.index + match[0].length;
+    }
+    if (last < value.length) paragraph.append(document.createTextNode(value.slice(last)));
+    return paragraph;
+  }
+
   /* Mensaje del hilo. `view`: 'guest' (el huésped no ve notas internas) o 'staff'.
      Orientación igual en ambas vistas: el huésped a la derecha, asistente y recepción a la izquierda. */
   function messageNodes(message, view, previousRole) {
@@ -159,7 +183,7 @@
         if (message.role === 'staff') bubble.append(el('span', 'who', `${message.author || 'Recepción'} · Recepción`));
         if (message.role === 'guest' && view === 'staff') bubble.append(el('span', 'who', 'Huésped'));
       }
-      bubble.append(el('p', '', part));
+      bubble.append(message.role === 'guest' ? el('p', '', part) : richParagraph(part));
       if (index === parts.length - 1) {
         const meta = el('span', 'meta');
         if (view === 'staff' && message.kind === 'ack') meta.append(el('span', 'tag', 'acuse'));

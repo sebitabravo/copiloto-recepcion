@@ -184,7 +184,9 @@
     if (options.status) {
       $('guest-hotel').textContent = options.status.hotel.name;
       $('guest-channel').textContent = options.status.hotel.channel_label;
+      // Sin aviso publicado (versión estática) el enlace queda como texto: nunca un enlace roto.
       if (options.status.privacy_url) $('privacy-link').href = S.base + options.status.privacy_url;
+      else $('privacy-link').removeAttribute('href');
     }
     sessionId = readSession();
     $('guest-form').addEventListener('submit', event => {

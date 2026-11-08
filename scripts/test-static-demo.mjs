@@ -52,13 +52,16 @@ test('the static demo runs the canonical case without a backend', async () => {
   const {call, calls} = loadShim();
   const session = 'estatico-huesped-000001';
   const say = (message, extra = {}) => call('/api/demo/chat', {session_id: session, message, shift: 'open', ...extra});
-  assert.match((await say('¿Dónde queda la hostería?')).body.reply, /Cerca de la costanera de Villarrica/);
+  assert.match((await say('¿Dónde queda el hotel?')).body.reply, /sector Molco/);
   await say('Consultar fechas');
   assert.match((await say('22 al 20 de noviembre 2 adultos')).body.reply, /tiene que ser después/);
   assert.deepEqual((await say('20-22 nov')).body.quick_replies, ['Sin niños', '1 niño', '2 niños']);
-  assert.match((await say('Sin niños')).body.reply, /Revisa tu solicitud/);
+  const summary = (await say('Sin niños')).body.reply;
+  assert.match(summary, /Revisa tu solicitud/);
+  assert.match(summary, /Disponible según lectura del PMS a las \d\d:\d\d/, 'sello de hora, como en la portada');
   const sent = await say('Enviar a recepción', {client_message_id: 'enviar-0000001'});
   assert.match(sent.body.reply, /^Solicitud enviada a recepción\. Te responderán por aquí\./);
+  assert.match(sent.body.reply, /BDL-001/);
   const retry = await say('Enviar a recepción', {client_message_id: 'enviar-0000001'});
   assert.equal(retry.body.duplicate, true, 'el reintento no duplica');
 
@@ -71,7 +74,8 @@ test('the static demo runs the canonical case without a backend', async () => {
   assert.equal(request.checkin.slice(5), '11-20');
   assert.equal((await call(`/api/panel/requests/${request.id}/take`, {})).body.status_label, 'En atención');
   const inventory = (await call(`/api/panel/requests/${request.id}/inventory`, {})).body;
-  assert.equal(inventory.offers[0].available_units, 1);
+  assert.equal(inventory.source, 'PMS simulado');
+  assert.ok(inventory.offers.length > 0 && inventory.offers.every(offer => offer.available_units > 0));
   const reply = 'Hay una habitación doble para esas fechas. ¿Quieres avanzar con la reserva?';
   const answered = (await call(`/api/panel/requests/${request.id}/reply`, {body: reply, client_id: 'resp-00000001'})).body;
   assert.equal(answered.request.status_label, 'Respondida');
@@ -132,5 +136,5 @@ test('the build only ever cleans its own output directory', () => {
 test('the static demo declares itself and never interprets HTML', () => {
   assert.match(shim, /WhatsApp simulado · versión estática/, 'el canal se rotula como versión estática');
   assert.doesNotMatch(shim, /innerHTML/, 'el shim no interpreta HTML');
-  assert.doesNotMatch(shim, /hotelbordeluz|963949710/i, 'ningún dato de un hotel real');
+  assert.doesNotMatch(shim, /963949710|comercial@/i, 'nunca el contacto real del hotel');
 });

@@ -13,6 +13,7 @@ const shared = read('demo-shared.js');
 const guest = read('demo-guest.js');
 const inbox = read('demo-inbox.js');
 const page = read('demo-page.js');
+const index = read('index.html');
 
 class Node {
   constructor(tag) { this.tagName = tag; this.children = []; this.className = ''; this.dataset = {}; this.text = ''; }
@@ -23,7 +24,10 @@ class Node {
 
 function loadShared() {
   const window = {COPILOTO_CONFIG: {copilotoUrl: 'http://localhost:8100'}, crypto: globalThis.crypto};
-  const document = {createElement: tag => new Node(tag)};
+  const document = {
+    createElement: tag => new Node(tag),
+    createTextNode: text => { const node = new Node('#text'); node.text = String(text); return node; }
+  };
   vm.runInNewContext(shared, {window, document, location: {href: 'http://localhost:8080/demo', hostname: 'localhost',
     protocol: 'http:'}, Intl, Date, URL, Math, String, Number, Array, Uint8Array, AbortController, setTimeout, clearTimeout});
   return window.DemoShared;
@@ -59,7 +63,7 @@ test('the thread labels who speaks and hides internal notes from the guest', () 
   const note = {id: 1, role: 'note', body: 'Pre-información', created_at: 1};
   assert.equal(S.messageNodes(note, 'guest', null).length, 0, 'el huésped nunca ve notas internas');
   assert.match(S.messageNodes(note, 'staff', null)[0].textContent, /Nota interna · solo recepción/);
-  const assistant = {id: 2, role: 'assistant', body: 'Solicitud enviada a recepción.\n\nN.º VLL-001', created_at: 1};
+  const assistant = {id: 2, role: 'assistant', body: 'Solicitud enviada a recepción.\n\nN.º BDL-001', created_at: 1};
   const bubbles = S.messageNodes(assistant, 'guest', 'guest');
   assert.equal(bubbles.length, 2, 'una idea por burbuja');
   assert.match(bubbles[0].textContent, /^Asistente virtual/);
@@ -70,6 +74,23 @@ test('the thread labels who speaks and hides internal notes from the guest', () 
   assert.doesNotMatch(S.messageNodes(ack, 'guest', null)[0].textContent, /acuse/);
 });
 
+test('links in assistant replies are short and safe; guest text is never a link', () => {
+  const map = 'https://www.google.com/maps/search/?api=1&query=Hotel+Boutique+Bordeluz+Villarrica';
+  const reply = {id: 9, role: 'assistant', body: `Dirección: Molco\nMapa: ${map}`, created_at: 1};
+  const paragraph = S.messageNodes(reply, 'guest', null)[0].children.find(node => node.tagName === 'p');
+  const link = paragraph.children.find(node => node.tagName === 'a');
+  assert.equal(link.textContent, 'Abrir en Google Maps');
+  assert.equal(link.href, map);
+  assert.equal(link.rel, 'noopener noreferrer');
+  assert.doesNotMatch(paragraph.textContent, /api=1/, 'la URL cruda no se muestra');
+  const guestMessage = {id: 10, role: 'guest', body: `mira ${map}`, created_at: 1};
+  const guestParagraph = S.messageNodes(guestMessage, 'guest', null)[0].children.find(node => node.tagName === 'p');
+  assert.equal(guestParagraph.children.length, 0, 'lo que escribe el huésped queda como texto');
+  const sneaky = {id: 11, role: 'assistant', body: 'javascript:alert(1) <b>hola</b>', created_at: 1};
+  const plain = S.messageNodes(sneaky, 'guest', null)[0].children.find(node => node.tagName === 'p');
+  assert.ok(plain.children.every(node => node.tagName !== 'a'), 'solo http(s) se vuelve enlace');
+});
+
 test('idempotency keys satisfy the server contract', () => {
   const ids = new Set(Array.from({length: 50}, () => S.newId()));
   assert.equal(ids.size, 50);
@@ -77,10 +98,10 @@ test('idempotency keys satisfy the server contract', () => {
 });
 
 test('the page shows the reference labels and the guest actions', () => {
-  assert.match(html, /Hostería Demo Villarrica/);
+  assert.match(html, /Hotel Boutique Bordeluz/);
   assert.match(html, /WhatsApp simulado/);
   assert.match(html, /Bandeja de recepción/);
-  assert.match(html, /Datos de prueba/);
+  assert.match(html, /datos de prueba/i);
   for (const action of ['Ubicación', 'Consultar fechas', 'Hablar con recepción']) {
     assert.match(html, new RegExp(`data-say="${action}"`), action);
   }
@@ -97,7 +118,22 @@ test('accessibility basics: live regions, labels and visible focus', () => {
   assert.match(html, /<label class="sr-only" for="inbox-search">/);
   assert.match(css, /:focus-visible/);
   assert.match(css, /prefers-reduced-motion/);
-  assert.match(css, /prefers-color-scheme: dark/);
+  // El modo oscuro lo pone la portada: demo.css redefine sus tokens y la demo solo usa esos tokens.
+  assert.match(landingCss, /prefers-color-scheme: dark/);
+});
+
+test('the demo keeps the landing name, brand and palette', () => {
+  // Misma marca que la portada: «B» + Bordeluz, mismo hotel en el chat que en el hero.
+  const brand = '<span class="brand-mark" aria-hidden="true">B</span>Bordeluz';
+  assert.ok(index.includes(brand) && html.includes(brand), 'la marca de la demo es la de la portada');
+  assert.ok(index.includes('Hotel Boutique Bordeluz') && html.includes('Hotel Boutique Bordeluz'));
+  assert.match(html, /copiloto\.bordeluz\.demo/, 'el marco repite la dirección del hero');
+  assert.doesNotMatch(html + css, /Hostería|hostería|VLL-/, 'sin restos del alojamiento ficticio anterior');
+  // Los colores salen de los tokens de demo.css; solo se admiten el verde «en línea» de WhatsApp y
+  // los tonos de las mezclas de bronce que ya usa la portada.
+  const hex = [...new Set(css.match(/#[0-9a-f]{3,8}\b/gi) || [])].map(value => value.toLowerCase()).sort();
+  assert.deepEqual(hex, ['#25d366', '#40230d', '#fff']);
+  for (const token of ['--accent', '--ink', '--card', '--wa-bg', '--ok']) assert.match(css, new RegExp(`var\\(${token}\\)`), token);
 });
 
 test('the guest role never touches reception endpoints or credentials', () => {

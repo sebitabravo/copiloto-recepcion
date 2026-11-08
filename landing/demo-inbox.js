@@ -8,8 +8,14 @@
   const $ = id => document.getElementById(id);
   const NAME_KEY = 'copiloto-demo-recepcion';
   const POLL_MS = 4000;
-  const SUGGESTED_OK = 'Hay una habitación doble para esas fechas. ¿Quieres avanzar con la reserva?';
   const SUGGESTED_UNKNOWN = 'Estoy verificando los cupos para esas fechas y te confirmo por aquí en unos minutos.';
+  // La sugerencia sale de la lectura que recepción acaba de hacer, nunca de un cupo supuesto.
+  const suggestion = result => {
+    const offer = result && result.ok && result.offers[0];
+    if (!offer) return SUGGESTED_UNKNOWN;
+    const room = offer.name.replace(/^Habitación\s+/i, '');
+    return `Hay disponibilidad en ${room} para esas fechas. ¿Quieres avanzar con la reserva?`;
+  };
 
   const state = {
     me: null, items: [], selected: null, detail: null, fetchedAt: Date.now(), amber: 120, target: 180,
@@ -324,13 +330,14 @@
       const list = S.el('ul');
       if (!result.offers.length) list.append(S.el('li', '', 'Sin cupo para esas fechas y huéspedes.'));
       result.offers.forEach(offer => list.append(S.el('li', '',
-        `${offer.name}: ${offer.available_units} libre${offer.available_units === 1 ? '' : 's'} · $${offer.nightly_price_clp.toLocaleString('es-CL')} por noche`)));
+        `${offer.name.replace(/^Habitación\s+/i, '')}: ${offer.available_units} libre${offer.available_units === 1 ? '' : 's'} · $${offer.nightly_price_clp.toLocaleString('es-CL')} por noche`)));
+      if (result.more) list.append(S.el('li', '', `y ${result.more} tipo${result.more === 1 ? '' : 's'} más en el PMS`));
       box.append(list);
     } else {
       box.append(S.el('p', 'warn', `Cupo desconocido: ${result.reason}. No informes disponibilidad; responde con un seguimiento honesto.`));
     }
     if (detail.actions.reply) {
-      const text = result.ok && result.offers.some(offer => offer.code === 'doble') ? SUGGESTED_OK : SUGGESTED_UNKNOWN;
+      const text = suggestion(result);
       const use = S.el('button', 'link-button', 'Usar respuesta sugerida');
       use.type = 'button';
       use.addEventListener('click', () => {
@@ -349,7 +356,7 @@
   const MEASURE_TEXT = {
     inbound: 'Mensaje del huésped', handoff: 'Traspaso a recepción', commercial_started: 'Consulta comercial registrada',
     request_created: 'Solicitud creada', request_taken: 'Asignación', human_ack: 'Acuse (no detiene el reloj)',
-    human_first_reply: 'Primera respuesta pertinente', sla_breached: 'Meta vencida', pms_read: 'Lectura de inventario',
+    human_first_reply: 'Primera respuesta pertinente', sla_breached: 'Meta vencida', pms_read: 'Lectura del PMS',
     request_closed: 'Cierre', night_capture: 'Captura fuera de turno', location_shown: 'Ubicación mostrada',
     faq_answered: 'FAQ respondida', prebooking_created: 'Pre-reserva auxiliar'
   };
@@ -362,7 +369,7 @@
       'respuesta marcada como «Respuesta a la consulta». La pertinencia la declara quien responde: un acuse no ' +
       'detiene el reloj. Tomar la solicitud no lo reinicia. Fuera de turno no cuenta para la meta.'));
     if (detail.faq.length) {
-      box.append(S.el('p', '', 'FAQ (meta < 10 s, desde el ingreso del mensaje):'));
+      box.append(S.el('p', '', 'Ubicación y FAQ (meta < 10 s, desde el ingreso del mensaje):'));
       const faq = S.el('ol');
       detail.faq.forEach(item => faq.append(S.el('li', '',
         `${item.faq_id}: ${item.latency_s.toFixed(3)} s ${item.met ? '· dentro de la meta' : '· fuera de la meta'}`)));
@@ -459,7 +466,7 @@
     } catch (error) {
       showError(error.message, checkInventory);
     } finally {
-      button.textContent = 'Consultar inventario';
+      button.textContent = 'Consultar el PMS';
       button.disabled = !(state.detail && state.detail.actions.inventory);
     }
   }
