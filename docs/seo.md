@@ -72,7 +72,7 @@ window.COPILOTO_CONFIG = {
 
 Sin `config.js` (por ejemplo un checkout recién clonado sin seed) `site.js` deriva las URLs del host
 de la página con los puertos del stack (3000, 8100, 8200) y respeta la demo por LAN: si la página no
-se abre en `localhost`, reescribe el host de la config al de la página, igual que `demo.js`. Sin
+se abre en `localhost`, reescribe el host de la config al de la página, igual que `demo-shared.js`. Sin
 JavaScript los enlaces quedan en `/demo`, que también enlaza a esos paneles: nada se rompe.
 
 El aviso de privacidad se sirve en la misma origen, `/privacidad`: Nginx lo pasa al copiloto
