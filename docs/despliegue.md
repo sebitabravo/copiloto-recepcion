@@ -95,10 +95,15 @@ La demo no necesita servidor propio para la presentación. Tres caminos, de meno
    procedimiento es el mismo (`ngrok http 8080`). La URL cambia en cada arranque gratuito.
    Límite: la pestaña Administración embebe el PMS en `http://localhost:8200`, que no existe para la
    audiencia remota; para mostrarla completa hay que presentar en local.
-3. **Vercel.** Solo sirve para publicar la landing como sitio estático: no ejecuta Docker, ni SQLite
-   persistente, ni el worker de SLA, y no recibe el webhook de Chatwoot. Además el HTML usa el marcador
-   `__PUBLIC_SITE_URL__` que hoy reemplaza nginx (`sub_filter`), así que habría que resolverlo en un paso
-   de build. La demo interactiva no puede funcionar ahí.
+3. **Portfolio público, sin servidor.** `make static-demo` genera `dist/`: la landing y `/demo` con
+   `static-demo.js`, que responde `/api/*` desde el navegador con guiones preparados. No hay backend, IA,
+   PMS ni Chatwoot, y un aviso fijo lo declara. Se publica gratis:
+   ```sh
+   PUBLIC_SITE_URL=https://mi-portfolio.vercel.app ./scripts/build-static-demo.sh
+   npx vercel deploy --prod dist
+   ```
+   En Netlify basta arrastrar `dist/` (lleva `_redirects`); en Vercel, `cleanUrls` resuelve `/demo`.
+   Comprobado: en esa versión ninguna petición a `/api` sale a la red.
 
 ## Verificación de las imágenes
 

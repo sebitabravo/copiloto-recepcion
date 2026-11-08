@@ -13,3 +13,6 @@ landing/config.js
 backups/
 .playwright-mcp/
 odd/tasks/demo-security-workflow.md
+
+# Build estático para portfolio (make static-demo)
+dist/

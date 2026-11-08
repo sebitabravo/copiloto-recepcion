@@ -4,7 +4,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
 COMPOSE_FULL = $(COMPOSE) --profile full
 
 .DEFAULT_GOAL := help
-.PHONY: help up up-full down reset env ps logs test lint bridge seed health e2e creds smoke backup ai-smoke demo model ui-test piloto beds24-check wa-up wa-down wa-qr wa-e2e config
+.PHONY: help up up-full down reset env ps logs test lint bridge seed health e2e creds smoke backup ai-smoke demo model ui-test piloto beds24-check wa-up wa-down wa-qr wa-e2e config static-demo
 
 help: ## Muestra esta ayuda
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z0-9_-]+:.*## / {printf "  \033[1m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -35,6 +35,9 @@ up-full: env ## Levanta todo el stack, incluido Chatwoot (primer arranque: vario
 	# dé 404 en un stack ya levantado tras un cambio de configuración.
 	$(COMPOSE_FULL) restart landing
 	@echo "Listo. Landing: http://localhost:8080 · Recepción: http://localhost:3000 · Métricas: http://localhost:8100/metricas"
+
+static-demo: ## Construye dist/ estático para portfolio (sin backend; Vercel/Netlify)
+	./scripts/build-static-demo.sh
 
 config: ## Regenera landing/config.js sin Chatwoot (modo demo o túnel)
 	./scripts/landing-config.sh
