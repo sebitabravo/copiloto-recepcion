@@ -129,7 +129,7 @@
   async function speakReply(data, version) {
     addLine('Asistente virtual', data.reply);
     (data.events || []).filter(event => event && event.type === 'handoff')
-      .forEach(() => addLine('Sistema', 'Se avisó a una persona de recepción (simulado).', 'system'));
+      .forEach(() => addLine('Sistema', 'Derivación simulada: no se notificó a recepción. El canal real es «Escribir a recepción».', 'system'));
     const spokenText = data.spoken || data.reply;
     const language = data.spoken_language || data.language || currentLang();
     if (data.audio_b64) {

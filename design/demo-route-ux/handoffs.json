@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "chosen": "01-recorrido-guiado.html",
+  "handoffs": {
+    "01-recorrido-guiado.html": {
+      "status": "implemented",
+      "queued": false,
+      "sentAt": "2026-11-08T01:30:26.140Z",
+      "startedAt": "2026-11-08T01:30:45.778Z",
+      "implementedAt": "2026-11-08T01:59:51.459Z",
+      "feature": "odd/tasks/demo-route-ux.md",
+      "note": "Implemented on /demo: guided guest-first story, same-page Reception/Admin views, on-demand trace, truthful handoff copy, and compact mobile steps. Playwright interaction and responsive checks passed.",
+      "previewUrl": "http://localhost:8080/demo"
+    }
+  }
+}

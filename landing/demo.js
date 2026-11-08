@@ -478,13 +478,10 @@
     const toggle = get('toggle-actions');
     const open = !panel.hidden;
     toggle.setAttribute('aria-expanded', String(open));
-    toggle.textContent = open ? 'Ocultar acciones del asistente' :
-      (actionCount ? `Ver acciones del asistente (${actionCount})` : 'Ver acciones del asistente');
-    const grid = document.querySelector('.demo-grid');
-    if (grid) grid.classList.toggle('with-actions', open);
+    toggle.textContent = open ? 'Ocultar traza técnica' :
+      (actionCount ? `Ver traza técnica (${actionCount})` : 'Ver traza técnica');
   }
-  // En escritorio la traza se ve junto al teléfono; en móvil arranca cerrada para no alargar la página.
-  if (window.matchMedia('(min-width: 1000px)').matches) get('actions-panel').hidden = false;
+  // La traza empieza cerrada en todos los tamaños y se revela a petición.
   updateActionsToggle();
   get('toggle-actions').addEventListener('click', () => {
     get('actions-panel').hidden = !get('actions-panel').hidden;

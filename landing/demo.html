@@ -31,7 +31,7 @@
 <link rel="preload" href="fonts/instrument-serif-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="demo.css?v=20261107a">
-<link rel="stylesheet" href="demo-console.css?v=20261107a">
+<link rel="stylesheet" href="demo-console.css?v=20261108b">
 </head>
 <body>
 <a class="skip" href="#main">Saltar al contenido</a>
@@ -56,22 +56,38 @@
 </div>
 
 <main id="main" class="wrap" tabindex="-1">
-  <div id="console-tabs" class="console-tabs" role="tablist" aria-label="Vistas de la consola de demo">
+  <section class="demo-intro" aria-labelledby="demo-page-title">
+    <div class="demo-intro-main">
+      <p class="eyebrow">Recorrido guiado · 2 minutos</p>
+      <h1 id="demo-page-title">De una pregunta a una atención más clara.</h1>
+      <p class="lede">Prueba el copiloto como huésped; Recepción y Administración siguen en esta misma página.</p>
+    </div>
+    <aside class="demo-intro-aside" aria-label="Qué vas a ver">
+      <p class="eyebrow">Qué vas a ver</p>
+      <h2>Primero el valor. Después, el detalle.</h2>
+      <p>La conversación es el punto de entrada. La traza técnica aparece cuando la necesitas.</p>
+    </aside>
+    <ol class="demo-steps" aria-label="Pasos del recorrido">
+      <li><span>01 · HUÉSPED</span><strong>Haz una consulta</strong><small>Escribe o inicia una llamada.</small></li>
+      <li><span>02 · COPILOTO</span><strong>Revisa la respuesta</strong><small>Abre la traza para ver sus acciones.</small></li>
+      <li><span>03 · EQUIPO</span><strong>Explora las otras vistas</strong><small>Recepción y PMS siguen en /demo.</small></li>
+    </ol>
+    <p class="demo-intro-note">Derivación simulada: no se avisa a recepción. El canal real de contacto está separado.</p>
+  </section>
+  <div id="console-tabs" class="console-tabs" role="tablist" aria-label="Perspectivas de la demo">
     <button id="tab-huesped" role="tab" aria-selected="true" aria-controls="panel-huesped" type="button">Huésped</button>
     <button id="tab-recepcion" role="tab" aria-selected="false" aria-controls="panel-recepcion" tabindex="-1" type="button">Recepción</button>
-    <button id="tab-admin" role="tab" aria-selected="false" aria-controls="panel-admin" tabindex="-1" type="button">Admin</button>
+    <button id="tab-admin" role="tab" aria-selected="false" aria-controls="panel-admin" tabindex="-1" type="button">Administración</button>
   </div>
 
   <div id="panel-huesped" class="tab-panel" role="tabpanel" aria-labelledby="tab-huesped" tabindex="0">
     <section id="demo" class="demo-hero" aria-labelledby="demo-title">
       <div class="demo-copy">
-        <p class="eyebrow">Demo en vivo · INNOVA3, INACAP</p>
-        <h1 id="demo-title">Habla con el <em>copiloto</em>.</h1>
-        <p class="lede">Como una conversación de WhatsApp, pero del otro lado está el copiloto del hotel:
-          responde con la hora de lectura del PMS y deriva a recepción con contexto. La reserva la confirma
-          una persona, nunca el bot.</p>
+        <p class="eyebrow">Perspectiva de huésped</p>
+        <h2 id="demo-title">Habla con el <em>copiloto</em>.</h2>
+        <p class="lede">Escribe o llama para probar el copiloto del hotel. La traza muestra qué consulta; una derivación simulada no avisa a recepción. Una persona confirma las reservas.</p>
         <ul class="demo-points">
-          <li><span class="dot-mark" aria-hidden="true">✓</span><div><b>Consulta datos reales de la demo</b><span>Hotel, disponibilidad y precios del PMS simulado.</span></div></li>
+          <li><span class="dot-mark" aria-hidden="true">✓</span><div><b>Consulta el PMS simulado</b><span>Habitaciones, disponibilidad y precios de prueba.</span></div></li>
           <li><span class="dot-mark" aria-hidden="true">✓</span><div><b>Respuesta por voz</b><span>Llama desde el teléfono con el icono de llamada.</span></div></li>
         </ul>
 
@@ -86,7 +102,7 @@
 
         <div class="demo-meta">
           <span class="pill" id="model-label">Conectando con el asistente…</span>
-          <button id="toggle-actions" class="text-button" type="button" aria-expanded="true" aria-controls="actions-panel">Ocultar detalle técnico</button>
+          <button id="toggle-actions" class="text-button" type="button" aria-expanded="false" aria-controls="actions-panel">Ver traza técnica</button>
         </div>
         <p id="capability" class="small" hidden></p>
         <div id="guided-banner" class="notice" hidden>Modo sin IA: respuestas guiadas sobre información del hotel, sin consultas al PMS ni creación de reservas.</div>
@@ -190,7 +206,7 @@
         </div>
         <div class="usage"><span id="response-time" hidden>Respuesta en — s</span><span id="messages-left">Mensajes restantes: —</span></div>
       </div>
-      <aside id="actions-panel" class="thinking">
+      <aside id="actions-panel" class="thinking" hidden>
         <div id="timeline-empty" class="timeline-empty">
           <p>Envía un mensaje para ver qué consulta o hace el asistente.</p>
           <ul class="ghost-trace" aria-hidden="true">
@@ -310,8 +326,8 @@
 </footer>
 
 <script src="config.js?v=20261107a" defer></script>
-<script src="demo.js?v=20261107a" defer></script>
-<script src="voice.js?v=20261107a" defer></script>
+<script src="demo.js?v=20261108a" defer></script>
+<script src="voice.js?v=20261108a" defer></script>
 <script src="console.js?v=20261107a" defer></script>
 </body>
 </html>
