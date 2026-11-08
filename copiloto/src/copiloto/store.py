@@ -7,6 +7,10 @@ import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
+# Origen de una conversación: la operación real (Chatwoot) o el espacio aislado de la demostración.
+DEMO_SOURCE = "demo"
+OPERATIONAL_SOURCE = "chatwoot"
+
 
 @contextmanager
 def transaction(db: sqlite3.Connection):
@@ -230,15 +234,22 @@ def shift_summary(db: sqlite3.Connection, since: float, now: float) -> dict:
 SAFE_PAYLOAD_KEYS = ("greeting", "in_shift", "complete", "inbound_ts", "faq_id", "status", "ok", "latency_ms", "reason")
 
 
-def list_conversations(db: sqlite3.Connection, now: float, limit: int = 40) -> list[dict]:
+def list_conversations(db: sqlite3.Connection, now: float, limit: int = 40, scope: str | None = None) -> list[dict]:
     """Cola de recepción: primero lo que corre riesgo de vencerse, después lo reciente.
 
     Sin esto, la persona de recepción solo puede mirar una conversación si ya sabe su id.
+    `scope` separa la operación real del espacio de demostración: la demo nunca ve datos de huéspedes
+    reales y el personal nunca recibe las conversaciones de prueba en su cola.
     """
+    where, params = "", []
+    if scope == DEMO_SOURCE:
+        where, params = "WHERE source = ?", [DEMO_SOURCE]
+    elif scope:
+        where, params = "WHERE source <> ?", [DEMO_SOURCE]
     rows = db.execute(
-        """SELECT conversation_id, step, contact_name, sla_started_at, sla_stopped_at, updated_at
-           FROM conversation_state ORDER BY updated_at DESC LIMIT ?""",
-        (limit,),
+        f"""SELECT conversation_id, step, contact_name, sla_started_at, sla_stopped_at, updated_at, source
+           FROM conversation_state {where} ORDER BY updated_at DESC LIMIT ?""",
+        (*params, limit),
     ).fetchall()
     queue = []
     for row in rows:
@@ -256,10 +267,92 @@ def list_conversations(db: sqlite3.Connection, now: float, limit: int = 40) -> l
                 "prebooking": prebooking["status"] if prebooking is not None else None,
                 "prebooking_expires_at": prebooking["expires_at"] if prebooking is not None else None,
                 "updated_at": row["updated_at"],
+                "source": row["source"],
             }
         )
     queue.sort(key=lambda item: (not item["running"], -(item["waiting_s"] or 0), -item["updated_at"]))
     return queue
+
+
+def conversation_source(db: sqlite3.Connection, conversation_id: int) -> str | None:
+    """De dónde viene una conversación; sin fila devuelve None (no existe)."""
+    row = db.execute(
+        "SELECT source FROM conversation_state WHERE conversation_id = ?", (conversation_id,)
+    ).fetchone()
+    return row["source"] if row is not None else None
+
+
+def demo_conversation_id(session_id: str) -> int:
+    """Id negativo estable por sesión: nunca choca con los ids positivos que asigna Chatwoot."""
+    digest = hashlib.sha256(f"demo:{session_id}".encode()).digest()
+    return -(int.from_bytes(digest[:6], "big") + 1)
+
+
+def ensure_demo_conversation(db: sqlite3.Connection, session_id: str, now: float) -> int:
+    """Una conversación de demo por sesión, marcada para que la operación real no la reciba."""
+    row = db.execute(
+        "SELECT conversation_id FROM demo_conversations WHERE session_id = ?", (session_id,)
+    ).fetchone()
+    if row is not None:
+        return row["conversation_id"]
+    conversation_id = demo_conversation_id(session_id)
+    with transaction(db):
+        db.execute(
+            "INSERT OR IGNORE INTO demo_conversations(session_id, conversation_id, created_at) VALUES (?, ?, ?)",
+            (session_id, conversation_id, now),
+        )
+        created = db.execute(
+            "SELECT 1 FROM conversation_state WHERE conversation_id = ?", (conversation_id,)
+        ).fetchone()
+        if created is None:
+            db.execute(
+                """INSERT INTO conversation_state(conversation_id, step, data, contact_name, updated_at, source)
+                   VALUES (?, 'ai', '{}', 'Huésped demo', ?, ?)""",
+                (conversation_id, now, DEMO_SOURCE),
+            )
+    return conversation_id
+
+
+def demo_conversation_for_session(db: sqlite3.Connection, session_id: str) -> int | None:
+    row = db.execute(
+        "SELECT conversation_id FROM demo_conversations WHERE session_id = ?", (session_id,)
+    ).fetchone()
+    return row["conversation_id"] if row is not None else None
+
+
+def add_demo_message(db: sqlite3.Connection, conversation_id: int, role: str, body: str, now: float) -> dict:
+    """Turno de la transcripción de demo (huésped, asistente o persona de recepción)."""
+    with transaction(db):
+        cursor = db.execute(
+            "INSERT INTO demo_messages(conversation_id, role, body, created_at) VALUES (?, ?, ?, ?)",
+            (conversation_id, role, body, now),
+        )
+        db.execute(
+            "UPDATE conversation_state SET updated_at = ? WHERE conversation_id = ?", (now, conversation_id)
+        )
+    return {"id": cursor.lastrowid, "role": role, "body": body, "created_at": now}
+
+
+def list_demo_messages(db: sqlite3.Connection, conversation_id: int, limit: int = 60) -> list[dict]:
+    """Transcripción en orden de conversación; el tope se queda con lo último dicho."""
+    rows = db.execute(
+        """SELECT id, role, body, created_at FROM demo_messages
+           WHERE conversation_id = ? ORDER BY id DESC LIMIT ?""",
+        (conversation_id, limit),
+    ).fetchall()
+    return [dict(row) for row in reversed(rows)]
+
+
+def reset_demo_conversation(db: sqlite3.Connection, session_id: str) -> None:
+    """Reiniciar el historial de la demo borra solo su espacio aislado."""
+    conversation_id = demo_conversation_for_session(db, session_id)
+    if conversation_id is None:
+        return
+    with transaction(db):
+        db.execute("DELETE FROM demo_messages WHERE conversation_id = ?", (conversation_id,))
+        db.execute("DELETE FROM staff_notes WHERE conversation_id = ?", (conversation_id,))
+        db.execute("DELETE FROM demo_conversations WHERE session_id = ?", (session_id,))
+        db.execute("DELETE FROM conversation_state WHERE conversation_id = ?", (conversation_id,))
 
 
 def anonymous_id(conversation_id: int, salt: str) -> int:

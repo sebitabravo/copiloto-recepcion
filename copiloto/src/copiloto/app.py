@@ -268,17 +268,18 @@ def create_app(
         await core.on_booking_confirmed(body.get("conversation_id"), booking_id, source)
         return {"status": "recorded"}
 
-    def panel_session(name: str, expires: int) -> str:
-        payload = base64.urlsafe_b64encode(json.dumps({"n": name, "e": expires}).encode()).decode()
+    def panel_session(name: str, expires: int, demo: bool = False) -> str:
+        claims = {"n": name, "e": expires}
+        if demo:
+            claims["d"] = 1
+        payload = base64.urlsafe_b64encode(json.dumps(claims).encode()).decode()
         sig = hmac.new(settings.panel_token.encode(), payload.encode(), hashlib.sha256).hexdigest()
         return f"{payload}.{sig}"
 
-    def panel_identity(request: Request) -> str | None:
-        """Quién mira el panel: sesión firmada por cookie, o el token del panel (app de Chatwoot)."""
+    def panel_claims(request: Request) -> dict | None:
+        """Claims firmados de la cookie del panel: nombre y si la sesión es de demostración."""
         if not settings.panel_token:
             return None
-        if _token_ok(settings.panel_token, request.headers.get("x-panel-token", "")):
-            return "chatwoot"
         payload, _, signature = request.cookies.get(PANEL_COOKIE, "").partition(".")
         if not payload or not signature:
             return None
@@ -294,7 +295,25 @@ def create_app(
             return None
         if expires < clock():
             return None
-        return str(data.get("n") or "recepción")
+        return {"name": str(data.get("n") or "recepción"), "demo": data.get("d") == 1}
+
+    def panel_identity(request: Request) -> str | None:
+        """Quién mira el panel: sesión firmada por cookie, o el token del panel (app de Chatwoot)."""
+        if not settings.panel_token:
+            return None
+        if _token_ok(settings.panel_token, request.headers.get("x-panel-token", "")):
+            return "chatwoot"
+        claims = panel_claims(request)
+        return claims["name"] if claims else None
+
+    def panel_is_demo(request: Request) -> bool:
+        """Sesión de demostración: solo ve y escribe el espacio aislado, nunca la operación real."""
+        if not settings.panel_token:
+            return False
+        if _token_ok(settings.panel_token, request.headers.get("x-panel-token", "")):
+            return False
+        claims = panel_claims(request)
+        return bool(claims and claims["demo"])
 
     @app.get("/panel", response_class=HTMLResponse, dependencies=limited)
     async def panel():
@@ -362,7 +381,7 @@ def create_app(
         response = Response(status_code=204)
         response.set_cookie(
             PANEL_COOKIE,
-            panel_session(name, int(clock()) + PANEL_SESSION_HOURS * 3600),
+            panel_session(name, int(clock()) + PANEL_SESSION_HOURS * 3600, demo=True),
             max_age=PANEL_SESSION_HOURS * 3600,
             httponly=True,
             samesite="lax",
@@ -383,7 +402,10 @@ def create_app(
             "now": clock(),
             "amber_s": settings.sla_amber_s,
             "red_s": settings.sla_red_s,
-            "conversations": store.list_conversations(db, clock()),
+            # La demo ve solo su espacio; el personal nunca recibe las conversaciones de prueba.
+            "conversations": store.list_conversations(
+                db, clock(), scope=store.DEMO_SOURCE if panel_is_demo(request) else "operational"
+            ),
         }
 
     @app.get("/api/panel/shift", dependencies=limited)
@@ -397,6 +419,10 @@ def create_app(
     async def panel_data(conversation_id: int, request: Request):
         if panel_identity(request) is None:
             raise HTTPException(status_code=401, detail="Sesión del panel requerida")
+        # Cada sesión ve solo su mundo: la demo no lee la operación real y el personal no lee la demo.
+        source = store.conversation_source(db, conversation_id)
+        if source is not None and (source == store.DEMO_SOURCE) != panel_is_demo(request):
+            raise HTTPException(status_code=404, detail="Conversación no encontrada")
         state = store.get_state(db, conversation_id)
         data = dict(state.data)
         room = hotel.room(data["room_code"]) if data.get("room_code") else None
@@ -430,6 +456,7 @@ def create_app(
             "now": clock(),
             "pms_url": f"{settings.pms_staff_url.rstrip('/')}/admin?{urlencode(pms_params)}",
             "notes": store.list_notes(db, conversation_id),
+            "messages": store.list_demo_messages(db, conversation_id) if source == store.DEMO_SOURCE else [],
         }
 
     @app.post("/api/panel/{conversation_id}/note", dependencies=limited)
@@ -437,6 +464,9 @@ def create_app(
         author = panel_identity(request)
         if author is None:
             raise HTTPException(status_code=401, detail="Sesión del panel requerida")
+        source = store.conversation_source(db, conversation_id)
+        if source is not None and (source == store.DEMO_SOURCE) != panel_is_demo(request):
+            raise HTTPException(status_code=404, detail="Conversación no encontrada")
         try:
             body = json.loads(await read_capped(request, 4096))
         except ValueError:
@@ -445,6 +475,28 @@ def create_app(
             return store.add_note(db, conversation_id, author, body.get("body", ""), clock())
         except ValueError:
             return JSONResponse({"detail": "La nota está vacía"}, status_code=400)
+
+    @app.post("/api/panel/{conversation_id}/reply", dependencies=limited)
+    async def panel_reply(conversation_id: int, request: Request):
+        """Respuesta de la persona dentro del espacio aislado de la demo.
+
+        La operación real responde en Chatwoot: aquí nunca se escribe a un huésped real.
+        """
+        if panel_identity(request) is None:
+            raise HTTPException(status_code=401, detail="Sesión del panel requerida")
+        demo = panel_is_demo(request)
+        if demo and store.conversation_source(db, conversation_id) != store.DEMO_SOURCE:
+            raise HTTPException(status_code=404, detail="Conversación no encontrada")
+        if not demo:
+            raise HTTPException(status_code=403, detail="Las respuestas reales se envían desde Chatwoot")
+        try:
+            body = json.loads(await read_capped(request, 4096))
+        except ValueError:
+            return JSONResponse({"detail": "JSON inválido"}, status_code=400)
+        text = " ".join(str((body or {}).get("body") or "").split())
+        if not text or len(text) > 1000:
+            return JSONResponse({"detail": "La respuesta debe tener entre 1 y 1000 caracteres"}, status_code=400)
+        return {"message": store.add_demo_message(db, conversation_id, "staff", text, clock())}
 
     @app.get("/metricas", response_class=HTMLResponse, dependencies=limited)
     async def metrics_page(request: Request):
@@ -599,12 +651,25 @@ def create_app(
             events = [{"type": "fallback", "reason": "ia_no_configurada"}]
             reply, quick = guided_reply(hotel, message)
         ai_sessions.save(db, session, clock())
+        # La demo tiene su propio espacio: cada turno queda en una conversación marcada y su transcripción,
+        # para que recepción pueda leerla y responderla sin tocar la operación real.
+        now = clock()
+        conversation_id = store.ensure_demo_conversation(db, body["session_id"], now)
+        store.add_demo_message(db, conversation_id, "guest", message, now)
+        store.add_demo_message(db, conversation_id, "assistant", reply, now)
+        if any(event.get("type") == "handoff" for event in events):
+            state = store.get_state(db, conversation_id)
+            if state.step != "handed_off":
+                state.step = "handed_off"
+                store.save_state(db, state, now)
+                store.start_sla(db, conversation_id, now)
         payload = {
             "reply": reply,
             "mode": mode,
             "events": events,
             "quick_replies": quick[:4],
             "usage": {"messages_left": max(settings.demo_messages_per_session - session.msg_count, 0), **usage},
+            "conversation_id": conversation_id,
         }
         if voice:
             payload["spoken_language"] = guess_language(message)
@@ -613,6 +678,20 @@ def create_app(
     @app.post("/api/demo/chat")
     async def demo_chat(request: Request):
         return await demo_turn(request, voice=False)
+
+    @app.get("/api/demo/conversation", dependencies=limited)
+    async def demo_conversation(session_id: str = Query(min_length=1, max_length=64)):
+        """Lo que ve el huésped: su conversación de demo y las respuestas de recepción."""
+        if not settings.demo_enabled:
+            raise HTTPException(status_code=404, detail="demo_disabled")
+        conversation_id = store.demo_conversation_for_session(db, session_id)
+        if conversation_id is None:
+            return {"conversation_id": None, "step": None, "messages": []}
+        return {
+            "conversation_id": conversation_id,
+            "step": store.get_state(db, conversation_id).step,
+            "messages": store.list_demo_messages(db, conversation_id),
+        }
 
     async def synthesize(text: str, language: str = "es") -> tuple[str | None, str | None, str | None]:
         """(audio base64, motivo si no hubo, formato). La voz nunca impide que el huésped lea la respuesta."""
@@ -684,6 +763,7 @@ def create_app(
             return body
         async with demo_session_lock(body["session_id"]):
             ai_sessions.delete(db, f"demo:{body['session_id']}")
+            store.reset_demo_conversation(db, body["session_id"])
         return {"status": "ok"}
 
     def record_demo_event(kind: str, payload: dict) -> None:

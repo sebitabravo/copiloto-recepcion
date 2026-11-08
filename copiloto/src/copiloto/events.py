@@ -112,6 +112,22 @@ CREATE TABLE IF NOT EXISTS staff_notes (
     created_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS staff_notes_conv ON staff_notes(conversation_id, created_at);
+
+-- Espacio aislado de la demostración: mapa sesión → conversación propia (ids negativos) y su transcripción.
+CREATE TABLE IF NOT EXISTS demo_conversations (
+    session_id TEXT PRIMARY KEY,
+    conversation_id INTEGER NOT NULL UNIQUE,
+    created_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS demo_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS demo_messages_conv ON demo_messages(conversation_id, id);
 """
 
 
@@ -124,6 +140,12 @@ def connect(path: str) -> sqlite3.Connection:
 
 def init_db(connection: sqlite3.Connection) -> None:
     connection.executescript(SCHEMA)
+    # Migración de bases ya creadas: el origen separa la operación real del espacio de demostración.
+    columns = {row["name"] for row in connection.execute("PRAGMA table_info(conversation_state)")}
+    if "source" not in columns:
+        connection.execute(
+            "ALTER TABLE conversation_state ADD COLUMN source TEXT NOT NULL DEFAULT 'chatwoot'"
+        )
 
 
 def record_event(
