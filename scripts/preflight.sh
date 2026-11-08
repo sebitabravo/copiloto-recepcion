@@ -26,11 +26,18 @@ check() { # nombre, comando...
 
 http_ok() { [ "$(curl -s -o /dev/null -w '%{http_code}' -m 5 "$1")" = "200" ]; }
 
+running() { docker ps --format '{{.Names}}' | grep -qx "copiloto-$1-1"; }
+
 echo "1) Servicios del stack"
 check "landing $LANDING" http_ok "$LANDING/"
 check "copiloto $COPILOTO/health" http_ok "$COPILOTO/health"
 check "PMS simulado $PMS/health" http_ok "$PMS/health"
-check "Chatwoot $CHATWOOT" http_ok "$CHATWOOT/"
+# La demo liviana no incluye Chatwoot: se comprueba solo cuando forma parte del stack.
+if running chatwoot; then
+  check "Chatwoot $CHATWOOT" http_ok "$CHATWOOT/"
+else
+  echo "  · Chatwoot no está en este stack (modo demo): se omite"
+fi
 
 echo "2) Modelo local en el puerto $MODEL_PORT"
 model_dead=0

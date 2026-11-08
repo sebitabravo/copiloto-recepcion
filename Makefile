@@ -118,11 +118,13 @@ ui-test: ## Tests de la UI de la demo (node --test)
 
 # Canal de WhatsApp (OpenWA, no oficial). Requiere `make up` previo. Re-siembra para crear el inbox de WhatsApp.
 wa-up: env ## Levanta el canal de WhatsApp de la demo (OpenWA + puente); luego escanea el QR
-	$(COMPOSE) --profile whatsapp build wa-bridge
-	$(COMPOSE) --profile whatsapp up -d openwa
+	# WhatsApp vive en Chatwoot: el stack completo tiene que estar arriba antes de sembrar.
+	$(COMPOSE_FULL) up -d postgres redis chatwoot sidekiq
+	$(COMPOSE_FULL) --profile whatsapp build wa-bridge
+	$(COMPOSE_FULL) --profile whatsapp up -d openwa
 	WA_BRIDGE_URL=http://wa-bridge:8400 ./scripts/seed-chatwoot.sh
-	$(COMPOSE) --profile whatsapp up -d --force-recreate wa-bridge
-	$(COMPOSE) up -d --force-recreate copiloto
+	$(COMPOSE_FULL) --profile whatsapp up -d --force-recreate wa-bridge
+	$(COMPOSE_FULL) up -d --force-recreate copiloto
 	@echo "Siguiente paso: make wa-qr (crea la sesión y muestra dónde escanear el QR)"
 
 wa-qr: ## Muestra cómo vincular el teléfono dedicado (QR de OpenWA)

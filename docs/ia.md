@@ -16,7 +16,7 @@ reservar o derivar a una persona. Sin IA configurada, el mismo bot funciona con 
 | `AI_MODE` | `assisted` | `assisted`: no reserva, deriva a recepción · `full`: también reserva en el PMS simulado (solo demostración) · `off`: sin IA |
 | `LLM_BASE_URL` | `https://api.deepseek.com` | Cualquier API compatible con OpenAI (`/chat/completions` con herramientas) |
 | `AI_TURN_TIMEOUT_S` | `12` | Tope en segundos de todo el turno de IA (reintentos incluidos); al vencer, el huésped sigue con el menú guiado |
-| `LLM_MODEL` | `deepseek-flash` | Nombre del modelo (según la documentación de DeepSeek al 28-oct-2026) |
+| `LLM_MODEL` | `deepseek-chat` | Nombre del modelo; confírmalo en la documentación de DeepSeek antes de la demo |
 | `LLM_TEMPERATURE` | `0.3` | Temperatura de muestreo del turno del asistente |
 | `LLM_TOP_P` | sin definir | `top_p` (nucleus sampling); sin definir no se envía, el servidor aplica su valor |
 

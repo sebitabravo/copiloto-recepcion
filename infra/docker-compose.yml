@@ -159,7 +159,7 @@ services:
       AI_MODE: ${AI_MODE:-assisted}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
-      LLM_MODEL: ${LLM_MODEL:-deepseek-flash}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
       LLM_TIMEOUT_S: ${LLM_TIMEOUT_S:-25}
       AI_TURN_TIMEOUT_S: ${AI_TURN_TIMEOUT_S:-12}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
