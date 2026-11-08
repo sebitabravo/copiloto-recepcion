@@ -144,7 +144,7 @@ const reception = (messages, after) => ({conversation_id: -5, step: 'handed_off'
 const message = (id, body) => ({id, role: 'assistant', body, created_at: 1, options: null});
 
 async function openGuest() {
-  const ui = boot('guest', GUEST_IDS, {session: {'copiloto-demo-huesped': 'huesped-anterior-000001'}});
+  const ui = boot('guest', GUEST_IDS, {session: {'copiloto-demo-huesped:sin-corrida': 'huesped-anterior-000001'}});
   ui.window.DemoGuest.init({});
   await flush();
   return ui;

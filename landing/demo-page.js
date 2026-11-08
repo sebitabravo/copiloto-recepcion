@@ -9,6 +9,38 @@
   const VIEWS = ['ambas', 'huesped', 'recepcion'];
   const started = {huesped: false, recepcion: false};
   let status = null;
+  let run = null;
+
+  /* Corrida de esta presentación: la emite el servidor. Va en la URL (?corrida=), así una recarga o «Abrir … en
+     otra ventana» siguen en la MISMA corrida, y otra presentación (otra corrida) no ve estos casos. */
+  async function ensureRun() {
+    const params = new URLSearchParams(location.search);
+    const asked = params.get('corrida');
+    let notice = '';
+    if (asked && /^[A-Za-z0-9_-]{16,32}$/.test(asked)) {
+      try {
+        await S.api(`/api/demo/run/${encodeURIComponent(asked)}`);
+        return {id: asked, notice};
+      } catch (error) {
+        if (error.status !== 404) throw error;
+        notice = 'La corrida del enlace venció: empezamos una nueva.';
+      }
+    }
+    const created = await S.api('/api/demo/run', {method: 'POST'});
+    params.set('corrida', created.run);
+    try { history.replaceState(null, '', `${location.pathname}?${params}${location.hash}`); } catch (_) { /* */ }
+    return {id: created.run, notice};
+  }
+
+  function linkWindows() {
+    document.querySelectorAll('a[href*="vista="]').forEach(link => {
+      try {
+        const url = new URL(link.getAttribute('href'), location.href);
+        url.searchParams.set('corrida', run);
+        link.href = url.pathname + url.search;
+      } catch (_) { /* el enlace queda como estaba */ }
+    });
+  }
 
   function initialView() {
     const asked = new URLSearchParams(location.search).get('vista');
@@ -33,7 +65,8 @@
       : ` · ${hours}. Las solicitudes quedan guardadas; responde desde las ${shift.next_opening}.`));
     if (scenario) box.append(document.createTextNode(' (simulado para esta sesión)'));
     // La barra del marco, como en el hero de la portada: dirección y estado del turno.
-    $('app-addr').textContent = `copiloto.bordeluz.demo · ${open ? 'recepción en turno' : 'fuera de turno'} · datos de prueba`;
+    const tag = run ? ` · corrida ${run.slice(0, 6)}` : '';
+    $('app-addr').textContent = `copiloto.bordeluz.demo · ${open ? 'recepción en turno' : 'fuera de turno'}${tag} · datos de prueba`;
   }
 
   function start(view) {
@@ -56,14 +89,22 @@
   }
 
   async function loadStatus() {
+    let notice = '';
     try {
       status = await S.api('/api/demo/status');
+      const current = await ensureRun();
+      run = current.id;
+      notice = current.notice;
     } catch (error) {
+      status = null;
       $('shift-status').textContent = `${error.message} Comprueba que el servidor de la demo esté encendido.`;
       setTimeout(loadStatus, 5000);
       return;
     }
+    S.setRun(run);
+    linkWindows();
     describeShift();
+    if (notice) $('shift-status').append(document.createTextNode(` ${notice}`));
     start(document.body.dataset.view);
   }
 

@@ -40,7 +40,8 @@ def fail_once(monkeypatch, owner, name, *, before=True, when=lambda *args, **kwa
 
 def chat(demo, text, key, session=SESSION):
     demo.clock.advance(3)
-    return demo.guest.post("/api/demo/chat", json={"session_id": session, "message": text, "client_message_id": key})
+    return demo.guest.post("/api/demo/chat", json={"session_id": session, "message": text, "client_message_id": key,
+                                                   "run": demo.run})
 
 
 def guest_messages(demo, session=SESSION):

@@ -14,6 +14,8 @@ def _parse_hhmm(value: str) -> time:
 
 # Valores que activan una bandera booleana del entorno; se comparan en minúsculas y sin espacios,
 # igual que la lectura de AI_MODE.
+# PMS simulado de este repositorio (pms_mock): el único inventario que la demo pública puede leer o reservar.
+SANDBOX_PMS_URLS = frozenset({"http://pms-mock:8200", "http://localhost:8200", "http://127.0.0.1:8200"})
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 
@@ -51,6 +53,10 @@ class Settings:
     pms_events_secret: str = ""
     panel_token: str = ""
     pms_url: str = "http://pms-mock:8200"
+    # Inventario de PRUEBA de la demo pública (nunca el PMS de la operación). Vacío: si el PMS operativo es el
+    # simulado autorizado se usa otra instancia apuntando a él; si no, la demo responde «Disponibilidad por
+    # verificar» y deriva igual.
+    demo_pms_url: str = ""
     pms_staff_url: str = "http://localhost:8200"
     pms_timeout_s: float = 4.0
     # Conector del PMS: "http" usa el contrato de docs/conector-pms.md; "none" deja al hotel sin PMS.
@@ -154,6 +160,7 @@ class Settings:
             panel_token=env.get("PANEL_TOKEN", ""),
             pms_url=env.get("PMS_URL", cls.pms_url),
             pms_staff_url=env.get("PMS_STAFF_URL", cls.pms_staff_url),
+            demo_pms_url=(env.get("DEMO_PMS_URL") or "").strip(),
             pms_adapter=env.get("PMS_ADAPTER", cls.pms_adapter).strip().lower(),
             pms_availability_path=env.get("PMS_AVAILABILITY_PATH", cls.pms_availability_path),
             pms_booking_path=env.get("PMS_BOOKING_PATH", cls.pms_booking_path),
@@ -203,7 +210,7 @@ class Settings:
         return (
             self.pms_adapter == "http"
             and self.pms_booking_path == "/api/v1/bookings"
-            and self.pms_url.rstrip("/") in {"http://pms-mock:8200", "http://localhost:8200", "http://127.0.0.1:8200"}
+            and self.pms_url.rstrip("/") in SANDBOX_PMS_URLS
         )
 
     @property

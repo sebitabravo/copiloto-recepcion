@@ -8,7 +8,7 @@ el reinicio borra solo lo de demo y la migración deja las bases existentes como
 import sqlite3
 from dataclasses import replace
 
-from conftest import FakeChatwoot
+from conftest import FakeChatwoot, new_run
 from copiloto.app import create_app
 from fastapi.testclient import TestClient
 
@@ -24,6 +24,7 @@ def client_for(settings, harness):
         replace(settings, demo_ai=False),
         chatwoot=FakeChatwoot(),
         pms=harness.pms,
+        demo_pms=harness.pms,
         clock=harness.clock,
         run_workers=False,
         db=harness.db,
@@ -32,15 +33,17 @@ def client_for(settings, harness):
 
 
 def demo_client(settings, harness):
+    """Huésped y recepción de una misma corrida (la corrida la emite el servidor)."""
     client = client_for(settings, harness)
-    assert client.post("/api/demo/session").status_code == 204
+    client.run = new_run(client)
+    assert client.post("/api/demo/session", json={"run": client.run}).status_code == 204
     return client
 
 
 def demo_request(demo, session=SESSION):
     """El huésped pide recepción: queda una solicitud en la bandeja de la demo. Devuelve (conversación, id)."""
     conversation_id = demo.post(
-        "/api/demo/chat", json={"session_id": session, "message": "Hablar con recepción"}
+        "/api/demo/chat", json={"session_id": session, "message": "Hablar con recepción", "run": demo.run}
     ).json()["conversation_id"]
     request_id = next(item["id"] for item in demo.get("/api/panel/requests").json()["requests"]
                       if item["conversation_id"] == conversation_id)
@@ -101,13 +104,14 @@ def test_reply_validates_body_and_requires_identity(ai_settings, harness):
 
 def test_unknown_session_polls_nothing_and_never_another_conversation(ai_settings, harness):
     demo = demo_client(ai_settings, harness)
-    first = demo.post("/api/demo/chat", json={"session_id": SESSION, "message": "Hola"}).json()["conversation_id"]
+    first = demo.post("/api/demo/chat", json={"session_id": SESSION, "message": "Hola",
+                                              "run": demo.run}).json()["conversation_id"]
 
     unseen = demo.get("/api/demo/conversation", params={"session_id": "sesion-inexistente-01"})
     assert unseen.json() == {"conversation_id": None, "step": None, "messages": [], "request": None,
                              "handled_by": "asistente", "quick_replies": []}
 
-    demo.post("/api/demo/chat", json={"session_id": "demo-guardas-9876543210", "message": "Otra"})
+    demo.post("/api/demo/chat", json={"session_id": "demo-guardas-9876543210", "message": "Otra", "run": demo.run})
     seen = demo.get("/api/demo/conversation", params={"session_id": SESSION}).json()
     assert seen["conversation_id"] == first
     assert all(message["role"] in {"guest", "assistant", "staff"} for message in seen["messages"])
@@ -119,7 +123,7 @@ def test_reset_clears_only_the_demo_space(ai_settings, harness):
     before = operational_row(harness)
     demo = demo_client(ai_settings, harness)
     conversation_id = demo.post(
-        "/api/demo/chat", json={"session_id": SESSION, "message": "Hola"}
+        "/api/demo/chat", json={"session_id": SESSION, "message": "Hola", "run": demo.run}
     ).json()["conversation_id"]
     demo.post(f"/api/panel/{conversation_id}/note", json={"body": "nota de demo"})
 
@@ -210,12 +214,14 @@ def test_demo_reply_never_reaches_chatwoot_or_the_pms(ai_settings, harness):
         replace(ai_settings, demo_ai=False),
         chatwoot=chatwoot,
         pms=pms,
+        demo_pms=pms,
         clock=harness.clock,
         run_workers=False,
         db=harness.db,
     )
     client = TestClient(app)
-    assert client.post("/api/demo/session").status_code == 204
+    client.run = new_run(client)
+    assert client.post("/api/demo/session", json={"run": client.run}).status_code == 204
     _, request_id = demo_request(client)
     assert client.post(f"/api/panel/requests/{request_id}/take").status_code == 200
     assert client.post(f"/api/panel/requests/{request_id}/reply", json={"body": "Te espero"}).status_code == 200

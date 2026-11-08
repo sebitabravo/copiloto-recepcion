@@ -170,8 +170,7 @@ def test_another_person_cannot_take_over_a_taken_request(demo):
     request_id = demo.inbox()["requests"][0]["id"]
     assert demo.sofia.post(f"/api/panel/requests/{request_id}/take").status_code == 200
     assert demo.sofia.post(f"/api/panel/requests/{request_id}/take").status_code == 200, "idempotente"
-    tomas = TestClient(demo.app)
-    tomas.post("/api/demo/session", json={"name": "Tomás"})
+    tomas = demo.staff("Tomás")
     conflict = tomas.post(f"/api/panel/requests/{request_id}/take")
     assert conflict.status_code == 409 and conflict.json()["detail"] == "Ya la tomó Sofía"
     assert tomas.post(f"/api/panel/requests/{request_id}/reply", json={"body": "hola"}).status_code == 409
@@ -231,7 +230,7 @@ def test_a_pms_outage_never_reports_availability_and_stays_with_reception(demo, 
     harness.pms.down = True
     demo.say("Quiero consultar del 10 al 12 de diciembre para 2 adultos")
     summary = demo.say("Sin niños")
-    assert "No pude consultar el sistema de reservas" in summary["reply"]
+    assert "Disponibilidad por verificar: no pude consultar el sistema de reservas" in summary["reply"]
     assert "Disponible" not in summary["reply"], "sin lectura no se promete cupo"
     sent = demo.say("Enviar a recepción")
     assert "Disponibilidad por verificar" in sent["reply"]
@@ -244,7 +243,7 @@ def test_a_pms_outage_never_reports_availability_and_stays_with_reception(demo, 
     simulated = demo.sofia.post(f"/api/panel/requests/{item['id']}/inventory", json={"simulate_down": True}).json()
     assert simulated["ok"] is False and "caída simulada" in simulated["reason"]
     notes = [m["body"] for m in simulated["request"]["messages"] if m["role"] == "note"]
-    assert any("Cupo desconocido: no informar disponibilidad" in note for note in notes)
+    assert any(note.startswith("Disponibilidad por verificar: PMS sin lectura") for note in notes)
 
 
 def test_guest_sessions_are_isolated(demo):

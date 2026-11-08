@@ -25,11 +25,14 @@
   const thread = () => $('guest-thread');
   const input = () => $('guest-input');
 
+  // Un huésped por corrida y pestaña: una sesión nunca cambia de corrida (el servidor lo rechaza).
+  const sessionKey = () => `${SESSION_KEY}:${S.run || 'sin-corrida'}`;
+
   function readSession() {
-    const stored = S.store.get('sessionStorage', SESSION_KEY);
+    const stored = S.store.get('sessionStorage', sessionKey());
     if (stored && /^[A-Za-z0-9-]{16,64}$/.test(stored)) return stored;
     const value = S.newId();
-    S.store.set('sessionStorage', SESSION_KEY, value);
+    S.store.set('sessionStorage', sessionKey(), value);
     return value;
   }
 
@@ -135,6 +138,7 @@
     setBusy(true);
     try {
       const body = {session_id: sessionId, message: text, client_message_id: clientId};
+      if (S.run) body.run = S.run;
       if (shift()) body.shift = shift();
       const data = await S.api('/api/demo/chat', {method: 'POST', body});
       node.remove();
@@ -153,7 +157,8 @@
     reading = true;
     const readEpoch = epoch;
     try {
-      const path = `/api/demo/conversation?session_id=${encodeURIComponent(sessionId)}&after=${lastId}`;
+      const runParam = S.run ? `&run=${encodeURIComponent(S.run)}` : '';
+      const path = `/api/demo/conversation?session_id=${encodeURIComponent(sessionId)}&after=${lastId}${runParam}`;
       const data = await S.api(path);
       if (readEpoch !== epoch) return;
       failures = 0;
@@ -191,7 +196,7 @@
     reading = false;
     failures = 0;
     sessionId = S.newId();
-    S.store.set('sessionStorage', SESSION_KEY, sessionId);
+    S.store.set('sessionStorage', sessionKey(), sessionId);
     clearTimeout(pollTimer);
     thread().querySelectorAll('.chat-bubble, .chips').forEach(node => node.remove());
     rendered.clear();

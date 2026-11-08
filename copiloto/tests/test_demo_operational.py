@@ -11,7 +11,7 @@ Reglas que se fijan aquí:
 
 from dataclasses import replace
 
-from conftest import FakeChatwoot, FakeLlm, call, say
+from conftest import FakeChatwoot, FakeLlm, call, new_run, say
 from copiloto.ai.agent import Agent
 from copiloto.app import create_app
 from fastapi.testclient import TestClient
@@ -30,6 +30,7 @@ def client_for(settings, harness, llm=None):
         settings if llm else replace(settings, demo_ai=False),
         chatwoot=FakeChatwoot(),
         pms=harness.pms,
+        demo_pms=harness.pms,
         clock=harness.clock,
         run_workers=False,
         db=harness.db,
@@ -38,14 +39,16 @@ def client_for(settings, harness, llm=None):
     return TestClient(app)
 
 
-def demo_client(settings, harness, llm=None):
+def demo_client(settings, harness, llm=None, run=None):
+    """Huésped y recepción de una misma corrida (la corrida la emite el servidor)."""
     client = client_for(settings, harness, llm)
-    assert client.post("/api/demo/session").status_code == 204
+    client.run = run or new_run(client)
+    assert client.post("/api/demo/session", json={"run": client.run}).status_code == 204
     return client
 
 
 def chat(client, message, session=SESSION):
-    return client.post("/api/demo/chat", json={"session_id": session, "message": message})
+    return client.post("/api/demo/chat", json={"session_id": session, "message": message, "run": client.run})
 
 
 def seed_operational(harness):
@@ -159,13 +162,18 @@ def test_demo_sessions_only_ever_see_the_demo_space(ai_settings, harness):
     first = demo_client(ai_settings, harness)
     first_id = chat(first, "¿Tienen piscina?", session=SESSION).json()["conversation_id"]
 
-    # Otra sesión de demo comparte el espacio sintético (como una cola real), pero nunca la operación.
-    second = demo_client(ai_settings, harness)
-    ids = [item["conversation_id"] for item in second.get("/api/panel/queue").json()["conversations"]]
+    # Otra recepción de la MISMA corrida comparte la cola (como una recepción real), nunca la operación.
+    colleague = demo_client(ai_settings, harness, run=first.run)
+    ids = [item["conversation_id"] for item in colleague.get("/api/panel/queue").json()["conversations"]]
     assert ids == [first_id] and OPERATIONAL_ID not in ids
-    assert second.get(f"/api/panel/{first_id}").status_code == 200
-    assert second.get(f"/api/panel/{OPERATIONAL_ID}").status_code == 404
-    assert second.post(f"/api/panel/requests/{OPERATIONAL_ID}/reply", json={"body": "Hola"}).status_code == 404
+    assert colleague.get(f"/api/panel/{first_id}").status_code == 200
+    assert colleague.get(f"/api/panel/{OPERATIONAL_ID}").status_code == 404
+    assert colleague.post(f"/api/panel/requests/{OPERATIONAL_ID}/reply", json={"body": "Hola"}).status_code == 404
 
+    # Otra corrida (otra presentación) no ve nada de la primera.
+    second = demo_client(ai_settings, harness)
+    assert second.get("/api/panel/queue").json()["conversations"] == []
+    assert second.get(f"/api/panel/{first_id}").status_code == 404
     second_id = chat(second, "¿Cómo llego?", session=OTHER).json()["conversation_id"]
     assert second_id != first_id, "cada sesión de huésped escribe su propia conversación"
+    assert [item["conversation_id"] for item in first.get("/api/panel/queue").json()["conversations"]] == [first_id]

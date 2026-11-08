@@ -317,6 +317,14 @@
         shift: {start: SHIFT.start, end: SHIFT.end, timezone: TZ, in_shift: inShift(''), override: null, next_opening: nextOpening()},
         privacy_url: '', ai_enabled: false, mode: 'off', model: null, max_message_chars: 400, messages_per_session: 30});
     }
+    // Corrida: en la versión estática todo vive en este navegador, así que basta con emitir una y aceptarla.
+    if (path === '/api/demo/run' && method === 'POST') {
+      const bytes = new Uint8Array(12);
+      (window.crypto && window.crypto.getRandomValues ? window.crypto.getRandomValues(bytes) : bytes);
+      return json({run: `estatica-${Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').slice(0, 16)}`,
+        ttl_s: 86400}, 201);
+    }
+    if (path.startsWith('/api/demo/run/')) return json({run: decodeURIComponent(path.slice('/api/demo/run/'.length))});
     if (path === '/api/demo/conversation') {
       return json(snapshot(db, conversation(db, query.get('session_id'), false), +(query.get('after') || 0)));
     }
@@ -405,7 +413,7 @@
           ? result.offers.map(o => `${o.name}: ${o.available_units} libre(s)`).join(', ') || 'sin cupo' : '';
         add(db, conv, 'note', result.ok
           ? `PMS simulado · lectura ${result.read_at.slice(11, 16)}: ${offersText}. Preliminar: no bloquea cupos.`
-          : `PMS sin lectura (${result.reason}). Cupo desconocido: no informar disponibilidad.`, {author: me});
+          : `Disponibilidad por verificar: PMS sin lectura (${result.reason}). No informar cupos al huésped.`, {author: me});
         write();
         return json({...result, request: requestView(db, r, me)});
       }

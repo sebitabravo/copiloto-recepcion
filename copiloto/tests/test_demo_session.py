@@ -39,7 +39,7 @@ def test_demo_session_is_refused_with_403_and_without_a_cookie_when_disabled(set
 
 def test_demo_session_responses_never_carry_a_secret(settings, harness):
     client = client_for(settings, harness)
-    assert client.get("/api/demo/session").json() == {"demo": True, "name": None}
+    assert client.get("/api/demo/session").json() == {"demo": True, "name": None, "run": None}
     created = client.post("/api/demo/session")
     assert "panel-secret" not in created.text + created.headers.get("set-cookie", "")
 
@@ -47,12 +47,12 @@ def test_demo_session_responses_never_carry_a_secret(settings, harness):
 def test_demo_session_reports_the_existing_panel_identity(settings, harness):
     client = client_for(settings, harness)
     client.post("/api/panel/login", json={"name": "Camila", "password": "panel-secret"})
-    assert client.get("/api/demo/session").json() == {"demo": True, "name": "Camila"}
+    assert client.get("/api/demo/session").json() == {"demo": True, "name": "Camila", "run": None}
 
 
 def test_demo_session_disabled_reports_false_without_a_name(settings, harness):
     client = client_for(replace(settings, demo_enabled=False), harness)
-    assert client.get("/api/demo/session").json() == {"demo": False, "name": None}
+    assert client.get("/api/demo/session").json() == {"demo": False, "name": None, "run": None}
 
 
 def test_demo_session_post_rejects_an_oversized_body(settings, harness):

@@ -33,7 +33,10 @@
   // ---------- sesión de recepción ----------
 
   async function enter(name) {
-    await S.api('/api/demo/session', {method: 'POST', body: {name}, staff: true});
+    // Entra a la corrida de esta página con la llave de operador de este navegador (id estable en el servidor).
+    const body = {name, operator_key: S.operatorKey()};
+    if (S.run) body.run = S.run;
+    await S.api('/api/demo/session', {method: 'POST', body, staff: true});
     S.store.set('localStorage', NAME_KEY, name);
     state.me = name;
     $('inbox-name').textContent = name;
@@ -366,7 +369,7 @@
       if (result.more) list.append(S.el('li', '', `y ${result.more} tipo${result.more === 1 ? '' : 's'} más en el PMS`));
       box.append(list);
     } else {
-      box.append(S.el('p', 'warn', `Cupo desconocido: ${result.reason}. No informes disponibilidad; responde con un seguimiento honesto.`));
+      box.append(S.el('p', 'warn', `Disponibilidad por verificar: ${result.reason}. No informes cupos; responde con un seguimiento honesto.`));
     }
     if (detail.actions.reply) {
       const text = suggestion(result);

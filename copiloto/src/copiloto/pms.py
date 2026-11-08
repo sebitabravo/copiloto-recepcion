@@ -131,6 +131,31 @@ class UnavailablePmsAdapter(PmsAdapter):
         raise PmsUnavailable("El hotel no tiene PMS conectado: recepción verifica los cupos")
 
 
+class DemoPmsUnconfigured(UnavailablePmsAdapter):
+    """La demo sin inventario de prueba configurado: nunca lee el PMS de la operación."""
+
+    async def availability(self, checkin: date, checkout: date, adults: int, children: int) -> PmsReading:
+        raise PmsUnavailable("La demo no tiene inventario de prueba configurado: disponibilidad por verificar")
+
+
+def build_demo_pms_adapter(settings) -> PmsAdapter:
+    """Adaptador propio de la demo pública: un inventario de prueba, separado del de la operación.
+
+    DEMO_PMS_URL manda; sin ella, solo si el PMS operativo es el simulado autorizado se crea OTRA instancia
+    apuntando a él. Cualquier otra configuración (p. ej. un PMS real) deja la demo sin lecturas.
+    """
+    from copiloto.config import SANDBOX_PMS_URLS
+
+    url = (settings.demo_pms_url or (settings.pms_url if settings.demo_sandbox_authorized else "")).rstrip("/")
+    if not url:
+        return DemoPmsUnconfigured()
+    # El token de personal solo viaja al PMS simulado: un DEMO_PMS_URL ajeno recibe lecturas, nunca el token.
+    token = settings.pms_staff_token if url in SANDBOX_PMS_URLS else ""
+    return HttpPmsAdapter(url, settings.pms_timeout_s, staff_token=token,
+                          availability_path=settings.pms_availability_path,
+                          booking_path=settings.pms_booking_path, auth_header=settings.pms_auth_header)
+
+
 def build_pms_adapter(settings) -> PmsAdapter:
     """Elige el conector según configuración; `PMS_ADAPTER=none` deja el copiloto sin PMS."""
     if settings.pms_adapter == "none":

@@ -83,7 +83,7 @@ En la ficha, **Medición de esta solicitud**:
 
 ## PMS sin respuesta (opcional)
 
-En la ficha, marca **Simular caída** y toca **Consultar el PMS**: la bandeja dice «Cupo desconocido» y propone
+En la ficha, marca **Simular caída** y toca **Consultar el PMS**: la bandeja dice «Disponibilidad por verificar» y propone
 un seguimiento honesto. Para mostrarlo desde el huésped, arranca con `SIMULATE_DOWN=1` en el PMS: el resumen dice
 que no pudo consultar y la solicitud entra como «Cupos sin verificar».
 
