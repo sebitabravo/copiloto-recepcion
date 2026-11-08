@@ -23,11 +23,11 @@ presentar:
 | Comando | Servicios | RAM en reposo | Cuándo usarlo |
 | --- | --- | --- | --- |
 | `make up` | landing, copiloto, pms-mock | ~110 MB | Presentar `/demo`: huésped → recepción → respuesta |
-| `make up-full` | los anteriores + Chatwoot, Sidekiq, Postgres, Redis | ~1,3 GB | Probar la bandeja real, el widget y WhatsApp |
+| `make up-full` | los anteriores + Chatwoot, Sidekiq, Postgres, Redis | ~1,3 GB | Probar la bandeja real y el widget |
 
 Chatwoot, Sidekiq, Postgres y Redis están detrás del perfil `full` (`docker compose --profile full`), así
 que un `docker compose up -d` normal arranca solo la demo. `seed-chatwoot.sh`, `smoke-docker.sh`,
-`backup.sh` y `wa-e2e.sh` declaran ese perfil porque operan sobre Chatwoot. `wait-healthy.sh` y
+`backup.sh` declara ese perfil porque opera sobre Chatwoot. `wait-healthy.sh` y
 `preflight.sh` esperan solo los servicios que están corriendo, así que funcionan en ambos modos.
 `scripts/demo.sh up` sigue levantando el stack completo.
 
@@ -134,8 +134,8 @@ levantarlo. Prueba la restauración antes de depender de ella.
   caracteres. `/health?probe=readiness` revisa la base; el healthcheck de Docker usa la sonda `liveness`.
 - Los webhooks aceptan cuerpos de hasta 256 KB y las páginas de lectura tienen un límite de 60 solicitudes por
   minuto por IP. Si pones un proxy delante, el límite verá la IP del proxy: aplícalo también ahí.
-- CI en `.github/workflows/ci.yml` (pytest de `copiloto` y `pms_mock`, ruff sobre
-  los mismos cuatro, y los tests de la UI de la demo con `node --test scripts/test-demo-ui.mjs`).
+- CI en `.github/workflows/ci.yml` (pytest de `copiloto` y `pms_mock`, ruff sobre esos dos paquetes y
+  `scripts`, y los tests de la UI de la demo con `node --test`).
 
 ## Variables
 

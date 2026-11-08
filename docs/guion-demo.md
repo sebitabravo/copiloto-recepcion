@@ -41,25 +41,14 @@ Dos notas de operación:
    sin pedir credenciales. Si aparece "Sin sesión", el backend tiene la demo apagada (`DEMO_ENABLED`).
 4. Baja el zoom del navegador a 90 % para que entren las tres columnas en el proyector.
 
-## IA local (opcional)
+## IA por API (opcional)
 
-El modelo corre en Docker (llama.cpp + Qwen2.5-3B) y no cuesta por consulta:
+Con `LLM_API_KEY` en `.env` el copiloto usa un modelo por API (DeepSeek por defecto) y responde en
+lenguaje libre en uno o dos segundos. Sin la clave funciona el **flujo guiado**, que es el recorrido
+probado de punta a punta.
 
-```bash
-./scripts/demo.sh ia       # baja el modelo la primera vez (~2 GB) y reconecta el copiloto
-./scripts/demo.sh ia-off   # vuelve al flujo guiado determinista
-```
-
-Medido en este equipo: **38 s** el primer turno (el servidor arma la caché del prompt) y **3-8 s**
-en caliente. El modelo acierta ubicación y consultas con herramienta, pero **se equivoca en preguntas
-frecuentes aprobadas** y no interpreta fechas en lenguaje natural.
-
-Ojo: el **e2e recrea el copiloto con la configuración base** y deja la IA apagada (`mode: off`). Si quieres
-mostrarla, corre `./scripts/demo.sh ia` **después** del e2e (o del `up`), no antes.
-
-Por eso: el recorrido del miércoles va con el **flujo guiado** (correcto y rápido, validado por el e2e).
-Si quieres mostrar la IA, calienta el modelo con una pregunta de ubicación antes de presentar y evita
-las de disponibilidad.
+El copiloto se conecta al modelo al arrancar: después de cambiar la clave, recrea el servicio con
+`docker compose -f infra/docker-compose.yml --project-directory . up -d --force-recreate copiloto`.
 
 ## La consola, en tres perspectivas
 

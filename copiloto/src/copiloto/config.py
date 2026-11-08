@@ -50,7 +50,7 @@ class Settings:
     pms_url: str = "http://pms-mock:8200"
     pms_staff_url: str = "http://localhost:8200"
     pms_timeout_s: float = 4.0
-    # Conector del PMS: "http" usa el contrato de docs/conector-pms.md; "none" deja al hotel sin PMS.
+    # Conector del PMS: "http" usa el contrato HTTP del adaptador; "none" deja al hotel sin PMS.
     pms_adapter: str = "http"
     pms_availability_path: str = "/api/v1/availability"
     pms_booking_path: str = "/api/v1/bookings"

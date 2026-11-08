@@ -1,6 +1,6 @@
 """Adaptador del PMS. El resto del copiloto solo conoce `PmsAdapter`.
 
-`HttpPmsAdapter` habla con cualquier PMS que exponga el contrato de docs/conector-pms.md, y el
+`HttpPmsAdapter` habla con cualquier PMS que exponga el contrato HTTP del adaptador, y el
 servicio pms-mock lo implementa. `UnavailablePmsAdapter` cubre al hotel que todavía no tiene PMS
 conectado: el copiloto orienta y deriva, sin prometer disponibilidad.
 """
@@ -71,7 +71,7 @@ class PmsAdapter(ABC):
 
 
 class HttpPmsAdapter(PmsAdapter):
-    """Conector HTTP contra el contrato del copiloto (ver docs/conector-pms.md).
+    """Conector HTTP contra el contrato del copiloto.
 
     Rutas, cabecera de autorización y token se configuran por hotel: el mismo código sirve para el
     PMS simulado y para un PMS real que exponga el contrato, sin escribir una clase nueva.

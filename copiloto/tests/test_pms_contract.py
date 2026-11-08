@@ -1,6 +1,6 @@
 """Contrato del conector de PMS: lo que cualquier adaptador debe cumplir para servir al copiloto.
 
-Estas pruebas describen el contrato de docs/conector-pms.md y corren contra `HttpPmsAdapter`, que es
+Estas pruebas describen el contrato del adaptador y corren contra `HttpPmsAdapter`, que es
 el conector que se usa con un PMS real. Un proveedor que quiera integrarse tiene que pasar lo mismo.
 """
 

@@ -116,8 +116,6 @@ services:
       retries: 20
     restart: unless-stopped
 
-  # Puente Beds24 → contrato del copiloto. Solo se levanta con `--profile beds24`: el stack de la
-  # demo no lo necesita. Ver docs/conector-pms.md.
   copiloto:
     build: ./copiloto
     env_file:
@@ -181,8 +179,6 @@ services:
       retries: 20
     restart: unless-stopped
 
-  # Canal de WhatsApp de la demo. Solo con `--profile whatsapp` (make wa-up): usa OpenWA, un gateway NO oficial
-  # (WhatsApp Web automatizado). Pensado para un número dedicado de demo; ver docs/whatsapp-demo.md.
   landing:
     image: nginx:alpine
     environment:

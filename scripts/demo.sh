@@ -18,8 +18,6 @@ Uso: ./scripts/demo.sh <comando>
   test    Tests de copiloto y pms_mock
   e2e     4 casos reales contra el stack levantado
   smoke   Construye las imágenes y comprueba que arrancan
-  ia      Levanta el modelo local en Docker y reconecta el copiloto con IA
-  ia-off  Apaga el modelo y deja el copiloto en modo guiado
   down    Detiene el stack (conserva los datos)
   reset   BORRA los volúmenes y los archivos generados
 TXT

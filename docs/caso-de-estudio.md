@@ -83,8 +83,7 @@ correctas que reutilizaban una lectura anterior del PMS. Lo detectó la misma ba
 ```
 make test    137 pruebas del copiloto · 25 del PMS
 make e2e     4 escenarios sobre el stack real: FAQ, disponibilidad, fuera de turno, PMS caído
-make demo    verifica los servicios, levanta el modelo y lo precalienta
-scripts/model_eval.py    12 conversaciones contra cualquier modelo compatible
+make demo    verifica los servicios y comprueba que responden
 ```
 
 La prueba end-to-end comprueba lo que ve cada lado: que el huésped reciba respuesta en menos de un
