@@ -33,17 +33,8 @@ def runner(monkeypatch):
     return e2e.Runner(runtime, e2e.Results()), calls
 
 
-def test_restore_keeps_the_llm_overlay(runner, monkeypatch):
-    r, calls = runner
-    monkeypatch.setattr(e2e, "local_llm_running", lambda: True)
-    r.recreate("copiloto", {"SIMULATE_DOWN": "0"})
-    command, _env = calls[-1]
-    assert "infra/docker-compose.ia.yml" in command, command
-
-
 def test_restore_drops_the_test_shift_and_the_off_mode(runner, monkeypatch):
     r, calls = runner
-    monkeypatch.setattr(e2e, "local_llm_running", lambda: True)
     r.recreate("copiloto", {"SHIFT_START": "00:00", "SHIFT_END": "00:00", "AI_MODE": "off"})
     r.recreate("copiloto", {"SIMULATE_DOWN": "0"})
     _command, env = calls[-1]
@@ -51,29 +42,11 @@ def test_restore_drops_the_test_shift_and_the_off_mode(runner, monkeypatch):
     assert env.get("AI_MODE") != "off", env
 
 
-def test_cpu_profile_keeps_its_own_overlay(runner, monkeypatch):
-    """Con el modelo en CPU, la recreación tiene que mantener los topes de ese perfil."""
-    r, calls = runner
-    monkeypatch.setattr(e2e, "local_llm_running", lambda: True)
-    monkeypatch.setattr(e2e, "local_llm_is_cpu", lambda: True)
-    r.recreate("copiloto", {"SIMULATE_DOWN": "0"})
-    command, _env = calls[-1]
-    assert "infra/docker-compose.ia-cpu.yml" in command, command
-
-
-def test_no_local_model_means_no_overlay(runner, monkeypatch):
-    r, calls = runner
-    monkeypatch.setattr(e2e, "local_llm_running", lambda: False)
-    r.recreate("copiloto", {"SIMULATE_DOWN": "0"})
-    command, _env = calls[-1]
-    assert "infra/docker-compose.ia.yml" not in command, command
-
-
 def test_spurious_docker_failure_is_reported_as_failure(runner, monkeypatch):
-    """Si el estado de la IA no coincide con lo que se pidió levantar, la restauración falla."""
+    """Si la recreación apaga una IA que estaba activa, la restauración falla."""
     r, _calls = runner
-    monkeypatch.setattr(e2e, "local_llm_running", lambda: True)
-    monkeypatch.setattr(r, "ai_enabled", lambda: False)
+    states = iter([True, False])
+    monkeypatch.setattr(r, "ai_enabled", lambda: next(states))
     passed = r.restore("copiloto")
     assert passed is False
     assert r.results.rows[-1][2] == "FAIL"
@@ -81,7 +54,6 @@ def test_spurious_docker_failure_is_reported_as_failure(runner, monkeypatch):
 
 def test_restore_passes_when_the_ai_state_matches(runner, monkeypatch):
     r, _calls = runner
-    monkeypatch.setattr(e2e, "local_llm_running", lambda: True)
     monkeypatch.setattr(r, "ai_enabled", lambda: True)
     passed = r.restore("copiloto")
     assert passed is True

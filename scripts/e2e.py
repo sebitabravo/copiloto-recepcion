@@ -23,30 +23,6 @@ CHECKIN = date.today() + timedelta(days=150)
 CHECKOUT = CHECKIN + timedelta(days=3)
 
 
-def local_llm_running() -> bool:
-    """¿El perfil de IA local está corriendo? Se pregunta a Docker por la etiqueta del servicio `llm`."""
-    try:
-        out = subprocess.run(
-            ["docker", "ps", "--filter", "label=com.docker.compose.service=llm", "--format", "{{.ID}}"],
-            capture_output=True, timeout=20,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return out.returncode == 0 and bool(out.stdout.strip())
-
-
-def local_llm_is_cpu() -> bool:
-    """¿El modelo local corre con la variante CPU? Se mira la imagen del contenedor `llm`."""
-    try:
-        out = subprocess.run(
-            ["docker", "ps", "--filter", "label=com.docker.compose.service=llm", "--format", "{{.Image}}"],
-            capture_output=True, timeout=20,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return out.returncode == 0 and b"-cuda" not in out.stdout
-
-
 def read_runtime():
     values = {}
     for raw in (ROOT / ".env.runtime").read_text(encoding="utf-8").splitlines():
@@ -120,14 +96,7 @@ class Runner:
         environment.pop("SHIFT_END", None)
         environment.update(overrides)
         environment["COMPOSE_PROJECT_NAME"] = "copiloto"
-        # Con el modelo local levantado, el overlay de IA tiene que seguir en juego: sin él el
-        # copiloto vuelve en modo guiado y la demo queda muda para el resto del día.
         files = ["-f", "infra/docker-compose.yml"]
-        if local_llm_running():
-            files += ["-f", "infra/docker-compose.ia.yml"]
-            if local_llm_is_cpu():
-                # El perfil de CPU sube los topes de tiempo: perderlo deja el turno sin margen.
-                files += ["-f", "infra/docker-compose.ia-cpu.yml"]
         command = [
             "docker",
             "compose",
@@ -157,12 +126,13 @@ class Runner:
 
     def restore(self, service):
         """Recrea un servicio con la configuración normal y comprueba que la IA quedó como estaba."""
+        before = self.ai_enabled() if service == "copiloto" else None
         self.recreate(service, {"SIMULATE_DOWN": "0"})
         if service != "copiloto":
             return self.results.check("restore", service, True, "SIMULATE_DOWN=0 restored; health 200")
-        expected = local_llm_running()
+        expected = before
         actual = self.ai_enabled()
-        detail = f"IA {'activa' if actual else 'apagada'}; esperada {'activa' if expected else 'apagada'}"
+        detail = f"IA {'activa' if actual else 'apagada'}; antes {'activa' if expected else 'apagada'}"
         return self.results.check("restore", service, actual is not None and actual == expected, detail)
 
     def wait_health(self, base_url):

@@ -111,7 +111,7 @@ corre en CI.
   menú de opciones; nunca queda mudo ni muestra jerga de sistema.
 - **Privacidad**: los eventos no guardan texto; el historial vive en `ai_sessions` y se borra con la retención
   (las sesiones de la demo, a las 24 h). Con un proveedor externo, el aviso de privacidad informa que un tercero
-  procesa los mensajes; con el modelo local de [IA local](ia-local.md), los mensajes no salen del equipo.
+  procesa los mensajes: en modo API el texto sale hacia el proveedor del modelo, y el aviso de privacidad lo declara.
 
 ## Relación con los informes
 

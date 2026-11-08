@@ -29,7 +29,7 @@ Dos notas de operación:
 
 ## Treinta minutos antes
 
-1. `./scripts/preflight.sh` — verifica los servicios y (si corresponde) el modelo local.
+1. `./scripts/preflight.sh` — verifica los servicios del stack.
 2. Deja abiertas estas pestañas, en este orden:
    - `http://localhost:8080` — portada.
    - `http://localhost:8080/demo` — consola de demo (pestaña Huésped).

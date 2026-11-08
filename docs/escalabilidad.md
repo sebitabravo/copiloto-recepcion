@@ -7,7 +7,7 @@ lucirse.
 ## Qué es hoy
 
 Una instancia por hotel. Un proceso de FastAPI, una base SQLite, una cuenta de Chatwoot, un archivo
-de datos del hotel y un modelo local. Levanta con `docker compose` y atiende una propiedad.
+de datos del hotel y un modelo por API. Levanta con `docker compose` y atiende una propiedad.
 
 Eso no es un defecto accidental: es el modelo de negocio declarado en la Unidad 2 —instalación,
 capacitación y soporte por pyme—. Pero conviene saber exactamente dónde se rompe si mañana entra el
@@ -48,7 +48,7 @@ Investigado en octubre de 2026 sobre precios y capacidades públicas.
 
 Dos cosas que ellos tienen y aquí no: **muchos canales** (Instagram, Facebook, email, OTA) y
 **muchas integraciones de PMS** (100 a 250). Dos que aquí sí hay y allá no: **autohospedaje real con
-modelo local** —sin costo por consulta ni datos saliendo del hotel— y **guardrails medidos** con una
+modelo por API** —sin infraestructura propia— y **guardrails medidos** con una
 batería reproducible: no inventa datos, no reserva sin el «sí» del huésped y nunca confirma solo.
 
 ## Lo que le faltaba al lado del hotel

@@ -15,7 +15,7 @@ Uso: ./scripts/demo.sh <comando>
   seed    Vuelve a sembrar Chatwoot (idempotente)
   status  Estado de los contenedores
   creds   Usuarios demo y token del PMS
-  test    Tests de copiloto, pms_mock, pms_bridge y wa_bridge
+  test    Tests de copiloto y pms_mock
   e2e     4 casos reales contra el stack levantado
   smoke   Construye las imágenes y comprueba que arrancan
   ia      Levanta el modelo local en Docker y reconecta el copiloto con IA
@@ -57,54 +57,13 @@ case "$cmd" in
   status) "${COMPOSE[@]}" ps ;;
   creds) ./scripts/show-credentials.sh ;;
   test)
-    for service in copiloto pms_mock pms_bridge wa_bridge; do
+    for service in copiloto pms_mock; do
       echo "== $service"
       (cd "$service" && uv run pytest -q)
     done
     ;;
   e2e) uv run --with httpx --with tzdata python scripts/e2e.py ;;
   smoke) ./scripts/smoke-docker.sh ;;
-  ia)
-    compose_ia=(docker compose -f infra/docker-compose.yml -f infra/docker-compose.ia.yml)
-    # La detección no oculta sus errores: si Docker falla, el mensaje lo dice en vez de culpar a la GPU.
-    gpu_probe="$(MSYS_NO_PATHCONV=1 docker run --rm --gpus all --entrypoint /app/llama-server \
-      ghcr.io/ggml-org/llama.cpp:server-cuda-b12169 --list-devices 2>&1)"
-    if [ "${LLM_GPU:-auto}" != 0 ] && printf '%s' "$gpu_probe" | grep -q CUDA0; then
-      echo "GPU NVIDIA detectada: el modelo corre en la GPU."
-    else
-      compose_ia+=(-f infra/docker-compose.ia-cpu.yml)
-      if [ "${LLM_GPU:-auto}" = 0 ]; then
-        echo "LLM_GPU=0: el modelo corre en CPU (más lento)."
-      elif printf '%s' "$gpu_probe" | grep -qE "error|cannot|failed|denied"; then
-        echo "Docker no pudo probar la GPU; el modelo corre en CPU. Detalle:"
-        printf '%s\n' "$gpu_probe" | tail -3
-      else
-        echo "Sin GPU NVIDIA en Docker: el modelo corre en CPU (más lento)."
-      fi
-    fi
-    compose_ia+=(--project-directory .)
-    echo "Levantando el modelo local (la primera vez descarga ~2,5 GB dentro de Docker)…"
-    "${compose_ia[@]}" up -d llm
-    ready=0
-    for _ in $(seq 1 240); do
-      if curl -fsS -o /dev/null http://localhost:11434/health 2>/dev/null; then ready=1; break; fi
-      sleep 5
-    done
-    if [ "$ready" != 1 ]; then
-      echo "El modelo no respondió. Revisa: docker compose -f infra/docker-compose.yml -f infra/docker-compose.ia.yml logs llm" >&2
-      exit 1
-    fi
-    echo "Modelo listo. Reconectando el copiloto con IA…"
-    "${compose_ia[@]}" up -d --force-recreate copiloto
-    ./scripts/wait-healthy.sh
-    curl -s http://localhost:8100/api/demo/status; echo
-    ;;
-  ia-off)
-    docker compose -f infra/docker-compose.yml -f infra/docker-compose.ia.yml --project-directory . stop llm >/dev/null 2>&1 || true
-    "${COMPOSE[@]}" up -d --force-recreate copiloto
-    ./scripts/wait-healthy.sh
-    curl -s http://localhost:8100/api/demo/status; echo
-    ;;
   down)
     confirm "Esto detiene el stack (los datos se conservan). ¿Seguir?"
     "${COMPOSE[@]}" down
