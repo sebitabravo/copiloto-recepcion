@@ -31,7 +31,7 @@
 <link rel="preload" href="fonts/instrument-serif-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="demo.css?v=20261107a">
-<link rel="stylesheet" href="demo-console.css?v=20261109c">
+<link rel="stylesheet" href="demo-console.css?v=20261109e">
 </head>
 <body>
 <a class="skip" href="#main">Saltar al contenido</a>
@@ -177,7 +177,7 @@
         <p id="reset-help" class="small">Reinicia solo el historial de esta conversación; no elimina reservas del PMS ni conversaciones de Chatwoot.</p>
       </div>
       <div class="workspace-context">
-        <p class="workspace-note">La derivación de este chat es simulada: no avisa a recepción. <a href="#canal">Usar el canal real</a>.</p>
+        <p class="workspace-note">Tu conversación aparece en la recepción de esta demo. No se envía a Chatwoot ni a una recepción real; <a href="#canal">el canal real es aparte</a>.</p>
         <div class="journey-actions" aria-label="Seguir explorando">
           <button type="button" class="text-button" data-demo-view="recepcion">Ver cola de recepción →</button>
           <button type="button" class="text-button" data-demo-view="admin">Ver habitaciones y reservas →</button>
@@ -265,13 +265,13 @@
     <section id="recepcion-console" class="card console-card" aria-labelledby="recepcion-title">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">02 · Recepción · solo lectura</p>
+          <p class="eyebrow">02 · Recepción · demo operativa</p>
           <h2 id="recepcion-title">Prioriza lo que necesita al equipo.</h2>
         </div>
         <span class="pill" id="recepcion-session"></span>
       </div>
-      <p class="section-intro">Cola recibida del servidor de recepción: espera, riesgo de SLA y contexto de cada conversación. Abre una fila para leer el detalle; aquí no se responde ni se confirma una reserva.</p>
-      <p class="workspace-note">Esta cola no recibe las derivaciones simuladas del chat de prueba. El canal real es <a href="#canal">Chatwoot</a>.</p>
+      <p class="section-intro">Cola del espacio de demostración: espera, riesgo de SLA y la conversación completa. Abre una fila para leerla y responder como recepción. La reserva se confirma en el PMS.</p>
+      <p class="workspace-note">Aquí solo aparecen las conversaciones creadas en esta demo. Los datos reales del hotel no se muestran; <a href="#canal">Chatwoot</a> sigue siendo el canal operativo.</p>
       <div class="journey-actions" aria-label="Otras perspectivas">
         <button type="button" class="text-button" data-demo-view="huesped">← Volver a la conversación</button>
         <button type="button" class="text-button" data-demo-view="admin">Ver habitaciones y reservas →</button>
@@ -331,9 +331,9 @@
 </footer>
 
 <script src="config.js?v=20261107a" defer></script>
-<script src="demo.js?v=20261109c" defer></script>
+<script src="demo.js?v=20261109e" defer></script>
 <script src="voice.js?v=20261108a" defer></script>
-<script src="console.js?v=20261109a" defer></script>
+<script src="console.js?v=20261109f" defer></script>
 <script src="demo-journey.js?v=20261109c" defer></script>
 </body>
 </html>

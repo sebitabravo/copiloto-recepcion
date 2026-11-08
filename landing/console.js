@@ -63,8 +63,9 @@
 
   function activateRecepcion() {
     startQueuePoll();
-    if (selectedId) showDetail(selectedId, {quiet: true});
-    else refreshQueue();
+    // Entrar a Recepción muestra la cola: el detalle se abre al elegir una fila, no se hereda de la visita anterior.
+    selectedId = null;
+    refreshQueue();
   }
 
   function selectTab(index, options = {}) {
@@ -473,6 +474,67 @@
     }
   }
 
+  const TRANSCRIPT_SPEAKERS = {guest: 'Huésped', assistant: 'Copiloto', staff: 'Recepción'};
+  function transcriptLine(message) {
+    const item = create('li', `transcript-line ${message.role || ''}`.trim());
+    item.append(
+      create('span', 'transcript-who', TRANSCRIPT_SPEAKERS[message.role] || 'Mensaje'),
+      create('p', 'transcript-body', message.body || '')
+    );
+    return item;
+  }
+
+  // Respuesta de la persona en el espacio aislado de la demo: nunca escribe a un huésped real.
+  async function replyToDemoConversation(conversationId, form, input, status) {
+    const text = input.value.trim();
+    if (!text) return;
+    const send = form.querySelector('button');
+    if (send) send.disabled = true;
+    status.textContent = 'Enviando respuesta…';
+    try {
+      const response = await api(`/api/panel/${encodeURIComponent(String(conversationId))}/reply`, {
+        method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({body: text})
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        status.textContent = (data && data.detail) || 'No se pudo enviar la respuesta. Reintenta en un momento.';
+        return;
+      }
+      const transcript = get('recepcion-transcript');
+      if (transcript && data && data.message) transcript.append(transcriptLine(data.message));
+      input.value = '';
+      status.textContent = 'Respuesta enviada en este espacio de demostración.';
+    } catch (_) {
+      status.textContent = 'Sin conexión con el servidor de recepción. Reintenta en un momento.';
+    } finally {
+      if (send) send.disabled = false;
+    }
+  }
+
+  function renderReply(conversationId, container) {
+    const form = create('form', 'console-reply');
+    form.id = 'recepcion-reply-form';
+    const label = create('label', 'console-reply-label', 'Responder como recepción');
+    label.setAttribute('for', 'recepcion-reply-input');
+    const input = create('textarea', 'console-reply-input');
+    input.id = 'recepcion-reply-input';
+    input.setAttribute('rows', '2');
+    input.setAttribute('maxlength', '1000');
+    input.setAttribute('placeholder', 'Escribe la respuesta a esta conversación…');
+    const send = create('button', 'button', 'Enviar respuesta');
+    send.type = 'submit';
+    const status = create('p', 'small console-reply-status');
+    status.id = 'recepcion-reply-status';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    form.append(label, input, send, status);
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      replyToDemoConversation(conversationId, form, input, status);
+    });
+    container.append(form);
+  }
+
   function detailRow(dl, term, value) {
     dl.append(create('dt', '', term), create('dd', '', value === undefined || value === null || value === '' ? '—' : value));
   }
@@ -529,6 +591,17 @@
       notes.append(item);
     }
     recepcionDetailBody.append(notes);
+
+    const transcriptTitle = create('h3', 'console-transcript-title', 'Conversación de la demo');
+    const transcript = create('ol', 'console-transcript');
+    transcript.id = 'recepcion-transcript';
+    const messages = Array.isArray(snapshot.messages) ? snapshot.messages : [];
+    if (!messages.length) transcript.append(create('li', 'console-note-empty', 'Sin mensajes en esta conversación.'));
+    for (const message of messages) {
+      if (message && typeof message === 'object') transcript.append(transcriptLine(message));
+    }
+    recepcionDetailBody.append(transcriptTitle, transcript);
+    renderReply(snapshot.conversation_id, recepcionDetailBody);
 
     const pmsUrl = typeof (snapshot && snapshot.pms_url) === 'string' && /^https?:\/\//.test(snapshot.pms_url) ? snapshot.pms_url : null;
     const foot = create('p', 'small', 'El copiloto nunca confirma: la confirmación la hace una persona.');

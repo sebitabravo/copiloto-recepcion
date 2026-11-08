@@ -559,6 +559,20 @@
     }
     return success;
   }
+  // La respuesta de recepción llega por la conversación de demo: se sondea y nunca se duplica.
+  const staffSeen = new Set();
+  async function syncStaffReplies() {
+    try {
+      const data = await request(`/api/demo/conversation?session_id=${encodeURIComponent(sessionId)}`);
+      for (const message of Array.isArray(data && data.messages) ? data.messages : []) {
+        if (!message || message.role !== 'staff' || staffSeen.has(message.id)) continue;
+        staffSeen.add(message.id);
+        addBubble('staff', message.body);
+      }
+    } catch (_) { /* sin conexión: el chat de la demo sigue disponible */ }
+  }
+  window.setInterval(syncStaffReplies, 6000);
+
   function clearConversation() {
     invalidateProposal();
     messageList.replaceChildren();
@@ -587,6 +601,7 @@
       await request('/api/demo/reset', {session_id:sessionId});
       sessionId = newSessionId();
       persistSession(sessionId);
+      staffSeen.clear();
       clearConversation();
       loadStatus();
     } catch (error) { showChatError(error.message, resetConversation); }

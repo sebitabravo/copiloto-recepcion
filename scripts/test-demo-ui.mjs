@@ -101,26 +101,30 @@ async function app(status = {}, responses = [], options = {}) {
   // Skip decorative scrolling only; chat and all scenario handlers execute unchanged.
   ids.delete('topbar'); ids.delete('hero-stage');
   const pendingTimers = []; const timerDelays = [];
+  const pollers = [];
   const window = {
     COPILOTO_CONFIG: options.config || {}, matchMedia: () => ({matches: !options.animate}), crypto: {randomUUID: () => '12345678-1234-1234-1234-123456789012'},
     sessionStorage: {getItem() {}, setItem() {}}, addEventListener() {},
-    setInterval() {}, clearTimeout() {},
+    setInterval(fn) { pollers.push(fn); return pollers.length; }, clearTimeout() {},
     setTimeout: options.manualTimers ? (fn, ms) => { if (ms < 90000) { pendingTimers.push(fn); timerDelays.push(ms); } return 1; }
       : (fn, ms) => { if (ms < 90000) queueMicrotask(fn); return 1; }
   };
   vm.runInNewContext(source, {window, document, Intl, Date, Uint8Array, AbortController, URL,
     location: options.location || {hostname: 'localhost', protocol: 'http:'},
-    fetch: async (url, options) => {
+    fetch: async (url, init = {}) => {
       requests.push(url);
-      const body = options.body && JSON.parse(options.body);
+      const body = init.body && JSON.parse(init.body);
       let data = {ai_enabled: true, autonomous_booking: true, sandbox: true, ...status};
+      if (url.includes('/api/demo/conversation')) data = options.conversation || {conversation_id: null, step: null, messages: []};
       if (url.endsWith('/chat')) { sent.push(body.message); data = responses.shift() || {reply: 'Réponse de test', events: [], quick_replies: []}; }
       return {ok: true, json: async () => data};
     }});
   const settle = async () => { for (let i = 0; i < 100; i++) await Promise.resolve(); };
   await settle();
-  return {get, scenarios, sent, requests, settle, document, window, timerDelays,
+  return {get, scenarios, sent, requests, settle, document, window, timerDelays, conversation: options.conversation,
     flushTimers: () => { while (pendingTimers.length) pendingTimers.shift()(); },
+    // Sondeo manual: ejecuta el temporizador registrado por la página, sin esperar relojes reales.
+    syncStaff: async () => { for (const fn of pollers) await fn(); await settle(); },
     scripts: () => document.body.querySelectorAll('script'),
     async send(text) { get('message-input').value = text; await get('chat-form').emit('submit'); await settle(); }};
 }
@@ -511,7 +515,9 @@ test('existing tab keys, deferred admin and single queue poll preserve triage cr
   await ui.get('recepcion-queue').querySelector('button').emit('click'); await ui.settle();
   const detailRequests = ui.requests.length; await ui.poll(); assert.equal(ui.requests.length, detailRequests);
   await ui.click('tab-huesped'); await ui.click('tab-recepcion');
-  assert.equal(ui.requests.at(-1).path, '/api/panel/41', 'return to reception refreshes the selected detail');
+  assert.equal(ui.requests.at(-1).path, '/api/panel/queue', 'volver a recepción recarga la cola');
+  assert.equal(ui.get('recepcion-detail').hidden, true, 'la cola sustituye al detalle anterior');
+  assert.deepEqual(queueNames(ui), [allQueueNames[0], 'Camila Soto']);
   assertReadOnly(ui);
 });
 
@@ -776,4 +782,93 @@ test('dead landing hooks disappear and the demo gate reads as a state', () => {
   // La consola sondea GET /api/demo/session al cargar y deshabilita el interruptor si el servidor apagó la demo.
   assert.match(consoleSource, /\/api\/demo\/session/);
   assert.match(consoleSource, /demoSwitch\.disabled =/);
+});
+
+// --- Caso operativo aislado: recepción lee la transcripción y responde la demo ---
+
+const operationalSnapshot = messages => ({
+  conversation_id: 41, contact_name: 'Huésped demo', step: 'handed_off', now: 1240, data: {},
+  sla: {started_at: 1000, red_s: 180, amber_s: 120},
+  pms_url: 'http://localhost:8200/admin', notes: [], messages
+});
+
+test('reception detail reads the demo transcript and replies through the isolated endpoint', async () => {
+  const sent = [];
+  const snapshot = operationalSnapshot([
+    {id: 1, role: 'guest', body: 'Quiero hablar con una persona', created_at: 1000},
+    {id: 2, role: 'assistant', body: 'Derivación simulada: no se notificó a recepción.', created_at: 1001},
+    {id: 3, role: 'staff', body: 'Soy Camila de recepción.', created_at: 1002}
+  ]);
+  const ui = await consoleApp([{conversation_id: 41, contact_name: 'Huésped demo', waiting_s: 180, needs_human: true, step: 'handed_off'}], snapshot, {respond: async request => {
+    if (request.path === '/api/panel/41/reply') {
+      sent.push({method: request.method, body: JSON.parse(request.body)});
+      return {ok: true, status: 200, json: async () => ({message: {id: 4, role: 'staff', body: 'Te espero en recepción.', created_at: 1200}})};
+    }
+    return null;
+  }});
+  await ui.get('recepcion-queue').querySelector('button').emit('click'); await ui.settle();
+
+  const transcript = ui.get('recepcion-transcript');
+  assert.ok(transcript, 'el detalle muestra la transcripción de la conversación de demo');
+  const speakers = transcript.querySelectorAll('.transcript-who').map(node => node.textContent);
+  assert.deepEqual(speakers, ['Huésped', 'Copiloto', 'Recepción']);
+  assert.match(transcript.textContent, /Quiero hablar con una persona/);
+  assert.match(transcript.textContent, /Soy Camila de recepción\./);
+
+  await ui.change('recepcion-reply-input', '  Te espero en recepción.  ');
+  await ui.get('recepcion-reply-form').emit('submit'); await ui.settle();
+  assert.deepEqual(sent, [{method: 'POST', body: {body: 'Te espero en recepción.'}}]);
+  assert.equal(ui.get('recepcion-reply-input').value, '');
+  assert.equal(transcript.querySelectorAll('.transcript-line').length, 4, 'la respuesta aparece una sola vez');
+  assert.match(transcript.textContent, /Te espero en recepción\./);
+
+  await ui.change('recepcion-reply-input', '   ');
+  await ui.get('recepcion-reply-form').emit('submit'); await ui.settle();
+  assert.equal(sent.length, 1, 'una respuesta vacía no se envía');
+});
+
+test('a rejected reply explains itself and keeps the text to retry', async () => {
+  const ui = await consoleApp([{conversation_id: 41, contact_name: 'Huésped demo', waiting_s: 180, needs_human: true}],
+    operationalSnapshot([{id: 1, role: 'guest', body: 'Hola', created_at: 1000}]), {
+      respond: async request => request.path === '/api/panel/41/reply'
+        ? {ok: false, status: 403, json: async () => ({detail: 'Las respuestas reales se envían desde Chatwoot'})} : null
+    });
+  await ui.get('recepcion-queue').querySelector('button').emit('click'); await ui.settle();
+  await ui.change('recepcion-reply-input', 'Hola');
+  await ui.get('recepcion-reply-form').emit('submit'); await ui.settle();
+  assert.match(ui.get('recepcion-reply-status').textContent, /Chatwoot|no se pudo/i);
+  assert.equal(ui.get('recepcion-reply-input').value, 'Hola', 'el texto se conserva para reintentar');
+});
+
+test('the guest sees a staff reply once, even when the conversation is polled again', async () => {
+  const conversation = {conversation_id: -7, step: 'handed_off', messages: []};
+  const ui = await app({}, [{reply: 'Te derivo a una persona.', events: [{type: 'handoff'}]}], {conversation});
+  await ui.send('Quiero hablar con una persona');
+  assert.equal(assistantBubbles(ui).length, 1);
+
+  conversation.messages.push({id: 1, role: 'guest', body: 'Quiero hablar con una persona', created_at: 1});
+  conversation.messages.push({id: 2, role: 'assistant', body: 'Te derivo a una persona.', created_at: 2});
+  await ui.syncStaff();
+  assert.equal(ui.get('messages').querySelectorAll('.staff').length, 0, 'no repite lo que ya está en el chat');
+
+  conversation.messages.push({id: 3, role: 'staff', body: 'Soy Camila de recepción.', created_at: 3});
+  await ui.syncStaff();
+  const staff = ui.get('messages').querySelectorAll('.staff');
+  assert.equal(staff.length, 1);
+  assert.match(staff[0].textContent, /Soy Camila de recepción\./);
+
+  await ui.syncStaff();
+  assert.equal(ui.get('messages').querySelectorAll('.staff').length, 1, 'idempotente al volver a consultar');
+});
+
+test('returning to reception shows the queue again instead of the last open detail', async () => {
+  const ui = await consoleApp([{conversation_id: 41, contact_name: 'Huésped demo', waiting_s: 180, needs_human: true}],
+    operationalSnapshot([{id: 1, role: 'guest', body: 'Hola', created_at: 1000}]));
+  await ui.get('recepcion-queue').querySelector('button').emit('click'); await ui.settle();
+  assert.equal(ui.get('recepcion-detail').hidden, false);
+  await ui.click('tab-huesped');
+  await ui.click('tab-recepcion');
+  assert.equal(ui.get('recepcion-queue').hidden, false, 'volver a recepción muestra la cola');
+  assert.equal(ui.get('recepcion-detail').hidden, true);
+  assert.equal(ui.get('recepcion-queue').querySelectorAll('button').length, 1);
 });

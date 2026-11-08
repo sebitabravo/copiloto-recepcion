@@ -361,3 +361,50 @@
   #recepcion-detail .detail-list dt { padding-bottom: 0; border-bottom: 0; }
   #recepcion-detail .detail-list dd { padding-top: 2px; margin-bottom: 0; }
 }
+
+/* Caso operativo de la demo: recepción lee la conversación y responde. */
+.message.staff .bubble { background: var(--ok-bg); border-left: 3px solid var(--accent-2); }
+.message.staff .bubble::before {
+  content: "Recepción";
+  display: block;
+  font: 600 .62rem var(--font-ui);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+.console-transcript-title {
+  margin: 18px 0 0;
+  font: 600 .72rem var(--font-ui);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.console-transcript {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 340px;
+  overflow: auto;
+}
+.transcript-line { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card-2); }
+.transcript-line.staff { border-color: var(--accent); background: var(--card); }
+.transcript-who { display: block; font: 600 .62rem var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.transcript-line.staff .transcript-who { color: var(--accent); }
+.transcript-body { margin: 2px 0 0; font-size: .84rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.console-reply { margin-top: 14px; display: grid; gap: 6px; }
+.console-reply-label { font: 600 .74rem var(--font-ui); }
+.console-reply-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font: 400 .86rem var(--font-ui);
+  resize: vertical;
+}
+.console-reply .button { justify-self: start; }
+.console-reply-status { margin: 0; min-height: 1.2em; color: var(--muted); }
