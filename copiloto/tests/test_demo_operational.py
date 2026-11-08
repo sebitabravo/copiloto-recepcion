@@ -9,6 +9,8 @@ Reglas que se fijan aquí:
 6. Dos sesiones de demo no se ven entre sí.
 """
 
+from dataclasses import replace
+
 from conftest import FakeChatwoot, FakeLlm, call, say
 from copiloto.ai.agent import Agent
 from copiloto.app import create_app
@@ -24,7 +26,8 @@ OPERATIONAL_ID = 7
 def client_for(settings, harness, llm=None):
     agent = Agent(llm, harness.hotel, harness.pms, settings, lambda: harness.clock()) if llm else None
     app = create_app(
-        settings,
+        # Sin modelo guionado, la demo corre su motor por defecto: el flujo guiado.
+        settings if llm else replace(settings, demo_ai=False),
         chatwoot=FakeChatwoot(),
         pms=harness.pms,
         clock=harness.clock,
@@ -104,42 +107,51 @@ def test_handoff_marks_the_demo_conversation_as_waiting_for_a_person(ai_settings
 
 def test_demo_detail_returns_the_transcript(ai_settings, harness):
     client = demo_client(ai_settings, harness)
-    body = chat(client, "¿Tienen piscina?").json()
+    body = chat(client, "¿Dónde queda la hostería?").json()
     conversation_id = body["conversation_id"]
 
     snapshot = client.get(f"/api/panel/{conversation_id}").json()
     roles = [message["role"] for message in snapshot["messages"]]
     assert roles[0] == "guest" and roles[-1] == "assistant"
-    assert snapshot["messages"][0]["body"] == "¿Tienen piscina?"
-    assert body["reply"] in snapshot["messages"][-1]["body"]
+    assert snapshot["messages"][0]["body"] == "¿Dónde queda la hostería?"
+    assert snapshot["messages"][-1]["body"] in body["reply"]
+
+
+def demo_request(client, session=SESSION):
+    conversation_id = chat(client, "Hablar con recepción", session=session).json()["conversation_id"]
+    request_id = next(item["id"] for item in client.get("/api/panel/requests").json()["requests"]
+                      if item["conversation_id"] == conversation_id)
+    return conversation_id, request_id
 
 
 def test_reply_is_only_allowed_on_demo_conversations(ai_settings, harness):
-    seed_operational(harness)
+    demo = demo_client(ai_settings, harness)
+    _, request_id = demo_request(demo)
     staff = client_for(ai_settings, harness)
     headers = {"X-Panel-Token": ai_settings.panel_token}
-    blocked = staff.post(f"/api/panel/{OPERATIONAL_ID}/reply", json={"body": "Hola"}, headers=headers)
-    assert blocked.status_code == 403, "una respuesta real no se envía desde la demo"
+    blocked = staff.post(f"/api/panel/requests/{request_id}/reply", json={"body": "Hola"}, headers=headers)
+    assert blocked.status_code == 404, "el personal real no ve ni escribe solicitudes de demo"
 
-    demo = demo_client(ai_settings, harness)
-    conversation_id = chat(demo, "¿Tienen piscina?").json()["conversation_id"]
-    assert demo.post(f"/api/panel/{OPERATIONAL_ID}/reply", json={"body": "Hola"}).status_code == 404
-    sent = demo.post(f"/api/panel/{conversation_id}/reply", json={"body": "  Soy Camila, te ayudo.  "})
+    assert demo.post(f"/api/panel/requests/{request_id}/take").status_code == 200
+    sent = demo.post(f"/api/panel/requests/{request_id}/reply", json={"body": "  Soy Camila, te ayudo.  "})
     assert sent.status_code == 200
     assert sent.json()["message"]["role"] == "staff"
     assert sent.json()["message"]["body"] == "Soy Camila, te ayudo."
-    assert demo.post(f"/api/panel/{conversation_id}/reply", json={"body": "   "}).status_code == 400
+    assert demo.post(f"/api/panel/requests/{request_id}/reply", json={"body": "   "}).status_code == 400
 
 
 def test_guest_sees_the_staff_reply_when_asking_again(ai_settings, harness):
     demo = demo_client(ai_settings, harness)
-    conversation_id = chat(demo, "Quiero hablar con una persona").json()["conversation_id"]
-    demo.post(f"/api/panel/{conversation_id}/reply", json={"body": "Soy Camila de recepción."})
+    conversation_id, request_id = demo_request(demo)
+    demo.post(f"/api/panel/requests/{request_id}/take")
+    demo.post(f"/api/panel/requests/{request_id}/reply", json={"body": "Soy Camila de recepción."})
 
     seen = demo.get("/api/demo/conversation", params={"session_id": SESSION}).json()
     assert seen["conversation_id"] == conversation_id
     assert [message["role"] for message in seen["messages"]][-1] == "staff"
     assert seen["messages"][-1]["body"] == "Soy Camila de recepción."
+    assert seen["messages"][-1]["author"] == "Recepción (demo)"
+    assert seen["handled_by"] == "recepcion"
 
 
 def test_demo_sessions_only_ever_see_the_demo_space(ai_settings, harness):
@@ -153,7 +165,7 @@ def test_demo_sessions_only_ever_see_the_demo_space(ai_settings, harness):
     assert ids == [first_id] and OPERATIONAL_ID not in ids
     assert second.get(f"/api/panel/{first_id}").status_code == 200
     assert second.get(f"/api/panel/{OPERATIONAL_ID}").status_code == 404
-    assert second.post(f"/api/panel/{OPERATIONAL_ID}/reply", json={"body": "Hola"}).status_code == 404
+    assert second.post(f"/api/panel/requests/{OPERATIONAL_ID}/reply", json={"body": "Hola"}).status_code == 404
 
     second_id = chat(second, "¿Cómo llego?", session=OTHER).json()["conversation_id"]
     assert second_id != first_id, "cada sesión de huésped escribe su propia conversación"

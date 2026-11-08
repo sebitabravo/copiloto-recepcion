@@ -14,6 +14,7 @@ import weakref
 from collections import OrderedDict
 from contextlib import asynccontextmanager
 from dataclasses import replace
+from datetime import date
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
@@ -30,11 +31,13 @@ from copiloto.ai.prompts import PROMPT_VERSION
 from copiloto.ai.tools import ToolHooks
 from copiloto.chatwoot import ChatwootClient
 from copiloto.config import Settings, int_env
-from copiloto.events import connect, init_db, record_event
-from copiloto.flow import Copiloto
+from copiloto.demo_channel import DemoChannel
+from copiloto.demo_inventory import InventoryPmsAdapter
+from copiloto.events import connect, init_db, mark_processed, record_event
+from copiloto.flow import DEMO_CHANNEL, DEMO_MENU, DEMO_STYLE, Copiloto, long_date
 from copiloto.guided import guided_reply
 from copiloto.hotel import HotelData
-from copiloto.pms import PmsAdapter, build_pms_adapter
+from copiloto.pms import PmsAdapter, PmsUnavailable, build_pms_adapter
 from copiloto.ratelimit import SlidingWindowLimiter
 from copiloto.sla import SlaWorker
 from copiloto.voice import (
@@ -52,7 +55,11 @@ STATIC = Path(__file__).parent / "static"
 PURGE_INTERVAL_S = 86400
 AUDIO_CACHE_MAX = 200
 DEMO_SESSION_ID = re.compile(r"^[A-Za-z0-9-]{16,64}$")
+# Llave de idempotencia de una acción (mensaje del huésped o respuesta de recepción): un reintento con la
+# misma llave no duplica nada.
+ACTION_ID = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 DEMO_MAX_MESSAGE = 400
+STAFF_NAME = re.compile(r"^[^\W\d_][\w .'-]{0,29}$")
 
 
 def verify_signature(settings: Settings, headers, raw_body: bytes, now: float) -> bool:
@@ -157,7 +164,25 @@ def create_app(
     greeting_lock = asyncio.Lock()
     session_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
     core = Copiloto(settings, hotel, db, chatwoot, pms, clock, agent)
-    sla = SlaWorker(settings, db, chatwoot, clock)
+    # Espacio de la demo: alojamiento ficticio, canal sobre la transcripción aislada e inventario de prueba.
+    demo_hotel = hotel
+    if settings.demo_hotel_data_path and Path(settings.demo_hotel_data_path).is_file():
+        demo_hotel = HotelData.load(settings.demo_hotel_data_path)
+    demo_channel = DemoChannel(db, clock)
+    demo_inventory = InventoryPmsAdapter(demo_hotel, clock, settings.timezone)
+    # Por defecto la demo corre el flujo guiado; con DEMO_AI=1 y un modelo configurado, el asistente con IA.
+    demo_uses_ai = settings.demo_ai and agent is not None
+    sla = SlaWorker(settings, db, chatwoot, clock, demo_channel=demo_channel)
+
+    def demo_settings(shift: str | None) -> Settings:
+        """Escenario de turno de la sesión de prueba («open»/«closed»); sin escenario manda la configuración."""
+        return replace(settings, shift_override=shift) if shift in ("open", "closed") else settings
+
+    def demo_engine(shift: str | None) -> Copiloto:
+        return Copiloto(
+            demo_settings(shift), demo_hotel, db, demo_channel, demo_inventory, clock, None,
+            style=DEMO_STYLE, source=store.DEMO_SOURCE,
+        )
 
     async def purge_loop() -> None:
         while True:
@@ -172,6 +197,7 @@ def create_app(
         while True:
             try:
                 ai_sessions.purge_expired(db, clock(), settings.demo_session_ttl_s, "demo:")
+                store.purge_demo(db, clock() - settings.demo_session_ttl_s)
             except Exception:
                 logger.exception("Falla al purgar sesiones de la demo")
             await asyncio.sleep(3600)
@@ -374,10 +400,19 @@ def create_app(
         Acepta cuerpo vacío con el mismo tope que el login; con la demo apagada responde 403 y sin cookie.
         Nunca devuelve el token ni ningún secreto: la sesión viaja solo en la cookie HttpOnly.
         """
-        await read_capped(request, 4096)
+        raw = await read_capped(request, 4096)
         if not settings.demo_enabled:
             raise HTTPException(status_code=403, detail="demo_disabled")
         name = "Recepción (demo)"
+        if raw.strip():
+            try:
+                wanted = " ".join(str((json.loads(raw) or {}).get("name") or "").split())
+            except (ValueError, AttributeError):
+                raise HTTPException(status_code=400, detail="JSON inválido") from None
+            if wanted:
+                if not STAFF_NAME.match(wanted):
+                    raise HTTPException(status_code=422, detail="Nombre inválido: letras, hasta 30 caracteres")
+                name = wanted
         response = Response(status_code=204)
         response.set_cookie(
             PANEL_COOKIE,
@@ -414,6 +449,192 @@ def create_app(
             raise HTTPException(status_code=401, detail="Sesión del panel requerida")
         now = clock()
         return {"hours": hours, **store.shift_summary(db, now - hours * 3600, now)}
+
+    # ---------- bandeja de solicitudes ----------
+
+    def require_identity(request: Request) -> str:
+        who = panel_identity(request)
+        if who is None:
+            raise HTTPException(status_code=401, detail="Sesión del panel requerida")
+        return who
+
+    def scoped_request(request_id: int, request: Request):
+        """La solicitud, solo si pertenece al mundo de la sesión (demo u operación); si no, 404."""
+        row = store.get_request_row(db, request_id)
+        if row is None or (row["source"] == store.DEMO_SOURCE) != panel_is_demo(request):
+            raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+        return row
+
+    def require_demo(request: Request) -> None:
+        if not panel_is_demo(request):
+            raise HTTPException(status_code=403, detail="La operación real se atiende en Chatwoot")
+
+    def request_detail(row, me: str) -> dict:
+        now = clock()
+        detail = store.request_dict(row, now, settings.sla_red_s)
+        conversation_id = row["conversation_id"]
+        demo = row["source"] == store.DEMO_SOURCE
+        detail["contact_name"] = store.get_state(db, conversation_id).contact_name
+        detail["messages"] = store.list_demo_messages(db, conversation_id) if demo else []
+        detail["events"] = store.request_events(db, conversation_id, row["commercial_at"] - 0.001)
+        faq = []
+        for event in store.request_events(db, conversation_id, 0):
+            if event["kind"] == "faq_answered" and "inbound_ts" in event["payload"]:
+                latency = event["ts"] - event["payload"]["inbound_ts"]
+                faq.append({"faq_id": event["payload"].get("faq_id"), "latency_s": round(latency, 3),
+                            "met": latency < 10})
+        detail["faq"] = faq
+        open_ = row["status"] != "cerrada"
+        detail["actions"] = {
+            "take": demo and open_ and not row["assignee"],
+            "reply": demo and open_ and row["assignee"] == me,
+            "close": demo and open_ and row["assignee"] == me,
+            "inventory": demo and open_ and bool(row["checkin"]),
+        }
+        return detail
+
+    def shift_info(shift_settings: Settings) -> dict:
+        now = clock()
+        opening = shift_settings.next_shift_start(now)
+        return {
+            "start": shift_settings.shift_start,
+            "end": shift_settings.shift_end,
+            "timezone": shift_settings.timezone,
+            "in_shift": shift_settings.in_shift(now),
+            "override": shift_settings.shift_override or None,
+            "next_opening": f"{opening.strftime('%H:%M')} del {long_date(opening.date())}",
+        }
+
+    @app.get("/api/panel/requests", dependencies=limited)
+    async def panel_requests(request: Request, selected: int | None = Query(default=None, ge=1)):
+        """Bandeja y, en la misma lectura, el detalle de la solicitud abierta (un solo sondeo por ciclo)."""
+        me = require_identity(request)
+        scope = store.DEMO_SOURCE if panel_is_demo(request) else "operational"
+        detail = None
+        if selected is not None:
+            row = store.get_request_row(db, selected)
+            if row is not None and (row["source"] == store.DEMO_SOURCE) == (scope == store.DEMO_SOURCE):
+                detail = request_detail(row, me)
+        return {
+            "now": clock(),
+            "me": me,
+            "target_s": settings.sla_red_s,
+            "amber_s": settings.sla_amber_s,
+            "shift": shift_info(settings),
+            "requests": store.list_requests(db, clock(), settings.sla_red_s, scope),
+            "selected": detail,
+        }
+
+    @app.get("/api/panel/requests/{request_id}", dependencies=limited)
+    async def panel_request(request_id: int, request: Request):
+        me = require_identity(request)
+        return request_detail(scoped_request(request_id, request), me)
+
+    @app.post("/api/panel/requests/{request_id}/take", dependencies=limited)
+    async def panel_take(request_id: int, request: Request):
+        """Tomar solicitud: asigna responsable y pasa a «En atención». No reinicia el reloj."""
+        me = require_identity(request)
+        row = scoped_request(request_id, request)
+        require_demo(request)
+        try:
+            row, _ = store.take_request(db, row["id"], me, clock())
+        except store.RequestConflict as exc:
+            current = request_detail(scoped_request(request_id, request), me)
+            return JSONResponse({"detail": str(exc), "request": current}, status_code=409)
+        return request_detail(row, me)
+
+    @app.post("/api/panel/requests/{request_id}/reply", dependencies=limited)
+    async def panel_request_reply(request_id: int, request: Request):
+        """Respuesta escrita por recepción en el hilo del huésped. `kind`: answer (pertinente) o ack (acuse).
+
+        Con `client_id`, un reintento de la misma respuesta no la duplica.
+        """
+        me = require_identity(request)
+        row = scoped_request(request_id, request)
+        require_demo(request)
+        try:
+            body = json.loads(await read_capped(request, 8192))
+        except ValueError:
+            return JSONResponse({"detail": "JSON inválido"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"detail": "JSON inválido"}, status_code=400)
+        text = " ".join(str(body.get("body") or "").split())
+        kind = body.get("kind") or "answer"
+        client_id = body.get("client_id")
+        if not text or len(text) > 1000:
+            return JSONResponse({"detail": "La respuesta debe tener entre 1 y 1000 caracteres"}, status_code=400)
+        if kind not in ("answer", "ack"):
+            return JSONResponse({"detail": "kind debe ser answer o ack"}, status_code=422)
+        if client_id is not None and (not isinstance(client_id, str) or not ACTION_ID.match(client_id)):
+            return JSONResponse({"detail": "client_id inválido"}, status_code=422)
+        key = f"staff:{row['id']}:{client_id}" if client_id else None
+        if key and db.execute("SELECT 1 FROM processed_messages WHERE message_id = ?", (key,)).fetchone():
+            current = request_detail(scoped_request(request_id, request), me)
+            return {"duplicate": True, "message": None, "request": current}
+        now = clock()
+        try:
+            updated, message = store.staff_reply(db, row["id"], me, text, kind, now)
+        except store.RequestConflict as exc:
+            current = request_detail(scoped_request(request_id, request), me)
+            return JSONResponse({"detail": str(exc), "request": current}, status_code=409)
+        if key:
+            mark_processed(db, key, now)
+        return {"duplicate": False, "message": message, "request": request_detail(updated, me)}
+
+    @app.post("/api/panel/requests/{request_id}/close", dependencies=limited)
+    async def panel_close(request_id: int, request: Request):
+        """Cierra la atención: el hilo vuelve al asistente y una consulta nueva crea otra solicitud."""
+        me = require_identity(request)
+        row = scoped_request(request_id, request)
+        require_demo(request)
+        if row["assignee"] and row["assignee"] != me:
+            return JSONResponse({"detail": f"La atiende {row['assignee']}"}, status_code=409)
+        return request_detail(store.close_request(db, row["id"], clock()), me)
+
+    @app.post("/api/panel/requests/{request_id}/inventory", dependencies=limited)
+    async def panel_inventory(request_id: int, request: Request):
+        """Recepción verifica cupos en el inventario de PRUEBA. Lectura preliminar, con origen y hora.
+
+        No bloquea cupos ni reserva. Ante caída o dato desconocido responde ok=false: el caso sigue
+        a cargo de recepción y nada se presenta como disponible.
+        """
+        me = require_identity(request)
+        row = scoped_request(request_id, request)
+        require_demo(request)
+        try:
+            body = json.loads(await read_capped(request, 1024) or b"{}")
+        except ValueError:
+            return JSONResponse({"detail": "JSON inválido"}, status_code=400)
+        if not row["checkin"] or not row["checkout"]:
+            return JSONResponse({"detail": "La solicitud no tiene fechas: pídeselas al huésped"}, status_code=409)
+        started = time.monotonic()
+        now = clock()
+        try:
+            reading = await demo_inventory.availability(
+                date.fromisoformat(row["checkin"]), date.fromisoformat(row["checkout"]),
+                int(row["adults"] or 1), int(row["children"] or 0),
+                simulate_down=bool(isinstance(body, dict) and body.get("simulate_down")),
+            )
+        except PmsUnavailable as exc:
+            record_event(db, row["conversation_id"], "pms_read", now, {"ok": False, "latency_ms": 0})
+            text = f"Inventario de prueba sin dato ({exc}). Cupo desconocido: no informar disponibilidad."
+            store.add_demo_message(db, row["conversation_id"], "note", text, now, author=me, request_id=row["id"])
+            return {"ok": False, "reason": str(exc), "request": request_detail(scoped_request(request_id, request), me)}
+        latency_ms = int((time.monotonic() - started) * 1000)
+        record_event(db, row["conversation_id"], "pms_read", now, {"ok": True, "latency_ms": latency_ms})
+        offers = [
+            {"code": offer.code, "name": offer.name, "available_units": offer.available_units,
+             "nightly_price_clp": offer.nightly_price_clp}
+            for offer in reading.offers
+        ]
+        summary = ", ".join(f"{o['name']}: {o['available_units']} libre(s)" for o in offers) or "sin cupo"
+        store.add_demo_message(
+            db, row["conversation_id"], "note",
+            f"{reading.source} · lectura {reading.read_at[11:16]}: {summary}. Preliminar: no bloquea cupos.",
+            now, author=me, request_id=row["id"],
+        )
+        return {"ok": True, "source": reading.source, "read_at": reading.read_at, "simulated": reading.simulated,
+                "offers": offers, "request": request_detail(scoped_request(request_id, request), me)}
 
     @app.get("/api/panel/{conversation_id}", dependencies=limited)
     async def panel_data(conversation_id: int, request: Request):
@@ -476,28 +697,6 @@ def create_app(
         except ValueError:
             return JSONResponse({"detail": "La nota está vacía"}, status_code=400)
 
-    @app.post("/api/panel/{conversation_id}/reply", dependencies=limited)
-    async def panel_reply(conversation_id: int, request: Request):
-        """Respuesta de la persona dentro del espacio aislado de la demo.
-
-        La operación real responde en Chatwoot: aquí nunca se escribe a un huésped real.
-        """
-        if panel_identity(request) is None:
-            raise HTTPException(status_code=401, detail="Sesión del panel requerida")
-        demo = panel_is_demo(request)
-        if demo and store.conversation_source(db, conversation_id) != store.DEMO_SOURCE:
-            raise HTTPException(status_code=404, detail="Conversación no encontrada")
-        if not demo:
-            raise HTTPException(status_code=403, detail="Las respuestas reales se envían desde Chatwoot")
-        try:
-            body = json.loads(await read_capped(request, 4096))
-        except ValueError:
-            return JSONResponse({"detail": "JSON inválido"}, status_code=400)
-        text = " ".join(str((body or {}).get("body") or "").split())
-        if not text or len(text) > 1000:
-            return JSONResponse({"detail": "La respuesta debe tener entre 1 y 1000 caracteres"}, status_code=400)
-        return {"message": store.add_demo_message(db, conversation_id, "staff", text, clock())}
-
     @app.get("/metricas", response_class=HTMLResponse, dependencies=limited)
     async def metrics_page(request: Request):
         # Invariante 8: las métricas exponen el operación del piloto; sin sesión ni token, 401 (nunca 403).
@@ -515,9 +714,10 @@ def create_app(
         return JSONResponse(compute_metrics(db, end - days * 86400, end + 1, settings))
 
     @app.get("/privacidad", response_class=HTMLResponse, dependencies=limited)
-    async def privacy_page():
+    async def privacy_page(alojamiento: str = Query(default="", max_length=10)):
+        # ?alojamiento=demo: aviso del alojamiento ficticio que usa el chat de prueba.
         return privacy.render(
-            hotel,
+            demo_hotel if alojamiento == "demo" else hotel,
             settings.llm_model if agent is not None else None,
             settings.llm_base_url,
             voice=tts is not None,
@@ -557,21 +757,27 @@ def create_app(
     @app.get("/api/demo/status", dependencies=limited)
     async def demo_status():
         # El modo reportado es el que realmente sirve turnos: un agente inyectado sin AI_MODE sirve asistido.
-        served_mode = (settings.ai_mode if settings.ai_mode != "off" else "assisted") if agent is not None else "off"
+        served_mode = (settings.ai_mode if settings.ai_mode != "off" else "assisted") if demo_uses_ai else "off"
+        demo_place = hotel if demo_uses_ai else demo_hotel
         return {
-            "ai_enabled": agent is not None,
+            "engine": "ai" if demo_uses_ai else "guided",
+            "hotel": {"name": demo_place.hotel["name"], "channel_label": "WhatsApp simulado"},
+            "menu": [title for title, _ in DEMO_MENU],
+            "shift": shift_info(settings),
+            "privacy_url": "/privacidad?alojamiento=demo",
+            "ai_enabled": demo_uses_ai,
             "mode": served_mode,
-            "model": settings.llm_model if agent is not None else None,
+            "model": settings.llm_model if demo_uses_ai else None,
             "sandbox": settings.demo_sandbox_authorized,
             "autonomous_booking": (
-                settings.autonomous_booking and settings.demo_sandbox_authorized and agent is not None
+                settings.autonomous_booking and settings.demo_sandbox_authorized and demo_uses_ai
             ),
             # Browser speech remains available without paid TTS credentials.
-            "voice": agent is not None and settings.demo_enabled,
+            "voice": demo_uses_ai and settings.demo_enabled,
             "tts": ("elevenlabs" if tts is not None else "piper" if piper is not None else "browser"),
             "max_message_chars": DEMO_MAX_MESSAGE,
             "messages_per_session": settings.demo_messages_per_session,
-            "disclaimer": "Demo con IA: no escribas datos personales reales.",
+            "disclaimer": "Chat de prueba con datos ficticios: no escribas datos personales reales.",
         }
 
     async def demo_turn(request: Request, voice: bool) -> dict | JSONResponse:
@@ -593,17 +799,89 @@ def create_app(
             lock = session_locks[session_id] = asyncio.Lock()
         return lock
 
+    def guest_request_view(conversation_id: int) -> dict | None:
+        """Lo que el huésped sabe de su solicitud: número, quién la atiende y cuándo habrá respuesta.
+
+        Nunca expone notas internas, el reloj de la meta ni datos de otras conversaciones.
+        """
+        row = store.latest_request(db, conversation_id)
+        if row is None:
+            return None
+        status = row["status"]
+        if status == "pendiente" and row["in_shift"]:
+            label = "Enviada a recepción · te responderán por aquí"
+        elif status == "pendiente":
+            opening = settings.next_shift_start(row["created_at"])
+            label = f"Guardada · recepción responde desde las {opening:%H:%M} del {long_date(opening.date())}"
+        elif status == "en_atencion":
+            label = f"{row['assignee']} de recepción está atendiendo tu solicitud"
+        elif status == "respondida":
+            label = f"Respondida por {row['assignee']} · recepción"
+        else:
+            label = "Atención cerrada · puedes escribir una nueva consulta"
+        return {
+            "code": row["code"],
+            "status": status,
+            "label": label,
+            "assignee": row["assignee"],
+            "in_shift": bool(row["in_shift"]),
+            "open": status in store.OPEN_STATUSES,
+        }
+
+    def guest_snapshot(conversation_id: int | None, after_id: int = 0) -> dict:
+        if conversation_id is None:
+            return {"conversation_id": None, "step": None, "messages": [], "request": None,
+                    "handled_by": "asistente", "quick_replies": []}
+        messages = store.list_demo_messages(db, conversation_id, guest_view=True, after_id=after_id)
+        request_view = guest_request_view(conversation_id)
+        handled_by = "recepcion" if request_view and request_view["open"] else "asistente"
+        quick: list[str] = []
+        if handled_by == "asistente":
+            last = store.list_demo_messages(db, conversation_id, limit=1, guest_view=True)
+            if last and last[0]["role"] == "assistant" and last[0]["options"]:
+                quick = last[0]["options"]
+        return {
+            "conversation_id": conversation_id,
+            "step": store.get_state(db, conversation_id).step,
+            "messages": messages,
+            "request": request_view,
+            "handled_by": handled_by,
+            "quick_replies": quick,
+        }
+
+    def last_message_id(conversation_id: int) -> int:
+        row = db.execute(
+            "SELECT COALESCE(MAX(id), 0) AS id FROM demo_messages WHERE conversation_id = ?", (conversation_id,)
+        ).fetchone()
+        return row["id"]
+
     async def locked_demo_turn(body: dict, message: str, voice: bool) -> dict | JSONResponse:
-        session = ai_sessions.load(db, f"demo:{body['session_id']}", clock())
+        session_id = body["session_id"]
+        client_id = body.get("client_message_id")
+        if client_id is not None and (not isinstance(client_id, str) or not ACTION_ID.match(client_id)):
+            return demo_error(422, "client_message_id inválido")
+        shift = body.get("shift") if body.get("shift") in ("open", "closed") else None
+        key = f"demo:{session_id}:{client_id}" if client_id else None
+        if key and db.execute("SELECT 1 FROM processed_messages WHERE message_id = ?", (key,)).fetchone():
+            # Reintento de un mensaje ya procesado (p. ej. se cortó la respuesta): no se vuelve a ejecutar.
+            snapshot = guest_snapshot(store.demo_conversation_for_session(db, session_id))
+            return {**snapshot, "reply": "", "mode": "duplicate", "events": [], "duplicate": True,
+                    "usage": {"messages_left": None, "llm_ms": 0, "tokens": None}}
+        session = ai_sessions.load(db, f"demo:{session_id}", clock())
         if session.msg_count >= settings.demo_messages_per_session:
             return demo_error(429, "Límite de mensajes de esta conversación: reiníciala para seguir", 3600)
         wait = demo_global_limiter.check("global")
         if wait is not None:
             return demo_error(429, "La demo alcanzó su límite por hora, vuelve en un rato", int(wait) + 1)
         session.msg_count += 1
+        now = clock()
+        conversation_id = store.ensure_demo_conversation(db, session_id, now)
+        if key:
+            mark_processed(db, key, now)
+        first_new = last_message_id(conversation_id)
         events: list[dict] = []
         reply, quick, mode, usage = "", [], "guided", {"llm_ms": 0, "tokens": None}
-        request_id = f"demo:{body['session_id']}:{session.msg_count}"
+        request_id = f"demo:{session_id}:{session.msg_count}"
 
         def trace(outcome: str, latency_ms: int = 0, tools: list | None = None, tokens: int | None = None) -> None:
             """Traza por turno de la demo: sin texto del huésped, siempre etiquetada con su resultado."""
@@ -620,10 +898,18 @@ def create_app(
                 },
             )
 
-        if agent is not None:
+        if store.open_request(db, conversation_id) is not None:
+            # Recepción tiene el caso: el mensaje le llega a ella y el asistente no contesta (traspaso).
+            with store.transaction(db):
+                open_row = store.guest_wrote_to_reception(db, conversation_id, now)
+                store.insert_demo_message(db, conversation_id, "guest", message, now, request_id=open_row["id"])
+                record_event(db, conversation_id, "inbound", now, {"greeting": False})
+            ai_sessions.save(db, session, clock())
+            mode, events = "human", [{"type": "to_reception", "request": open_row["code"]}]
+        elif demo_uses_ai:
             hooks = ToolHooks(
                 conversation_id=None,
-                in_shift=settings.in_shift(clock()),
+                in_shift=demo_settings(shift).in_shift(clock()),
                 record=lambda kind, payload: record_demo_event(kind, payload),
                 extra={"sandbox_only": True, "sandbox_authorized": settings.demo_sandbox_authorized},
             )
@@ -647,29 +933,32 @@ def create_app(
                 record_demo_event("ai_fallback", {"reason": reason})
                 events = [{"type": "fallback", "reason": "ia_no_disponible"}]
                 reply, quick = guided_reply(hotel, message)
+            ai_sessions.save(db, session, clock())
+            store.add_demo_message(db, conversation_id, "guest", message, now)
+            store.add_demo_message(db, conversation_id, "assistant", reply, now, options=quick[:4] or None)
+            if any(event.get("type") == "handoff" for event in events):
+                # Mismo traspaso que el flujo guiado: solicitud, reloj y estado en una transacción.
+                demo_engine(shift).persist_external_handoff(conversation_id, DEMO_CHANNEL, "ai_handoff", now)
         else:
-            events = [{"type": "fallback", "reason": "ia_no_configurada"}]
-            reply, quick = guided_reply(hotel, message)
-        ai_sessions.save(db, session, clock())
-        # La demo tiene su propio espacio: cada turno queda en una conversación marcada y su transcripción,
-        # para que recepción pueda leerla y responderla sin tocar la operación real.
-        now = clock()
-        conversation_id = store.ensure_demo_conversation(db, body["session_id"], now)
-        store.add_demo_message(db, conversation_id, "guest", message, now)
-        store.add_demo_message(db, conversation_id, "assistant", reply, now)
-        if any(event.get("type") == "handoff" for event in events):
-            state = store.get_state(db, conversation_id)
-            if state.step != "handed_off":
-                state.step = "handed_off"
-                store.save_state(db, state, now)
-                store.start_sla(db, conversation_id, now)
+            # Flujo guiado real (el mismo motor del canal de Chatwoot) escribiendo por el canal de la demo.
+            store.add_demo_message(db, conversation_id, "guest", message, now)
+            ai_sessions.save(db, session, clock())
+            await demo_engine(shift)._guest_message(conversation_id, message, DEMO_CHANNEL, None, now)
+            events = [{"type": "guided"}]
+        snapshot = guest_snapshot(conversation_id, after_id=first_new)
+        if mode == "guided":
+            reply = "\n\n".join(item["body"] for item in snapshot["messages"] if item["role"] == "assistant")
+            quick = snapshot["quick_replies"]
+            if snapshot["request"] and snapshot["handled_by"] == "recepcion":
+                events.append({"type": "handoff", "request": snapshot["request"]["code"]})
         payload = {
+            **snapshot,
             "reply": reply,
             "mode": mode,
             "events": events,
-            "quick_replies": quick[:4],
+            "quick_replies": list(quick)[:4],
+            "duplicate": False,
             "usage": {"messages_left": max(settings.demo_messages_per_session - session.msg_count, 0), **usage},
-            "conversation_id": conversation_id,
         }
         if voice:
             payload["spoken_language"] = guess_language(message)
@@ -680,18 +969,13 @@ def create_app(
         return await demo_turn(request, voice=False)
 
     @app.get("/api/demo/conversation", dependencies=limited)
-    async def demo_conversation(session_id: str = Query(min_length=1, max_length=64)):
-        """Lo que ve el huésped: su conversación de demo y las respuestas de recepción."""
+    async def demo_conversation(
+        session_id: str = Query(min_length=1, max_length=64), after: int = Query(default=0, ge=0)
+    ):
+        """Lo que ve el huésped: su hilo (sin notas internas), su solicitud y las respuestas de recepción."""
         if not settings.demo_enabled:
             raise HTTPException(status_code=404, detail="demo_disabled")
-        conversation_id = store.demo_conversation_for_session(db, session_id)
-        if conversation_id is None:
-            return {"conversation_id": None, "step": None, "messages": []}
-        return {
-            "conversation_id": conversation_id,
-            "step": store.get_state(db, conversation_id).step,
-            "messages": store.list_demo_messages(db, conversation_id),
-        }
+        return guest_snapshot(store.demo_conversation_for_session(db, session_id), after_id=after)
 
     async def synthesize(text: str, language: str = "es") -> tuple[str | None, str | None, str | None]:
         """(audio base64, motivo si no hubo, formato). La voz nunca impide que el huésped lea la respuesta."""

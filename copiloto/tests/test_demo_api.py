@@ -33,7 +33,7 @@ def test_status_reports_ai_configuration(ai_settings, harness):
 
 
 def test_status_reports_assisted_when_an_agent_serves_without_ai_mode(settings, harness):
-    body = client_for(settings, harness, FakeLlm([])).get("/api/demo/status").json()
+    body = client_for(replace(settings, demo_ai=True), harness, FakeLlm([])).get("/api/demo/status").json()
     assert body["ai_enabled"] is True
     assert body["mode"] == "assisted", "un agente inyectado sin AI_MODE sirve turnos asistidos"
 
@@ -84,10 +84,14 @@ def test_external_pms_demo_can_read_but_cannot_offer_or_execute_booking(ai_setti
     assert harness.events("ai_booking", 0) == []
 
 
-def test_without_ai_the_demo_answers_in_guided_mode(ai_settings, harness):
-    body = chat(client_for(replace(ai_settings, llm_api_key=""), harness), "¿tienen piscina?").json()
-    assert body["mode"] == "guided" and "piscina temperada" in body["reply"]
-    assert body["events"] == [{"type": "fallback", "reason": "ia_no_configurada"}]
+def test_without_ai_the_demo_runs_the_guided_flow_of_the_fictitious_hostel(ai_settings, harness):
+    client = client_for(replace(ai_settings, llm_api_key=""), harness)
+    status = client.get("/api/demo/status").json()
+    assert status["engine"] == "guided" and status["hotel"]["name"] == "Hostería Demo Villarrica"
+    body = chat(client, "¿Dónde queda la hostería?").json()
+    assert body["mode"] == "guided" and "Cerca de la costanera de Villarrica." in body["reply"]
+    assert body["events"] == [{"type": "guided"}]
+    assert "963949710" not in body["reply"], "la demo nunca deriva al número real de un hotel"
 
 
 def test_llm_outage_falls_back_to_guided_mode(ai_settings, harness):

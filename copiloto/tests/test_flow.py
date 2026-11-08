@@ -42,8 +42,10 @@ async def test_location_shown_before_booking_questions(harness):
     await harness.say("quiero reservar para el finde")
     texts = harness.chatwoot.guest_texts()
     location_index = next(i for i, t in enumerate(texts) if t.startswith("Ubicación:"))
-    question_index = next(i for i, t in enumerate(texts) if "fechas" in t and "necesito" in t.lower())
+    # «el finde» ya trae las fechas: el bot las reutiliza y la primera pregunta de estadía es por adultos.
+    question_index = next(i for i, t in enumerate(texts) if "adultos" in t.lower() or "fechas" in t.lower())
     assert location_index < question_index
+    assert "adultos" in texts[question_index].lower()
     assert len(harness.events("location_shown")) == 1
 
 

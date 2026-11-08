@@ -6,6 +6,9 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import date
+
+from copiloto.events import record_event
 
 # Origen de una conversación: la operación real (Chatwoot) o el espacio aislado de la demostración.
 DEMO_SOURCE = "demo"
@@ -307,7 +310,7 @@ def ensure_demo_conversation(db: sqlite3.Connection, session_id: str, now: float
         if created is None:
             db.execute(
                 """INSERT INTO conversation_state(conversation_id, step, data, contact_name, updated_at, source)
-                   VALUES (?, 'ai', '{}', 'Huésped demo', ?, ?)""",
+                   VALUES (?, 'start', '{}', 'Huésped demo', ?, ?)""",
                 (conversation_id, now, DEMO_SOURCE),
             )
     return conversation_id
@@ -320,27 +323,78 @@ def demo_conversation_for_session(db: sqlite3.Connection, session_id: str) -> in
     return row["conversation_id"] if row is not None else None
 
 
-def add_demo_message(db: sqlite3.Connection, conversation_id: int, role: str, body: str, now: float) -> dict:
-    """Turno de la transcripción de demo (huésped, asistente o persona de recepción)."""
+def add_demo_message(
+    db: sqlite3.Connection,
+    conversation_id: int,
+    role: str,
+    body: str,
+    now: float,
+    options: list[str] | None = None,
+    author: str | None = None,
+    kind: str | None = None,
+    request_id: int | None = None,
+) -> dict:
+    """Turno de la transcripción de demo: huésped, asistente, persona de recepción o nota interna.
+
+    `note` es la pre-información privada del traspaso: solo la ve recepción, nunca el huésped.
+    """
     with transaction(db):
-        cursor = db.execute(
-            "INSERT INTO demo_messages(conversation_id, role, body, created_at) VALUES (?, ?, ?, ?)",
-            (conversation_id, role, body, now),
-        )
-        db.execute(
-            "UPDATE conversation_state SET updated_at = ? WHERE conversation_id = ?", (now, conversation_id)
-        )
-    return {"id": cursor.lastrowid, "role": role, "body": body, "created_at": now}
+        message = insert_demo_message(db, conversation_id, role, body, now, options, author, kind, request_id)
+    return message
 
 
-def list_demo_messages(db: sqlite3.Connection, conversation_id: int, limit: int = 60) -> list[dict]:
-    """Transcripción en orden de conversación; el tope se queda con lo último dicho."""
+def insert_demo_message(db, conversation_id, role, body, now, options=None, author=None, kind=None, request_id=None):
+    """Inserción sin transacción propia: para escrituras que agrupan varias filas en una sola transacción."""
+    cursor = db.execute(
+        """INSERT INTO demo_messages(conversation_id, role, body, created_at, options, author, kind, request_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            conversation_id,
+            role,
+            body,
+            now,
+            json.dumps(options, ensure_ascii=False) if options else None,
+            author,
+            kind,
+            request_id,
+        ),
+    )
+    db.execute("UPDATE conversation_state SET updated_at = ? WHERE conversation_id = ?", (now, conversation_id))
+    return _message_dict(
+        {"id": cursor.lastrowid, "role": role, "body": body, "created_at": now, "options": options,
+         "author": author, "kind": kind}
+    )
+
+
+def _message_dict(row) -> dict:
+    options = row["options"]
+    if isinstance(options, str):
+        options = json.loads(options)
+    return {
+        "id": row["id"],
+        "role": row["role"],
+        "body": row["body"],
+        "created_at": row["created_at"],
+        "options": options or None,
+        "author": row["author"],
+        "kind": row["kind"],
+    }
+
+
+def list_demo_messages(
+    db: sqlite3.Connection, conversation_id: int, limit: int = 80, guest_view: bool = False, after_id: int = 0
+) -> list[dict]:
+    """Transcripción en orden de conversación; el tope se queda con lo último dicho.
+
+    `guest_view` deja fuera las notas internas: el huésped nunca lee la pre-información de recepción.
+    """
+    hidden = "AND role <> 'note'" if guest_view else ""
     rows = db.execute(
-        """SELECT id, role, body, created_at FROM demo_messages
-           WHERE conversation_id = ? ORDER BY id DESC LIMIT ?""",
-        (conversation_id, limit),
+        f"""SELECT id, role, body, created_at, options, author, kind FROM demo_messages
+           WHERE conversation_id = ? AND id > ? {hidden} ORDER BY id DESC LIMIT ?""",
+        (conversation_id, after_id, limit),
     ).fetchall()
-    return [dict(row) for row in reversed(rows)]
+    return [_message_dict(row) for row in reversed(rows)]
 
 
 def reset_demo_conversation(db: sqlite3.Connection, session_id: str) -> None:
@@ -351,6 +405,8 @@ def reset_demo_conversation(db: sqlite3.Connection, session_id: str) -> None:
     with transaction(db):
         db.execute("DELETE FROM demo_messages WHERE conversation_id = ?", (conversation_id,))
         db.execute("DELETE FROM staff_notes WHERE conversation_id = ?", (conversation_id,))
+        db.execute("DELETE FROM requests WHERE conversation_id = ?", (conversation_id,))
+        db.execute("DELETE FROM prebookings WHERE conversation_id = ?", (conversation_id,))
         db.execute("DELETE FROM demo_conversations WHERE session_id = ?", (session_id,))
         db.execute("DELETE FROM conversation_state WHERE conversation_id = ?", (conversation_id,))
 
@@ -371,6 +427,7 @@ def purge_personal_data(db: sqlite3.Connection, now: float, retention_days: int,
     cursor_msgs = db.execute("DELETE FROM processed_messages WHERE ts < ?", (cutoff,))
     cursor_ai = db.execute("DELETE FROM ai_sessions WHERE updated_at < ?", (cutoff,))
     cursor_notes = db.execute("DELETE FROM staff_notes WHERE created_at < ?", (cutoff,))
+    cursor_requests = db.execute("DELETE FROM requests WHERE updated_at < ?", (cutoff,))
     anonymized = 0
     for row in db.execute("SELECT id, payload FROM events WHERE ts < ? AND conversation_id > 0", (cutoff,)).fetchall():
         payload = json.loads(row["payload"])
@@ -391,4 +448,327 @@ def purge_personal_data(db: sqlite3.Connection, now: float, retention_days: int,
         "processed_messages": cursor_msgs.rowcount,
         "ai_sessions": cursor_ai.rowcount,
         "staff_notes": cursor_notes.rowcount,
+        "requests": cursor_requests.rowcount,
     }
+
+
+def purge_demo(db: sqlite3.Connection, cutoff: float) -> int:
+    """Borra las conversaciones de demo sin actividad desde `cutoff`: transcripción, solicitudes y estado.
+
+    La demo no es operación real: sus datos no esperan la retención de 90 días. Los eventos quedan
+    (no guardan texto) para que la medición siga siendo reproducible.
+    """
+    rows = db.execute(
+        """SELECT d.session_id, d.conversation_id FROM demo_conversations d
+           LEFT JOIN conversation_state s ON s.conversation_id = d.conversation_id
+           WHERE COALESCE(s.updated_at, d.created_at) < ?""",
+        (cutoff,),
+    ).fetchall()
+    for row in rows:
+        reset_demo_conversation(db, row["session_id"])
+    return len(rows)
+
+
+# ---------- solicitudes a recepción ----------
+
+ATTENTION_LABELS = {
+    "pendiente": "Pendiente de recepción",
+    "en_atencion": "En atención",
+    "respondida": "Respondida",
+    "cerrada": "Cerrada",
+}
+# El estado de la RESERVA es otro concepto: responder una consulta no confirma nada.
+RESERVATION_LABELS = {
+    "pendiente_confirmacion": "Pendiente de confirmación",
+    "confirmada": "Confirmada por recepción en el PMS",
+}
+OPEN_STATUSES = ("pendiente", "en_atencion", "respondida")
+REASON_LABELS = {
+    "commercial": "Consulta de fechas",
+    "human_requested": "Pidió hablar con recepción",
+    "pms_down": "Cupos sin verificar (PMS sin respuesta)",
+    "no_entendi_tres_veces": "El asistente no entendió",
+    "error": "Falla técnica del asistente",
+    "ai_handoff": "Derivada por el asistente con IA",
+}
+CHANNEL_LABELS = {"demo": "WhatsApp simulado", "Channel::WebWidget": "Chat web", "Channel::Whatsapp": "WhatsApp"}
+
+
+class RequestConflict(Exception):
+    """La acción no aplica al estado actual de la solicitud (p. ej. otra persona ya la tomó)."""
+
+
+def create_request(
+    db: sqlite3.Connection,
+    conversation_id: int,
+    *,
+    prefix: str,
+    source: str,
+    channel: str,
+    reason: str,
+    in_shift: bool,
+    commercial_at: float,
+    now: float,
+    data: dict,
+) -> dict:
+    """Solicitud nueva vinculada al hilo. Corre dentro de la transacción del traspaso (sin una propia).
+
+    Una solicitud abierta anterior del mismo hilo queda cerrada: el huésped volvió con otra consulta.
+    """
+    db.execute(
+        f"UPDATE requests SET status = 'cerrada', closed_at = ?, updated_at = ? "
+        f"WHERE conversation_id = ? AND status IN ({','.join('?' for _ in OPEN_STATUSES)})",
+        (now, now, conversation_id, *OPEN_STATUSES),
+    )
+    cursor = db.execute(
+        """INSERT INTO requests(code, conversation_id, source, channel, reason, in_shift, commercial_at,
+               created_at, checkin, checkout, adults, children, room_code, updated_at)
+           VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            conversation_id,
+            source,
+            channel,
+            reason,
+            int(in_shift),
+            commercial_at,
+            now,
+            data.get("checkin"),
+            data.get("checkout"),
+            data.get("adults"),
+            data.get("children"),
+            data.get("room_code"),
+            now,
+        ),
+    )
+    request_id = cursor.lastrowid
+    code = f"{prefix}-{request_id:03d}"
+    db.execute("UPDATE requests SET code = ? WHERE id = ?", (code, request_id))
+    return get_request_row(db, request_id)
+
+
+def get_request_row(db: sqlite3.Connection, request_id: int) -> sqlite3.Row | None:
+    return db.execute("SELECT * FROM requests WHERE id = ?", (request_id,)).fetchone()
+
+
+def open_request(db: sqlite3.Connection, conversation_id: int) -> sqlite3.Row | None:
+    """Solicitud que recepción tiene abierta en este hilo: mientras exista, el bot no contesta."""
+    return db.execute(
+        f"SELECT * FROM requests WHERE conversation_id = ? AND status IN ({','.join('?' for _ in OPEN_STATUSES)}) "
+        "ORDER BY id DESC LIMIT 1",
+        (conversation_id, *OPEN_STATUSES),
+    ).fetchone()
+
+
+def latest_request(db: sqlite3.Connection, conversation_id: int) -> sqlite3.Row | None:
+    return db.execute(
+        "SELECT * FROM requests WHERE conversation_id = ? ORDER BY id DESC LIMIT 1", (conversation_id,)
+    ).fetchone()
+
+
+def measurement(row, now: float, target_s: int) -> dict:
+    """Primera respuesta humana pertinente contra la meta, desde que ENTRÓ la consulta comercial.
+
+    Tomar la solicitud no reinicia ni detiene el reloj. Fuera de turno no cuenta para la meta.
+    """
+    if not row["in_shift"]:
+        return {"state": "fuera_de_turno", "elapsed_s": None, "target_s": target_s,
+                "label": "Fuera de turno: no cuenta para la meta de primera respuesta"}
+    if row["first_answer_at"] is not None:
+        elapsed = int(row["first_answer_at"] - row["commercial_at"])
+        met = elapsed < target_s
+        return {"state": "cumplida" if met else "vencida", "elapsed_s": elapsed, "target_s": target_s,
+                "label": f"Primera respuesta en {_clock(elapsed)} ({'dentro' if met else 'fuera'} de la meta)"}
+    elapsed = max(int(now - row["commercial_at"]), 0)
+    if elapsed >= target_s:
+        return {"state": "vencida", "elapsed_s": elapsed, "target_s": target_s,
+                "label": f"Sin respuesta pertinente tras {_clock(elapsed)}: meta vencida"}
+    return {"state": "en_curso", "elapsed_s": elapsed, "target_s": target_s,
+            "label": f"Esperando primera respuesta · {_clock(elapsed)}"}
+
+
+def _clock(seconds: int) -> str:
+    return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+
+def request_dict(row, now: float, target_s: int) -> dict:
+    nights = None
+    if row["checkin"] and row["checkout"]:
+        nights = (date.fromisoformat(row["checkout"]) - date.fromisoformat(row["checkin"])).days
+    return {
+        "id": row["id"],
+        "code": row["code"],
+        "conversation_id": row["conversation_id"],
+        "channel": row["channel"],
+        "channel_label": CHANNEL_LABELS.get(row["channel"], row["channel"].removeprefix("Channel::")),
+        "reason": row["reason"],
+        "reason_label": REASON_LABELS.get(row["reason"], row["reason"]),
+        "in_shift": bool(row["in_shift"]),
+        "commercial_at": row["commercial_at"],
+        "created_at": row["created_at"],
+        "checkin": row["checkin"],
+        "checkout": row["checkout"],
+        "nights": nights,
+        "adults": row["adults"],
+        "children": row["children"],
+        "room_code": row["room_code"],
+        "status": row["status"],
+        "status_label": ATTENTION_LABELS.get(row["status"], row["status"]),
+        "reservation_status": row["reservation_status"],
+        "reservation_label": RESERVATION_LABELS.get(row["reservation_status"], row["reservation_status"]),
+        "assignee": row["assignee"],
+        "taken_at": row["taken_at"],
+        "first_answer_at": row["first_answer_at"],
+        "last_guest_at": row["last_guest_at"],
+        "breached_at": row["breached_at"],
+        "closed_at": row["closed_at"],
+        "updated_at": row["updated_at"],
+        "measurement": measurement(row, now, target_s),
+    }
+
+
+def list_requests(db: sqlite3.Connection, now: float, target_s: int, scope: str, limit: int = 50) -> list[dict]:
+    """Bandeja: primero lo pendiente con más espera, luego lo que está en atención, al final lo cerrado."""
+    where, params = ("source = ?", [DEMO_SOURCE]) if scope == DEMO_SOURCE else ("source <> ?", [DEMO_SOURCE])
+    rows = db.execute(
+        f"""SELECT r.*, (SELECT body FROM demo_messages m WHERE m.conversation_id = r.conversation_id
+                         AND m.role <> 'note' ORDER BY m.id DESC LIMIT 1) AS preview
+            FROM requests r WHERE {where} ORDER BY r.id DESC LIMIT ?""",
+        (*params, limit),
+    ).fetchall()
+    order = {"pendiente": 0, "en_atencion": 1, "respondida": 2, "cerrada": 3}
+    items = []
+    for row in rows:
+        item = request_dict(row, now, target_s)
+        item["preview"] = row["preview"]
+        items.append(item)
+    # Abiertas: la que más espera primero. Cerradas: la más reciente primero.
+    items.sort(key=lambda item: (order.get(item["status"], 9),
+                                 -item["id"] if item["status"] == "cerrada" else item["commercial_at"]))
+    return items
+
+
+def take_request(db: sqlite3.Connection, request_id: int, assignee: str, now: float) -> tuple[sqlite3.Row, bool]:
+    """Asigna responsable y pasa de «Pendiente de recepción» a «En atención». Idempotente para la misma persona.
+
+    Devuelve (fila, cambió). Si otra persona ya la tomó, `RequestConflict`: no se pisa al responsable.
+    """
+    with transaction(db):
+        row = get_request_row(db, request_id)
+        if row is None:
+            raise LookupError(request_id)
+        if row["status"] == "cerrada":
+            raise RequestConflict("La solicitud está cerrada")
+        if row["assignee"] and row["assignee"] != assignee:
+            raise RequestConflict(f"Ya la tomó {row['assignee']}")
+        if row["assignee"] == assignee:
+            return row, False
+        status = "en_atencion" if row["status"] == "pendiente" else row["status"]
+        db.execute(
+            "UPDATE requests SET assignee = ?, taken_at = ?, status = ?, updated_at = ? WHERE id = ?",
+            (assignee, now, status, now, request_id),
+        )
+        _record(db, row["conversation_id"], "request_taken", now, {"request_id": request_id, "assignee": assignee})
+        return get_request_row(db, request_id), True
+
+
+def staff_reply(
+    db: sqlite3.Connection, request_id: int, author: str, body: str, kind: str, now: float
+) -> tuple[sqlite3.Row, dict]:
+    """Respuesta escrita por recepción en el mismo hilo del huésped.
+
+    Una respuesta pertinente (`answer`) deja la solicitud «Respondida» y, si es la primera, detiene el
+    reloj y registra `human_first_reply`. Un acuse (`ack`) se envía igual pero NO cuenta como respuesta.
+    Todo ocurre en una transacción: o queda el mensaje con su estado, o nada (se puede reintentar).
+    """
+    with transaction(db):
+        row = get_request_row(db, request_id)
+        if row is None:
+            raise LookupError(request_id)
+        if row["status"] == "cerrada":
+            raise RequestConflict("La solicitud está cerrada")
+        if row["assignee"] != author:
+            raise RequestConflict("Toma la solicitud antes de responder" if not row["assignee"]
+                                  else f"La atiende {row['assignee']}")
+        message = insert_demo_message(db, row["conversation_id"], "staff", body, now, author=author, kind=kind,
+                                       request_id=request_id)
+        conversation_id = row["conversation_id"]
+        if kind == "answer":
+            first = row["first_answer_at"] is None
+            db.execute(
+                "UPDATE requests SET status = 'respondida', first_answer_at = COALESCE(first_answer_at, ?), "
+                "updated_at = ? WHERE id = ?",
+                (now, now, request_id),
+            )
+            if first and stop_sla(db, conversation_id, now):
+                _record(db, conversation_id, "human_first_reply", now, {"user_id": None, "author": author})
+        else:
+            db.execute("UPDATE requests SET updated_at = ? WHERE id = ?", (now, request_id))
+            _record(db, conversation_id, "human_ack", now, {"author": author})
+        return get_request_row(db, request_id), message
+
+
+def guest_wrote_to_reception(db: sqlite3.Connection, conversation_id: int, now: float) -> sqlite3.Row | None:
+    """El huésped escribe mientras recepción tiene el caso: el bot calla y la solicitud vuelve a pedir respuesta."""
+    row = open_request(db, conversation_id)
+    if row is None:
+        return None
+    status = "en_atencion" if row["status"] == "respondida" else row["status"]
+    db.execute(
+        "UPDATE requests SET last_guest_at = ?, status = ?, updated_at = ? WHERE id = ?",
+        (now, status, now, row["id"]),
+    )
+    return get_request_row(db, row["id"])
+
+
+def close_request(db: sqlite3.Connection, request_id: int, now: float) -> sqlite3.Row:
+    """Cierra la atención: el hilo vuelve al asistente y una consulta nueva crea otra solicitud."""
+    with transaction(db):
+        row = get_request_row(db, request_id)
+        if row is None:
+            raise LookupError(request_id)
+        if row["status"] != "cerrada":
+            db.execute(
+                "UPDATE requests SET status = 'cerrada', closed_at = ?, updated_at = ? WHERE id = ?",
+                (now, now, request_id),
+            )
+            _record(db, row["conversation_id"], "request_closed", now, {"request_id": request_id})
+        return get_request_row(db, request_id)
+
+
+def mark_request_breached(db: sqlite3.Connection, conversation_id: int, now: float) -> None:
+    db.execute(
+        "UPDATE requests SET breached_at = COALESCE(breached_at, ?) WHERE conversation_id = ? "
+        f"AND status IN ({','.join('?' for _ in OPEN_STATUSES)})",
+        (now, conversation_id, *OPEN_STATUSES),
+    )
+
+
+def human_answered(db: sqlite3.Connection, conversation_id: int, now: float) -> None:
+    """Respuesta humana en Chatwoot (canal real): la solicitud abierta queda «Respondida»."""
+    db.execute(
+        "UPDATE requests SET status = 'respondida', first_answer_at = COALESCE(first_answer_at, ?), "
+        f"updated_at = ? WHERE conversation_id = ? AND status IN ({','.join('?' for _ in OPEN_STATUSES)})",
+        (now, now, conversation_id, *OPEN_STATUSES),
+    )
+
+
+def confirm_reservation(db: sqlite3.Connection, conversation_id: int, now: float) -> None:
+    """Reserva confirmada por una persona en el PMS: es el único camino a «confirmada»."""
+    db.execute(
+        "UPDATE requests SET reservation_status = 'confirmada', updated_at = ? WHERE id = "
+        "(SELECT id FROM requests WHERE conversation_id = ? ORDER BY id DESC LIMIT 1)",
+        (now, conversation_id),
+    )
+
+
+def request_events(db: sqlite3.Connection, conversation_id: int, since: float) -> list[dict]:
+    """Eventos del hilo desde que entró la consulta: con ellos se recalcula la medición a mano."""
+    rows = db.execute(
+        "SELECT kind, ts, payload FROM events WHERE conversation_id = ? AND ts >= ? ORDER BY ts, id",
+        (conversation_id, since),
+    ).fetchall()
+    return [{"kind": row["kind"], "ts": row["ts"], "payload": json.loads(row["payload"])} for row in rows]
+
+
+def _record(db: sqlite3.Connection, conversation_id: int, kind: str, now: float, payload: dict) -> None:
+    record_event(db, conversation_id, kind, now, payload)

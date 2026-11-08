@@ -12,6 +12,7 @@ from copiloto.hotel import HotelData
 from copiloto.pms import PmsAdapter, PmsReading, PmsUnavailable, RoomOffer
 
 HOTEL_PATH = Path(__file__).resolve().parents[2] / "data" / "hotel.yaml"
+DEMO_HOTEL_PATH = Path(__file__).resolve().parents[2] / "data" / "hosteria-demo.yaml"
 TZ = ZoneInfo("America/Santiago")
 
 
@@ -140,7 +141,7 @@ def clock():
 def settings():
     return Settings(hotel_data_path=str(HOTEL_PATH), db_path=":memory:", webhook_secret="s3cret",
                     pms_events_secret="pms-secret", panel_token="panel-secret", chatwoot_team_id=1,
-                    public_url="http://localhost:8100")
+                    public_url="http://localhost:8100", demo_hotel_data_path=str(DEMO_HOTEL_PATH))
 
 
 @pytest.fixture
@@ -198,7 +199,8 @@ def call(name, call_id="c1", **arguments):
 
 @pytest.fixture
 def ai_settings(settings):
-    return replace(settings, ai_mode="full", llm_api_key="k" * 20, pms_staff_token="t" * 20)
+    # demo_ai: estas pruebas fijan el camino de la demo con IA (sandbox, voz, topes), que es opcional.
+    return replace(settings, ai_mode="full", llm_api_key="k" * 20, pms_staff_token="t" * 20, demo_ai=True)
 
 
 @pytest.fixture

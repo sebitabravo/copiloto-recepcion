@@ -2,7 +2,7 @@
 
 import os
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
@@ -34,6 +34,8 @@ def float_env(env: dict[str, str], name: str, default: float | None) -> float | 
 @dataclass(frozen=True)
 class Settings:
     hotel_data_path: str = "../data/hotel.yaml"
+    # Alojamiento ficticio de /demo (Hostería Demo Villarrica). Si falta el archivo, la demo usa el del hotel.
+    demo_hotel_data_path: str = "../data/hosteria-demo.yaml"
     db_path: str = "./copiloto.sqlite"
     chatwoot_url: str = "http://chatwoot:3000"
     chatwoot_public_url: str = "http://localhost:3000"
@@ -59,6 +61,8 @@ class Settings:
     timezone: str = "America/Santiago"
     shift_start: str = "08:00"
     shift_end: str = "22:00"
+    # Forzar el turno para pruebas reproducibles: "" (según reloj), "open" (en turno) o "closed" (fuera).
+    shift_override: str = ""
     fixed_monthly_clp: int = 90000
     usage_m_clp: int = 0
     prebooking_minutes: int = 15  # lo promete docs/ia.md vía la variable PREBOOKING_MINUTES
@@ -96,6 +100,8 @@ class Settings:
     ai_max_history: int = 12
     pms_staff_token: str = ""
     demo_enabled: bool = True
+    # La demo usa el flujo guiado (reproducible, sin costo). DEMO_AI=1 la conecta al asistente con IA.
+    demo_ai: bool = False
     landing_origin: str = "http://localhost:8080"
     demo_messages_per_session: int = 30
     demo_ip_per_min: int = 20
@@ -108,6 +114,7 @@ class Settings:
         team = env.get("CHATWOOT_TEAM_ID")
         return cls(
             hotel_data_path=env.get("HOTEL_DATA_PATH", cls.hotel_data_path),
+            demo_hotel_data_path=env.get("DEMO_HOTEL_DATA_PATH", cls.demo_hotel_data_path),
             db_path=env.get("COPILOTO_DB_PATH", cls.db_path),
             chatwoot_url=env.get("CHATWOOT_URL", cls.chatwoot_url),
             chatwoot_public_url=env.get("CHATWOOT_PUBLIC_URL", cls.chatwoot_public_url),
@@ -137,6 +144,7 @@ class Settings:
             piper_config_path=env.get("PIPER_CONFIG_PATH", ""),
             pms_staff_token=env.get("PMS_STAFF_TOKEN", ""),
             demo_enabled=env.get("DEMO_ENABLED", "1").strip().lower() in _TRUTHY,
+            demo_ai=env.get("DEMO_AI", "0").strip().lower() in _TRUTHY,
             landing_origin=env.get("LANDING_ORIGIN", cls.landing_origin).rstrip("/"),
             panel_token=env.get("PANEL_TOKEN", ""),
             pms_url=env.get("PMS_URL", cls.pms_url),
@@ -149,6 +157,7 @@ class Settings:
             timezone=env.get("TIMEZONE", cls.timezone),
             shift_start=env.get("SHIFT_START", cls.shift_start),
             shift_end=env.get("SHIFT_END", cls.shift_end),
+            shift_override=env.get("SHIFT_OVERRIDE", "").strip().lower(),
             fixed_monthly_clp=int(env.get("FIXED_MONTHLY_CLP", "90000")),
             usage_m_clp=int(env.get("USAGE_M_CLP", "0")),
             prebooking_minutes=int_env(env, "PREBOOKING_MINUTES", cls.prebooking_minutes),
@@ -165,6 +174,8 @@ class Settings:
             "CHATWOOT_BOT_TOKEN": self.chatwoot_bot_token,
         }
         weak = sorted(name for name, value in secrets.items() if len(value) < 16)
+        if self.shift_override not in ("", "open", "closed"):
+            raise ValueError("SHIFT_OVERRIDE debe ser open, closed o vacío")
         if self.ai_mode not in ("off", "assisted", "full"):
             raise ValueError("AI_MODE debe ser off, assisted o full")
         if self.ai_mode == "full" and self.llm_api_key and not self.pms_staff_token:
@@ -213,6 +224,8 @@ class Settings:
     def in_shift(self, epoch: float) -> bool:
         """True si `epoch` cae dentro del turno humano. Soporta turnos que cruzan medianoche y, con inicio
         igual al fin, un turno de 24 horas (sin la ventana muerta de un minuto de 23:59 a 00:00)."""
+        if self.shift_override in ("open", "closed"):
+            return self.shift_override == "open"
         start, end = _parse_hhmm(self.shift_start), _parse_hhmm(self.shift_end)
         if start == end:
             return True
@@ -220,3 +233,16 @@ class Settings:
         if start <= end:
             return start <= current < end
         return current >= start or current < end
+
+    def next_shift_start(self, epoch: float) -> datetime:
+        """Próximo inicio de turno en hora local del alojamiento, posterior a `epoch`.
+
+        Con el turno forzado a «closed» se informa igual el horario configurado: la demo muestra qué
+        leería el huésped de noche sin depender de la hora real.
+        """
+        start = _parse_hhmm(self.shift_start)
+        current = self.local(epoch)
+        candidate = current.replace(hour=start.hour, minute=start.minute, second=0, microsecond=0)
+        if candidate <= current:
+            candidate += timedelta(days=1)
+        return candidate
