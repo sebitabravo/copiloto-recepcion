@@ -26,8 +26,8 @@ presentar:
 | `make up-full` | los anteriores + Chatwoot, Sidekiq, Postgres, Redis | ~1,3 GB | Probar la bandeja real y el widget |
 
 Chatwoot, Sidekiq, Postgres y Redis están detrás del perfil `full` (`docker compose --profile full`), así
-que un `docker compose up -d` normal arranca solo la demo. `seed-chatwoot.sh`, `smoke-docker.sh`,
-`backup.sh` declara ese perfil porque opera sobre Chatwoot. `wait-healthy.sh` y
+que un `docker compose up -d` normal arranca solo la demo. `seed-chatwoot.sh`, `smoke-docker.sh` y
+`backup.sh` declaran ese perfil porque operan sobre Chatwoot. `wait-healthy.sh` y
 `preflight.sh` esperan solo los servicios que están corriendo, así que funcionan en ambos modos.
 `scripts/demo.sh up` sigue levantando el stack completo.
 
