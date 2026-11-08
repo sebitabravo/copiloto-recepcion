@@ -36,9 +36,10 @@ vencida, PMS caído).
 
 1. Arranca con escenario limpio: `make demo-local LIMPIO=1` (o `make reset` + `make up` en Docker).
 2. Abre la portada (`http://localhost:8080`) y deja lista la pestaña: el recorrido parte en **Probar la demo**.
-3. Para presentar en **dos ventanas**, una al lado de la otra:
-   - Huésped: `http://localhost:8080/demo?vista=huesped` (si puedes, en modo teléfono).
-   - Recepción: `http://localhost:8080/demo?vista=recepcion`. Entra como **Sofía**.
+3. Para presentar en **dos ventanas**, una al lado de la otra: abre `http://localhost:8080/demo` y usa
+   **Abrir huésped en otra ventana** (si puedes, en modo teléfono) y **Abrir recepción en otra ventana** (entra
+   como **Sofía**). Ambos enlaces llevan la misma corrida (`?corrida=` en la URL): si escribes las URL a mano sin
+   ella, cada ventana es otra presentación y recepción no verá el caso del huésped.
 4. En la ventana del huésped, en **Turno de recepción**, elige **Simular en turno** (la demo usa la hora de
    Chile; fuera de 08:00–22:00 el caso sería «fuera de turno»).
 5. En una sola pantalla basta con `/demo` en **Vista partida**: el mismo marco del hero de la portada, con el

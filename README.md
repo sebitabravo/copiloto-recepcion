@@ -27,8 +27,10 @@ Abre **http://localhost:8080/demo**:
 
 - **Vista partida** (una pantalla): el chat del huésped a la izquierda y la bandeja de recepción a la
   derecha, dentro del marco de la portada.
-- **Dos ventanas**: `http://localhost:8080/demo?vista=huesped` y `http://localhost:8080/demo?vista=recepcion`
-  (o los enlaces «Abrir … en otra ventana» de la barra). Recepción entra como **Sofía**.
+- **Dos ventanas**: desde `/demo`, los enlaces «Abrir huésped en otra ventana» y «Abrir recepción en otra ventana».
+  La página crea una **corrida** y la deja en la URL (`?corrida=`): esos enlaces, una recarga o la misma URL
+  copiada siguen en la misma corrida. Escribir a mano `/demo?vista=recepcion` sin `corrida` abre otra
+  presentación, que (a propósito) no ve los casos de la primera. Recepción entra como **Sofía**.
 - Fuera de 08:00–22:00 (hora de Chile) el caso queda «fuera de turno»: en la barra, **Turno de recepción →
   Simular en turno** muestra la atención con el cronómetro de 3 minutos.
 
@@ -109,10 +111,10 @@ token solo existe después de sembrar Chatwoot con `make up-full`. Para detener:
 portada: el **Hotel Boutique Bordeluz**, el flujo guiado real y el PMS simulado, sin IA ni credenciales externas.
 Se levanta con `make demo-local` (ver [Probar la demo](#probar-la-demo-arranque-oficial-de-la-evaluación)).
 
-1. Huésped (`/demo?vista=huesped`, «WhatsApp simulado»): pregunta **¿Dónde queda el hotel?**, toca
+1. Huésped (vista partida o «Abrir huésped en otra ventana», «WhatsApp simulado»): pregunta **¿Dónde queda el hotel?**, toca
    **Consultar fechas**, escribe **20–22 nov · 2 adultos** y **Sin niños**: el resumen trae la lectura del PMS
    con su hora. Luego **Enviar a recepción**.
-2. Recepción (`/demo?vista=recepcion`, entra como Sofía): la solicitud llega **Pendiente de recepción** con
+2. Recepción (la misma corrida: vista partida o «Abrir recepción en otra ventana», entra como Sofía): la solicitud llega **Pendiente de recepción** con
    ID (BDL-NNN), fechas, huéspedes, canal y espera. **Tomar solicitud** → **En atención**; **Consultar el
    PMS** y **Enviar respuesta**.
 3. El huésped ve «Sofía · Recepción» en el mismo hilo; recepción ve **Respondida** y la reserva sigue
