@@ -5,11 +5,13 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
+from copiloto.app import create_app
 from copiloto.config import Settings
 from copiloto.events import connect, init_db
 from copiloto.flow import Copiloto
 from copiloto.hotel import HotelData
 from copiloto.pms import PmsAdapter, PmsReading, PmsUnavailable, RoomOffer
+from fastapi.testclient import TestClient
 
 HOTEL_PATH = Path(__file__).resolve().parents[2] / "data" / "hotel.yaml"
 TZ = ZoneInfo("America/Santiago")
@@ -218,3 +220,43 @@ def make_ai(ai_settings, clock):
         return Harness(settings, hotel, db, FakeChatwoot(), pms, clock, agent), llm
 
     return build
+
+
+DEMO_SESSION = "eva3-huesped-0000000001"
+
+
+@pytest.fixture
+def demo(settings, harness):
+    """App con reloj en turno (domingo 8-nov-2026 10:14, Chile), huésped y recepción en sesiones distintas."""
+    clock = FakeClock(local_epoch(2026, 11, 8, 10, 14))
+    chatwoot = FakeChatwoot()
+    app = create_app(
+        replace(settings, demo_ai=False),
+        chatwoot=chatwoot,
+        pms=harness.pms,
+        clock=clock,
+        run_workers=False,
+        db=harness.db,
+    )
+
+    class Demo:
+        pass
+
+    d = Demo()
+    d.app, d.clock, d.db, d.chatwoot = app, clock, harness.db, chatwoot
+    d.guest = TestClient(app)
+    d.sofia = TestClient(app)
+    assert d.sofia.post("/api/demo/session", json={"name": "Sofía"}).status_code == 204
+
+    def say(text, session=DEMO_SESSION, **extra):
+        d.clock.advance(3)
+        response = d.guest.post("/api/demo/chat", json={"session_id": session, "message": text, **extra})
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def inbox(selected=None):
+        params = {"selected": selected} if selected else {}
+        return d.sofia.get("/api/panel/requests", params=params).json()
+
+    d.say, d.inbox = say, inbox
+    return d

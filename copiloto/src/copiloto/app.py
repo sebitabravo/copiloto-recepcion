@@ -32,7 +32,7 @@ from copiloto.ai.tools import ToolHooks
 from copiloto.chatwoot import ChatwootClient
 from copiloto.config import Settings, int_env
 from copiloto.demo_channel import DemoChannel
-from copiloto.events import connect, init_db, mark_processed, record_event
+from copiloto.events import connect, init_db, record_event
 from copiloto.flow import DEMO_CHANNEL, DEMO_MENU, DEMO_STYLE, Copiloto, long_date
 from copiloto.guided import guided_reply
 from copiloto.hotel import HotelData
@@ -567,18 +567,19 @@ def create_app(
             return JSONResponse({"detail": "kind debe ser answer o ack"}, status_code=422)
         if client_id is not None and (not isinstance(client_id, str) or not ACTION_ID.match(client_id)):
             return JSONResponse({"detail": "client_id inválido"}, status_code=422)
-        key = f"staff:{row['id']}:{client_id}" if client_id else None
-        if key and db.execute("SELECT 1 FROM processed_messages WHERE message_id = ?", (key,)).fetchone():
-            current = request_detail(scoped_request(request_id, request), me)
-            return {"duplicate": True, "message": None, "request": current}
         now = clock()
         try:
-            updated, message = store.staff_reply(db, row["id"], me, text, kind, now)
+            # La llave (por caso), el mensaje, el estado y el evento se guardan en UNA transacción.
+            updated, message = store.staff_reply(db, row["id"], me, text, kind, now, client_id=client_id)
+        except store.DuplicateAction:
+            # Reintento de una respuesta ya guardada (p. ej. se perdió la respuesta HTTP): no se reenvía.
+            current = request_detail(scoped_request(request_id, request), me)
+            return {"duplicate": True, "message": None, "request": current}
+        except store.ActionConflict as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=409)
         except store.RequestConflict as exc:
             current = request_detail(scoped_request(request_id, request), me)
             return JSONResponse({"detail": str(exc), "request": current}, status_code=409)
-        if key:
-            mark_processed(db, key, now)
         return {"duplicate": False, "message": message, "request": request_detail(updated, me)}
 
     @app.post("/api/panel/requests/{request_id}/close", dependencies=limited)
@@ -869,24 +870,54 @@ def create_app(
         if client_id is not None and (not isinstance(client_id, str) or not ACTION_ID.match(client_id)):
             return demo_error(422, "client_message_id inválido")
         shift = body.get("shift") if body.get("shift") in ("open", "closed") else None
-        key = f"demo:{session_id}:{client_id}" if client_id else None
-        if key and db.execute("SELECT 1 FROM processed_messages WHERE message_id = ?", (key,)).fetchone():
+        scope, digest = f"guest:{session_id}", store.fingerprint(message)
+        action = None
+        if client_id:
+            try:
+                action = store.check_action(db, scope, client_id, digest)
+            except store.ActionConflict as exc:
+                return demo_error(409, str(exc))
+        if action is not None and action["state"] == "done":
             # Reintento de un mensaje ya procesado (p. ej. se cortó la respuesta): no se vuelve a ejecutar.
             snapshot = guest_snapshot(store.demo_conversation_for_session(db, session_id))
             return {**snapshot, "reply": "", "mode": "duplicate", "events": [], "duplicate": True,
                     "usage": {"messages_left": None, "llm_ms": 0, "tokens": None}}
         session = ai_sessions.load(db, f"demo:{session_id}", clock())
-        if session.msg_count >= settings.demo_messages_per_session:
-            return demo_error(429, "Límite de mensajes de esta conversación: reiníciala para seguir", 3600)
-        wait = demo_global_limiter.check("global")
-        if wait is not None:
-            return demo_error(429, "La demo alcanzó su límite por hora, vuelve en un rato", int(wait) + 1)
-        session.msg_count += 1
-        now = clock()
-        conversation_id = store.ensure_demo_conversation(db, session_id, now)
-        if key:
-            mark_processed(db, key, now)
-        first_new = last_message_id(conversation_id)
+        saved = db.execute("SELECT * FROM demo_messages WHERE id = ?", (action["message_id"],)).fetchone() \
+            if action is not None else None
+        if saved is None:
+            if session.msg_count >= settings.demo_messages_per_session:
+                return demo_error(429, "Límite de mensajes de esta conversación: reiníciala para seguir", 3600)
+            wait = demo_global_limiter.check("global")
+            if wait is not None:
+                return demo_error(429, "La demo alcanzó su límite por hora, vuelve en un rato", int(wait) + 1)
+            session.msg_count += 1
+            now = clock()
+            # Ingreso atómico: el mensaje y su llave quedan juntos o no queda ninguno. Con recepción a cargo el
+            # turno termina aquí ('done'); si no, queda 'started' hasta que el asistente conteste.
+            with store.transaction(db):
+                conversation_id = store.ensure_demo_conversation(db, session_id, now)
+                open_row = store.guest_wrote_to_reception(db, conversation_id, now)
+                saved = store.insert_demo_message(
+                    db, conversation_id, "guest", message, now, request_id=open_row["id"] if open_row else None
+                )
+                if open_row is not None:
+                    record_event(db, conversation_id, "inbound", now, {"greeting": False})
+                if client_id:
+                    state = "done" if open_row is not None else "started"
+                    store.claim_action(db, scope, client_id, digest, now, state, saved["id"])
+            ai_sessions.save(db, session, clock())
+            answered = False
+        else:
+            # Reintento de un turno que se cortó después de guardar el mensaje: no se vuelve a guardar. Si el
+            # asistente ya alcanzó a contestar, solo se cierra la llave; si no, se termina el turno con la hora
+            # original del mensaje (así el motor reconoce un traspaso que ya ocurrió y no lo repite).
+            conversation_id, now, open_row = saved["conversation_id"], saved["created_at"], None
+            answered = db.execute(
+                "SELECT 1 FROM demo_messages WHERE conversation_id = ? AND id > ? AND role != 'guest' LIMIT 1",
+                (conversation_id, saved["id"]),
+            ).fetchone() is not None
+        first_new = saved["id"] - 1
         events: list[dict] = []
         reply, quick, mode, usage = "", [], "guided", {"llm_ms": 0, "tokens": None}
         request_id = f"demo:{session_id}:{session.msg_count}"
@@ -906,14 +937,11 @@ def create_app(
                 },
             )
 
-        if store.open_request(db, conversation_id) is not None:
+        if open_row is not None:
             # Recepción tiene el caso: el mensaje le llega a ella y el asistente no contesta (traspaso).
-            with store.transaction(db):
-                open_row = store.guest_wrote_to_reception(db, conversation_id, now)
-                store.insert_demo_message(db, conversation_id, "guest", message, now, request_id=open_row["id"])
-                record_event(db, conversation_id, "inbound", now, {"greeting": False})
-            ai_sessions.save(db, session, clock())
             mode, events = "human", [{"type": "to_reception", "request": open_row["code"]}]
+        elif answered:
+            events = [{"type": "recovered"}]
         elif demo_uses_ai:
             hooks = ToolHooks(
                 conversation_id=None,
@@ -942,17 +970,16 @@ def create_app(
                 events = [{"type": "fallback", "reason": "ia_no_disponible"}]
                 reply, quick = guided_reply(hotel, message)
             ai_sessions.save(db, session, clock())
-            store.add_demo_message(db, conversation_id, "guest", message, now)
             store.add_demo_message(db, conversation_id, "assistant", reply, now, options=quick[:4] or None)
             if any(event.get("type") == "handoff" for event in events):
                 # Mismo traspaso que el flujo guiado: solicitud, reloj y estado en una transacción.
                 demo_engine(shift).persist_external_handoff(conversation_id, DEMO_CHANNEL, "ai_handoff", now)
         else:
             # Flujo guiado real (el mismo motor del canal de Chatwoot) escribiendo por el canal de la demo.
-            store.add_demo_message(db, conversation_id, "guest", message, now)
-            ai_sessions.save(db, session, clock())
             await demo_engine(shift)._guest_message(conversation_id, message, DEMO_CHANNEL, None, now)
             events = [{"type": "guided"}]
+        if client_id and open_row is None:
+            store.complete_action(db, scope, client_id, clock())
         snapshot = guest_snapshot(conversation_id, after_id=first_new)
         if mode == "guided":
             reply = "\n\n".join(item["body"] for item in snapshot["messages"] if item["role"] == "assistant")
