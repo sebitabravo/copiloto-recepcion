@@ -63,18 +63,19 @@ Para borrar todo: `make reset` o `./scripts/demo.sh reset` (ambos piden confirma
 
 ## Demo en dos ventanas: huésped y recepción (EVA 3)
 
-`/demo` muestra **una misma consulta desde dos roles**, con un alojamiento ficticio (**Hostería Demo
-Villarrica**, `data/hosteria-demo.yaml`) y el flujo guiado real, sin IA ni credenciales externas:
+`/demo` muestra **una misma consulta desde dos roles**, con la marca, los colores y el marco del hero de la
+portada: el **Hotel Boutique Bordeluz**, el flujo guiado real y el PMS simulado, sin IA ni credenciales externas:
 
 ```bash
-make demo-local LIMPIO=1   # sin Docker: copiloto (:8100) + portada (:8080), escenario limpio
+make demo-local LIMPIO=1   # sin Docker: portada (:8080), copiloto (:8100) y PMS simulado (:8200)
 ```
 
-1. Huésped (`/demo?vista=huesped`, «WhatsApp simulado»): pregunta **¿Dónde queda la hostería?**, toca
-   **Consultar fechas**, escribe **20–22 nov · 2 adultos**, **Sin niños** y **Enviar a recepción**.
+1. Huésped (`/demo?vista=huesped`, «WhatsApp simulado»): pregunta **¿Dónde queda el hotel?**, toca
+   **Consultar fechas**, escribe **20–22 nov · 2 adultos** y **Sin niños**: el resumen trae la lectura del PMS
+   con su hora. Luego **Enviar a recepción**.
 2. Recepción (`/demo?vista=recepcion`, entra como Sofía): la solicitud llega **Pendiente de recepción** con
-   ID, fechas, huéspedes, canal y espera. **Tomar solicitud** → **En atención**; **Consultar inventario**
-   (inventario de prueba) y **Enviar respuesta**.
+   ID (BDL-NNN), fechas, huéspedes, canal y espera. **Tomar solicitud** → **En atención**; **Consultar el
+   PMS** y **Enviar respuesta**.
 3. El huésped ve «Sofía · Recepción» en el mismo hilo; recepción ve **Respondida** y la reserva sigue
    **Pendiente de confirmación**. Recargar ambas vistas muestra el mismo caso.
 
@@ -124,7 +125,7 @@ El recorrido completo, las decisiones y lo que falló en el camino están en el
 make help   # lista todos los comandos
 make test   # pytest de copiloto, pms_mock y los puentes (PMS y WhatsApp)
 make ui-test # tests de la UI de la demo (node --test)
-make demo-local # demo sin Docker (copiloto con uv + portada); LIMPIO=1 parte de cero
+make demo-local # demo sin Docker (portada, copiloto y PMS simulado); LIMPIO=1 parte de cero
 make e2e    # 4 casos reales contra el stack levantado (FAQ, disponibilidad, fuera de turno, PMS caído)
 make smoke  # construye las imágenes y comprueba que arrancan (también corre en CI)
 make backup # respaldo en caliente de Chatwoot y las bases SQLite en backups/

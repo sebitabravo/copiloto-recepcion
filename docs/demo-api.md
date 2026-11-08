@@ -4,9 +4,10 @@ La página `/demo` conversa con el copiloto por esta API, sin pasar por Chatwoot
 (configurable en `landing/config.js` como `copilotoUrl`, o la misma origen detrás de nginx). Solo se aceptan
 peticiones desde el origen de la landing (`LANDING_ORIGIN`, por defecto `http://localhost:8080`).
 
-Por defecto la demo corre el **flujo guiado** (`flow.Copiloto`, el mismo motor del canal de Chatwoot) con la
-**Hostería Demo Villarrica** (`data/hosteria-demo.yaml`, ficticia). El motor escribe por `DemoChannel`, que
-guarda todo en la transcripción aislada de la demo: hay una sola fuente de verdad para el hilo y la solicitud.
+Por defecto la demo corre el **flujo guiado** (`flow.Copiloto`, el mismo motor del canal de Chatwoot) con el
+mismo hotel y el mismo PMS simulado que la portada (`data/hotel.yaml`, `pms_mock`). El resumen de la consulta
+incluye una lectura preliminar del PMS con su hora. El motor escribe por `DemoChannel`, que guarda todo en la
+transcripción aislada de la demo: hay una sola fuente de verdad para el hilo y la solicitud.
 Con `DEMO_AI=1` y un modelo configurado, el turno lo responde el asistente con IA (sección final).
 
 ## Huésped
@@ -30,9 +31,9 @@ Respuesta 200 (además de `reply`, `mode`, `events`, `quick_replies` y `usage` d
 ```json
 {
   "conversation_id": -1234567,
-  "messages": [{"id": 7, "role": "assistant", "body": "Solicitud enviada a recepción. Te responderán por aquí.\n\nN.º VLL-024 · Disponibilidad por verificar: …",
+  "messages": [{"id": 7, "role": "assistant", "body": "Solicitud enviada a recepción. Te responderán por aquí.\n\nN.º BDL-024 · La lectbilidad por verificar: …",
                 "created_at": 1794122324.4, "options": null, "author": null, "kind": null}],
-  "request": {"code": "VLL-024", "status": "pendiente", "label": "Enviada a recepción · te responderán por aquí",
+  "request": {"code": "BDL-024", "status": "pendiente", "label": "Enviada a recepción · te responderán por aquí",
               "assignee": null, "in_shift": true, "open": true},
   "handled_by": "recepcion",
   "duplicate": false
@@ -52,7 +53,7 @@ conversación: `{"conversation_id": null, "step": null, "messages": [], "request
 ### `GET /api/demo/status`
 
 Agrega `engine` (`guided` | `ai`), `hotel` (`name`, `channel_label`), `menu` (atajos), `shift` (`start`, `end`,
-`timezone`, `in_shift`, `override`, `next_opening`) y `privacy_url` (`/privacidad?alojamiento=demo`).
+`timezone`, `in_shift`, `override`, `next_opening`) y `privacy_url` (`/privacidad`; vacío en la versión estática, que no publica el aviso).
 
 ## Recepción (sesión firmada)
 
@@ -66,7 +67,7 @@ una cookie HttpOnly. Esa sesión **solo** ve y escribe solicitudes de la demo; e
 | `GET /api/panel/requests/{id}` | Detalle: datos, `messages` (con notas internas), `events`, `faq` (latencias), `measurement`, `actions`. |
 | `POST /api/panel/requests/{id}/take` | Asigna a quien llama: **Pendiente de recepción → En atención**. No reinicia el reloj. Otra persona: 409. |
 | `POST /api/panel/requests/{id}/reply` | `{"body": "…", "kind": "answer"\|"ack", "client_id": "…"}`. `answer` deja **Respondida** y, si es la primera, detiene el reloj (`human_first_reply`). `ack` se envía pero no cuenta. Sin tomarla: 409. Con `client_id` repetido: `"duplicate": true`, sin duplicar. |
-| `POST /api/panel/requests/{id}/inventory` | `{"simulate_down": false}`. Lee el **inventario de prueba** del alojamiento ficticio: origen, hora y cupos, preliminar. Fechas sin dato o caída: `ok: false` y nota «cupo desconocido». |
+| `POST /api/panel/requests/{id}/inventory` | `{"simulate_down": false}`. Lee el **PMS simulado**: origen, hora y las 4 opciones más económicas (`more` cuenta el resto), preliminar. PMS caído o `simulate_down`: `ok: false` y nota «cupo desconocido». |
 | `POST /api/panel/requests/{id}/close` | **Cerrada**: el hilo vuelve al asistente; una consulta nueva crea otra solicitud. |
 
 Estados: atención `pendiente`, `en_atencion`, `respondida`, `cerrada`; reserva `pendiente_confirmacion` (y
