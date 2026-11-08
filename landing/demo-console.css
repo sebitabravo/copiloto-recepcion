@@ -1,64 +1,46 @@
 /* Consola de demo: composición de dos columnas, piel WhatsApp y pantalla de llamada.
    Se carga después de demo.css y solo afecta a /demo. */
 
-.tab-panel { padding-top: 28px; }
+.tab-panel { padding-top: 20px; }
 
-.demo-intro {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
-  gap: 16px 32px;
-  align-items: end;
-  padding: 30px 0 10px;
-}
+/* Workspace chrome, not a second marketing hero. */
+.demo-intro { padding: 22px 0 0; }
 .demo-intro h1 {
-  max-width: 700px;
-  margin: 8px 0 0;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: clamp(2.7rem, 5.6vw, 4.5rem);
-  line-height: .99;
+  margin: 6px 0;
+  font: 400 clamp(1.8rem, 3.2vw, 2.6rem)/1.1 var(--font-display);
   letter-spacing: -.02em;
 }
-.demo-intro .lede { max-width: 64ch; margin: 10px 0 0; color: var(--ink-2); }
-.demo-intro-aside {
-  padding: 20px 22px;
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  background: var(--card);
-  box-shadow: var(--shadow-sm);
-}
-.demo-intro-aside h2 {
-  margin: 6px 0 0;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: clamp(1.55rem, 2.2vw, 2.15rem);
-  line-height: 1.1;
-}
-.demo-intro-aside p:last-child { margin: 8px 0 0; color: var(--muted); font-size: .82rem; }
-.demo-steps {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.demo-steps li { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
-.demo-steps li > span { display: block; color: var(--accent); font: 600 .64rem var(--font-mono); letter-spacing: .08em; }
-.demo-steps strong { display: block; margin-top: 3px; font-size: .84rem; font-weight: 600; }
-.demo-steps small { display: block; margin-top: 2px; color: var(--muted); font-size: .72rem; }
-.demo-intro-note { grid-column: 1 / -1; margin: -4px 0 0; color: var(--muted); font-size: .78rem; }
+.demo-intro > .eyebrow { margin: 0; font-size: .75rem; }
+.demo-intro > p:last-child { margin: 0; color: var(--ink-2); font-size: .86rem; }
+.console-tabs { max-width: 580px; margin: 18px 0 0; }
+.demo-hero .eyebrow, .console-card .eyebrow { font-size: .75rem; letter-spacing: .1em; }
+.workspace-note { margin: 0; color: var(--ink-2); font-size: .82rem; line-height: 1.5; }
+.workspace-context { grid-column: 2; }
+.workspace-context .small { font-size: .78rem; }
+.journey-actions { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 12px 0; }
+.journey-actions .text-button { min-height: 44px; text-align: left; font-size: .82rem; }
+.demo-disclosure { border: 1px solid var(--line); border-radius: 18px; background: var(--card); margin-top: 18px; }
+.demo-disclosure > summary { padding: 12px 18px; min-height: 44px; cursor: pointer; font-weight: 600; }
+.demo-disclosure > summary span { margin-left: 8px; color: var(--muted); font-size: .78rem; font-weight: 400; }
+.demo-disclosure .eyebrow { font-size: .75rem; }
+.demo-disclosure > section, .demo-disclosure > .secondary-chat { margin: 0; padding: 20px; }
+.demo-disclosure > summary:focus-visible, .queue-toolbar :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+#canal { scroll-margin-top: 90px; }
+#panel-huesped > #canal { margin-top: 0; padding-top: 0; }
 
 .demo-hero {
   display: grid;
   grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
-  gap: 32px;
+  grid-template-rows: auto 1fr;
+  gap: 16px 32px;
   align-items: start;
-  padding: 8px 0 34px;
+  padding: 8px 0 20px;
+  border-bottom: 1px solid var(--line);
 }
+.demo-copy { grid-column: 2; }
+.demo-hero > .demo-phone { grid-column: 1; grid-row: 1 / span 2; }
 .demo-copy h2 {
-  margin: 14px 0 0;
+  margin: 6px 0 0;
   font-family: var(--font-display);
   font-weight: 400;
   font-size: clamp(1.55rem, 2.2vw, 2.15rem);
@@ -67,29 +49,23 @@
 }
 .demo-copy h2 em { font-style: italic; color: var(--accent); }
 .demo-copy .lede { margin-top: 10px; max-width: 52ch; font-size: .9rem; line-height: 1.55; color: var(--ink-2); }
-.demo-points { margin: 26px 0 0; padding: 0; list-style: none; display: grid; gap: 14px; }
-.demo-points li { display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: start; }
-.demo-points b { display: block; font-size: .9rem; font-weight: 600; }
-.demo-points div span { font-size: .8rem; color: var(--muted); }
-.dot-mark {
-  width: 22px; height: 22px; border-radius: 50%; background: var(--ok-bg); color: var(--ok);
-  display: grid; place-items: center; font-size: .66rem; font-weight: 700; margin-top: 2px;
-}
-.eyebrow-tight { margin-top: 30px; }
 .demo-hero > * { min-width: 0; }
-.scenario-buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.scenario-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.scenario-buttons #cancel-scenario { grid-column: 1 / -1; }
 .scenario-buttons button {
-  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; white-space: normal; text-align: left;
   border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
   font: 500 .82rem var(--font-ui); cursor: pointer;
-  transition: border-color .2s var(--ease), transform .2s var(--ease);
+  transition: border-color .2s, transform .2s;
 }
 .scenario-buttons button span[aria-hidden] { font: 600 .64rem var(--font-mono); color: var(--accent); }
 .scenario-buttons button:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
 .scenario-buttons button:disabled { opacity: .55; cursor: not-allowed; }
-#scenario-status { margin-top: 10px; font-size: .78rem; color: var(--muted); }
-.demo-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 22px; }
-.demo-meta .text-button { font-size: .78rem; }
+#scenario-status { margin: 8px 0 0; font-size: .78rem; color: var(--muted); }
+#scenario-status:empty { display: none; }
+.demo-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin-top: 10px; }
+.demo-meta .text-button { font-size: .78rem; min-height: 44px; }
+.demo-meta .pill { font-size: .75rem; }
 .demo-copy .disclaimer, .demo-copy .notice { margin-top: 14px; }
 
 /* Teléfono con piel WhatsApp */
@@ -116,7 +92,7 @@
   display: block; font-size: .82rem; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.wa-sub { display: flex; align-items: center; gap: 5px; font-size: .66rem; color: #f2fbf8; }
+.wa-sub { display: flex; align-items: center; gap: 5px; font-size: .75rem; color: #f2fbf8; }
 .wa-sub .status-dot { width: 6px; height: 6px; background: #9fd0be; box-shadow: none; }
 .wa-sub .status-dot.ready { background: #25d366; box-shadow: 0 0 0 2px rgb(37 211 102 / 22%); }
 .wa-actions { margin-left: auto; display: flex; align-items: center; gap: 4px; }
@@ -148,7 +124,7 @@
 /* Aviso de privacidad dentro del historial, con la forma del aviso de cifrado de WhatsApp. */
 .chat-system {
   align-self: center; max-width: 88%; margin: 0 auto 10px; padding: 6px 10px; border-radius: 8px;
-  background: #ffeecd; color: #54656f; font-size: .66rem; line-height: 1.45; text-align: center;
+  background: #ffeecd; color: #54656f; font-size: .75rem; line-height: 1.45; text-align: center;
   box-shadow: 0 1px .5px rgb(11 20 26 / 10%);
 }
 @media (prefers-color-scheme: dark) {
@@ -176,8 +152,8 @@
   border-top: 1px solid var(--wa-line); border-radius: 0;
 }
 .composer textarea {
-  grid-column: auto; min-height: 38px; max-height: 92px; padding: 8px 12px;
-  border: 0; border-radius: 999px; background: #fff; font-size: .8rem; line-height: 1.35;
+  grid-column: auto; min-height: 44px; max-height: 92px; padding: 8px 12px;
+  border: 0; border-radius: 999px; background: var(--wa-in); color: var(--wa-ink); font-size: 1rem; line-height: 1.35;
 }
 .wa-emoji { color: var(--wa-muted); display: grid; place-items: center; }
 .composer-bottom { display: flex; align-items: center; }
@@ -188,11 +164,11 @@
 }
 .send-button:hover:not(:disabled) { background: #019475; }
 .send-button:disabled { opacity: .55; cursor: not-allowed; }
-.composer #input-help { grid-column: 1 / -1; margin: 0 0 0 8px; font-size: .6rem; color: var(--wa-muted); }
+.composer #input-help { grid-column: 1 / -1; margin: 0 0 0 8px; font-size: .75rem; color: var(--wa-muted); }
 
-.device-caption { font-size: .72rem; color: var(--muted); text-align: center; line-height: 1.5; }
-.device-caption .text-button { font-size: .72rem; margin-left: 6px; }
-.demo-phone #reset-help { font-size: .68rem; color: var(--muted); text-align: center; }
+.device-caption { font-size: .75rem; color: var(--muted); text-align: center; line-height: 1.5; }
+.device-caption .text-button { font-size: .75rem; min-height: 44px; margin-left: 6px; }
+.demo-phone #reset-help { font-size: .75rem; color: var(--muted); text-align: center; }
 
 /* Llamada dentro del teléfono: quién, cronómetro y estado arriba; transcripción; una fila de controles. */
 .call-screen {
@@ -211,20 +187,20 @@
 }
 .call-who { min-width: 0; }
 .call-name { font-size: .86rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.call-meta { font-size: .66rem; color: #8696a0; }
+.call-meta { font-size: .75rem; color: #8696a0; }
 .call-timer { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: #d1d7db; }
 .call-state {
   align-self: center; max-width: 100%; padding: 5px 12px; border-radius: 999px;
-  background: #182229; color: #d1d7db; font-size: .72rem; text-align: center;
+  background: #182229; color: #d1d7db; font-size: .75rem; text-align: center;
 }
 .voice-log {
   width: 100%; flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 0;
   display: flex; flex-direction: column; gap: 6px; list-style: none;
 }
-.voice-line { background: #202c33; border-radius: 8px; padding: 6px 9px; font-size: .7rem; line-height: 1.4; max-width: 92%; }
-.voice-line strong { display: block; font-size: .58rem; color: #53bdeb; margin-bottom: 1px; font-weight: 600; }
+.voice-line { background: #202c33; border-radius: 8px; padding: 6px 9px; font-size: .82rem; line-height: 1.4; max-width: 92%; }
+.voice-line strong { display: block; font-size: .75rem; color: #53bdeb; margin-bottom: 1px; font-weight: 600; }
 .voice-line.guest { background: #005c4b; align-self: flex-end; }
-.voice-line.system { background: #182229; color: #8696a0; font-size: .64rem; }
+.voice-line.system { background: #182229; color: #8696a0; font-size: .75rem; }
 /* Una sola fila: los botones ocultos no dejan hueco y nada se parte en líneas. */
 .call-actions { display: flex; align-items: center; justify-content: center; gap: 28px; }
 .call-round {
@@ -237,23 +213,23 @@
 .call-hangup { background: #ea4335; color: #fff; }
 .call-hangup:hover:not(:disabled) { background: #d93025; }
 .call-lang select {
-  max-width: 96px; min-height: 36px; padding: 6px 8px; border: 1px solid #2a3942; border-radius: 8px;
-  background: #111b21; color: #e9edef; font-size: .7rem;
+  max-width: 110px; min-height: 44px; padding: 6px 8px; border: 1px solid #2a3942; border-radius: 8px;
+  background: #111b21; color: #e9edef; font-size: .8rem;
 }
 .voice-typed { display: flex; flex-direction: row; align-items: center; gap: 8px; width: 100%; }
 .voice-typed input {
-  flex: 1; min-width: 0; min-height: 40px; background: #202c33; border: 0; border-radius: 999px;
-  padding: 8px 14px; color: #e9edef; font-size: .74rem;
+  flex: 1; min-width: 0; min-height: 44px; background: #202c33; border: 0; border-radius: 999px;
+  padding: 8px 14px; color: #e9edef; font-size: 1rem;
 }
 .voice-typed input::placeholder { color: #8696a0; }
 .call-send {
-  flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #00a884; color: #fff;
+  flex: none; width: 44px; height: 44px; border-radius: 50%; border: 0; background: #00a884; color: #fff;
   display: grid; place-items: center; cursor: pointer;
 }
 .call-send:hover:not(:disabled) { background: #019475; }
 .call-send:disabled, .voice-typed input:disabled { opacity: .55; cursor: not-allowed; }
-.call-support { font-size: .66rem; color: #ffb4a9; text-align: center; line-height: 1.4; }
-.call-fineprint { font-size: .62rem; color: #8696a0; text-align: center; line-height: 1.4; }
+.call-support { font-size: .75rem; color: #ffb4a9; text-align: center; line-height: 1.4; }
+.call-fineprint { font-size: .75rem; color: #8696a0; text-align: center; line-height: 1.4; }
 @media (prefers-reduced-motion: reduce) {
   .call-round { transition: none; }
 }
@@ -268,7 +244,7 @@
 .ghost-trace { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }
 .ghost-trace li { border: 1px dashed var(--line); border-radius: 12px; padding: 12px 14px; background: var(--card); }
 .ghost-trace b { display: block; font-size: .8rem; }
-.ghost-trace em { font-style: normal; font-size: .7rem; color: var(--muted); }
+.ghost-trace em { font-style: normal; font-size: .75rem; color: var(--muted); }
 .live-block { padding: 32px 0 8px; border-top: 1px solid var(--line); margin-top: 0; }
 .live-block .live-grid { margin-top: 20px; }
 /* Botones al pie de cada tarjeta: la descripción crece y empuja botón y resultado hacia abajo. */
@@ -301,7 +277,7 @@
   color: var(--ink-2); font-size: .84rem;
 }
 .console-summary b { margin-right: 4px; }
-.console-summary .risk, .console-row .risk { font-size: .7rem; padding: 4px 10px; }
+.console-summary .risk, .console-row .risk { font-size: .75rem; padding: 4px 10px; }
 .console-summary + .console-state, .console-summary ~ .console-list { margin-top: 12px; }
 .console-row { padding: 12px 10px; }
 #recepcion-detail > .text-button { display: inline-flex; margin: 14px 0 10px; }
@@ -314,8 +290,24 @@
 #recepcion-detail .detail-list dt, #recepcion-detail .detail-list dd { padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
 .console-notes-title { margin-top: 36px; }
 #recepcion-detail-body > .small { margin-top: 22px; }
+/* Restore card insets above demo.css's .tab-panel > section reset, without touching the phone. */
+.tab-panel > .console-card { padding: 26px; border-top: 1px solid var(--line); }
 /* La consola no compite con la portada: títulos de card un paso más chicos que el titular de marketing. */
 .console-card h2 { font-size: clamp(1.55rem, 2.2vw, 2.15rem); }
+
+/* Optional queue seam: console.js owns controls, filters, counts and data. */
+.queue-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-top: 18px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-2); }
+.queue-toolbar label { display: grid; gap: 4px; flex: 1 1 180px; color: var(--ink-2); font-size: .8rem; }
+.queue-toolbar input, .queue-toolbar select { width: 100%; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font: inherit; font-size: 1rem; }
+.queue-toolbar button { min-height: 44px; }
+#queue-result-count { flex-basis: 100%; margin: 0; color: var(--ink-2); font-size: .8rem; }
+.queue-filter-empty { padding: 18px; border: 1px dashed var(--line); border-radius: 12px; color: var(--ink-2); font-size: .86rem; }
+.console-row .sub, .console-notes small { font-size: .75rem; }
+
+/* Inline expansion: no overlay, route change or hidden collapse control. */
+#admin-console.is-expanded .admin-frame { height: 88vh; height: 88dvh; min-height: 480px; }
+#admin-console.is-expanded .admin-text { max-width: none; }
+#admin-expand { flex-shrink: 0; }
 
 /* Admin: el aviso mide exactamente lo que la columna de texto (comparten contenedor). */
 .admin-text { max-width: 62ch; }
@@ -323,8 +315,8 @@
 #admin-note { margin-top: 16px; font-size: .82rem; }
 
 @media (max-width: 1000px) {
-  .demo-intro { grid-template-columns: 1fr; gap: 14px; }
-  .demo-hero { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .demo-hero { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; gap: 16px; }
+  .demo-hero > .demo-phone, .demo-copy, .workspace-context { grid-column: 1; grid-row: auto; order: 0; }
   .demo-copy .lede { max-width: none; }
   .timeline-empty { grid-template-columns: 1fr; }
 }
@@ -334,21 +326,18 @@
   .secondary-chat-action #chat-status { text-align: left; }
 }
 @media (max-width: 620px) {
-  .demo-intro { padding-top: 20px; }
-  .demo-intro h1 { font-size: clamp(2.05rem, 8vw, 2.7rem); }
-  .demo-intro .lede { font-size: .9rem; line-height: 1.45; }
-  .demo-intro-aside { display: none; }
-  .demo-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-  .demo-steps li { min-width: 0; padding: 9px 8px; }
-  .demo-steps li > span { font-size: .55rem; letter-spacing: .02em; }
-  .demo-steps strong { font-size: .7rem; line-height: 1.2; }
-  .demo-steps small { font-size: .62rem; line-height: 1.3; }
-  .demo-intro-note { margin-top: 0; font-size: .72rem; line-height: 1.35; }
+  .demo-intro { padding-top: 14px; }
+  .demo-intro h1 { font-size: 1.8rem; }
+  .demo-intro > p:last-child { font-size: .8rem; line-height: 1.45; }
   .demo-copy h2 { font-size: 1.5rem; }
-  /* Chips en dos columnas: el guion deja de ocupar tres filas en el móvil. */
-  .scenario-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .scenario-buttons button { white-space: normal; text-align: left; }
-  .scenario-buttons #cancel-scenario { grid-column: 1 / -1; justify-content: center; }
+  .demo-copy .lede { margin: 6px 0; font-size: .82rem; }
+  .demo-copy .eyebrow { margin: 0; }
+  .demo-disclosure > summary span { display: block; margin-left: 0; }
+  .demo-disclosure > section, .demo-disclosure > .secondary-chat { padding: 16px; }
+  .section-heading { align-items: start; flex-wrap: wrap; }
+  .queue-toolbar { padding: 12px; }
+  .queue-toolbar label { flex-basis: 100%; }
+  .tab-panel > .console-card { padding: 20px; }
   .ghost-trace { grid-template-columns: 1fr; }
   .demo-phone .device { max-width: 100%; }
   .messages { height: 380px; }
@@ -363,7 +352,7 @@
   .topbar { flex-wrap: nowrap; padding-block: 9px; }
   .topbar nav { flex-wrap: nowrap; }
   .topbar nav .nav-cta { display: none; }
-  .demo-banner { font-size: .7rem; line-height: 1.4; }
+  .demo-banner { font-size: .75rem; line-height: 1.4; }
   .demo-banner-in { padding-block: 6px; }
   .tab-panel { padding-top: 18px; }
   #recepcion-detail .detail-list { grid-template-columns: minmax(0, 1fr); }

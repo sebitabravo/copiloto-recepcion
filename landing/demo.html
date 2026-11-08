@@ -31,7 +31,7 @@
 <link rel="preload" href="fonts/instrument-serif-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="demo.css?v=20261107a">
-<link rel="stylesheet" href="demo-console.css?v=20261108b">
+<link rel="stylesheet" href="demo-console.css?v=20261109b">
 </head>
 <body>
 <a class="skip" href="#main">Saltar al contenido</a>
@@ -56,24 +56,11 @@
 </div>
 
 <main id="main" class="wrap" tabindex="-1">
-  <section class="demo-intro" aria-labelledby="demo-page-title">
-    <div class="demo-intro-main">
-      <p class="eyebrow">Recorrido guiado · 2 minutos</p>
-      <h1 id="demo-page-title">De una pregunta a una atención más clara.</h1>
-      <p class="lede">Prueba el copiloto como huésped; Recepción y Administración siguen en esta misma página.</p>
-    </div>
-    <aside class="demo-intro-aside" aria-label="Qué vas a ver">
-      <p class="eyebrow">Qué vas a ver</p>
-      <h2>Primero el valor. Después, el detalle.</h2>
-      <p>La conversación es el punto de entrada. La traza técnica aparece cuando la necesitas.</p>
-    </aside>
-    <ol class="demo-steps" aria-label="Pasos del recorrido">
-      <li><span>01 · HUÉSPED</span><strong>Haz una consulta</strong><small>Escribe o inicia una llamada.</small></li>
-      <li><span>02 · COPILOTO</span><strong>Revisa la respuesta</strong><small>Abre la traza para ver sus acciones.</small></li>
-      <li><span>03 · EQUIPO</span><strong>Explora las otras vistas</strong><small>Recepción y PMS siguen en /demo.</small></li>
-    </ol>
-    <p class="demo-intro-note">Derivación simulada: no se avisa a recepción. El canal real de contacto está separado.</p>
-  </section>
+  <header class="demo-intro" aria-labelledby="demo-page-title">
+    <p class="eyebrow">Bordeluz · espacio de prueba</p>
+    <h1 id="demo-page-title">Una recepción, tres perspectivas.</h1>
+    <p>Conversa con el copiloto, revisa la cola o explora el PMS. Datos ficticios, sin reservas reales.</p>
+  </header>
   <div id="console-tabs" class="console-tabs" role="tablist" aria-label="Perspectivas de la demo">
     <button id="tab-huesped" role="tab" aria-selected="true" aria-controls="panel-huesped" type="button">Huésped</button>
     <button id="tab-recepcion" role="tab" aria-selected="false" aria-controls="panel-recepcion" tabindex="-1" type="button">Recepción</button>
@@ -83,15 +70,9 @@
   <div id="panel-huesped" class="tab-panel" role="tabpanel" aria-labelledby="tab-huesped" tabindex="0">
     <section id="demo" class="demo-hero" aria-labelledby="demo-title">
       <div class="demo-copy">
-        <p class="eyebrow">Perspectiva de huésped</p>
-        <h2 id="demo-title">Habla con el <em>copiloto</em>.</h2>
-        <p class="lede">Escribe o llama para probar el copiloto del hotel. La traza muestra qué consulta; una derivación simulada no avisa a recepción. Una persona confirma las reservas.</p>
-        <ul class="demo-points">
-          <li><span class="dot-mark" aria-hidden="true">✓</span><div><b>Consulta el PMS simulado</b><span>Habitaciones, disponibilidad y precios de prueba.</span></div></li>
-          <li><span class="dot-mark" aria-hidden="true">✓</span><div><b>Respuesta por voz</b><span>Llama desde el teléfono con el icono de llamada.</span></div></li>
-        </ul>
-
-        <p class="eyebrow eyebrow-tight">Prueba una consulta</p>
+        <p class="eyebrow">01 · Conversación</p>
+        <h2 id="demo-title">Prueba el <em>copiloto</em>.</h2>
+        <p class="lede">Escribe, llama con el icono del teléfono o elige una consulta guiada.</p>
         <div class="scenario-buttons">
           <button type="button" data-scenario="info"><span aria-hidden="true">01</span>Ubicación y servicios</button>
           <button type="button" data-scenario="booking" disabled><span aria-hidden="true">02</span><span class="scenario-label">Disponibilidad sin reservar</span></button>
@@ -104,8 +85,6 @@
           <span class="pill" id="model-label">Conectando con el asistente…</span>
           <button id="toggle-actions" class="text-button" type="button" aria-expanded="false" aria-controls="actions-panel">Ver traza técnica</button>
         </div>
-        <p id="capability" class="small" hidden></p>
-        <div id="guided-banner" class="notice" hidden>Modo sin IA: respuestas guiadas sobre información del hotel, sin consultas al PMS ni creación de reservas.</div>
         <div id="status-error" class="notice error" role="alert" hidden><span></span><button type="button">Reintentar</button></div>
       </div>
 
@@ -196,8 +175,19 @@
         </p>
         <p id="reset-help" class="small">Reinicia solo el historial de esta conversación; no elimina reservas del PMS ni conversaciones de Chatwoot.</p>
       </div>
+      <div class="workspace-context">
+        <p class="workspace-note">La derivación de este chat es simulada: no avisa a recepción. <a href="#canal">Usar el canal real</a>.</p>
+        <div class="journey-actions" aria-label="Seguir explorando">
+          <button type="button" class="text-button" data-demo-view="recepcion">Ver cola de recepción →</button>
+          <button type="button" class="text-button" data-demo-view="admin">Explorar PMS →</button>
+        </div>
+        <p id="capability" class="small" hidden></p>
+        <div id="guided-banner" class="notice" hidden>Modo sin IA: respuestas guiadas sobre información del hotel, sin consultas al PMS ni creación de reservas.</div>
+      </div>
     </section>
 
+    <details id="demo-diagnostics" class="demo-disclosure">
+      <summary>Diagnóstico <span>Traza, conexión y métricas de la demo</span></summary>
     <section id="acciones" class="trace-block" aria-labelledby="thinking-title">
       <div class="trace-head">
         <div>
@@ -218,18 +208,6 @@
         </div>
         <div id="timeline" class="timeline"></div>
       </aside>
-    </section>
-
-    <section id="canal" class="secondary-chat" aria-labelledby="canal-title">
-      <div class="secondary-chat-copy">
-        <p class="eyebrow">Canal real</p>
-        <h2 id="canal-title">Escribir a recepción</h2>
-        <p>Canal separado: el widget envía tu mensaje a la bandeja de recepción (Chatwoot) si está configurado y conectado. No traslada el historial del simulador ni garantiza atención inmediata.</p>
-      </div>
-      <div class="secondary-chat-action">
-        <button id="open-chat" class="button" type="button">Abrir el chat de recepción <span aria-hidden="true">→</span></button>
-        <p id="chat-status" class="small" role="status" aria-live="polite"></p>
-      </div>
     </section>
 
     <section id="en-vivo" class="reveal live-block" aria-labelledby="live-title">
@@ -263,6 +241,21 @@
         </article>
       </div>
     </section>
+    </details>
+    <section id="canal" aria-labelledby="canal-title">
+      <details id="demo-channel" class="demo-disclosure">
+        <summary id="canal-title">Canal real de recepción <span>Chatwoot · separado del simulador</span></summary>
+        <div class="secondary-chat">
+          <div class="secondary-chat-copy">
+            <p>El widget envía tu mensaje a la bandeja de recepción (Chatwoot) si está configurado y conectado. No traslada el historial del simulador ni garantiza atención inmediata.</p>
+          </div>
+          <div class="secondary-chat-action">
+            <button id="open-chat" class="button" type="button">Abrir el chat de recepción <span aria-hidden="true">→</span></button>
+            <p id="chat-status" class="small" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </details>
+    </section>
     <div id="assistant-announcement" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     <noscript><p>Activa JavaScript para conversar con el asistente y ver sus herramientas.</p></noscript>
   </div>
@@ -271,13 +264,19 @@
     <section id="recepcion-console" class="card console-card" aria-labelledby="recepcion-title">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">Vista gerencia</p>
-          <h2 id="recepcion-title">La cola de recepción, en la misma vista</h2>
+          <p class="eyebrow">02 · Recepción · solo lectura</p>
+          <h2 id="recepcion-title">Prioriza lo que necesita al equipo.</h2>
         </div>
         <span class="pill" id="recepcion-session"></span>
       </div>
-      <p class="section-intro">Solo lectura: qué espera en la cola, con cuánto tiempo y su riesgo de SLA. La confirmación de una reserva sigue siendo tarea de una persona.</p>
+      <p class="section-intro">Cola recibida del servidor de recepción: espera, riesgo de SLA y contexto de cada conversación. Abre una fila para leer el detalle; aquí no se responde ni se confirma una reserva.</p>
+      <p class="workspace-note">Esta cola no recibe las derivaciones simuladas del chat de prueba. El canal real es <a href="#canal">Chatwoot</a>.</p>
+      <div class="journey-actions" aria-label="Otras perspectivas">
+        <button type="button" class="text-button" data-demo-view="huesped">← Volver a la conversación</button>
+        <button type="button" class="text-button" data-demo-view="admin">Ver habitaciones y reservas →</button>
+      </div>
       <p id="recepcion-summary" class="console-summary" hidden></p>
+      <div id="reception-tools"></div>
       <div id="recepcion-state" class="console-state" role="status" aria-live="polite" hidden></div>
       <div id="recepcion-detail" hidden>
         <button id="recepcion-back" class="text-button" type="button">← Volver a la cola</button>
@@ -291,15 +290,20 @@
     <section id="admin-console" class="card console-card" aria-labelledby="admin-title">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">Administración</p>
-          <h2 id="admin-title">El PMS simulado, sin salir de la consola</h2>
+          <p class="eyebrow">03 · Administración · PMS simulado</p>
+          <h2 id="admin-title">Habitaciones y reservas, en contexto.</h2>
         </div>
+        <button id="admin-expand" class="button ghost" type="button" aria-expanded="false" aria-controls="admin-console">Ampliar PMS</button>
       </div>
       <div class="admin-text">
-        <p class="section-intro">El hotel ficticio tal como lo ve el personal: habitaciones, reservas y estado. Se carga al entrar a esta pestaña.</p>
-        <p class="note" id="admin-note">Confirmar una reserva es tarea humana: el copiloto propone y registra avisos, pero nadie confirma por ti.</p>
+        <p class="section-intro">PMS conectado de un hotel ficticio: habitaciones, reservas y estado. Se carga al entrar a esta pestaña; no es una imagen ni un resumen inventado.</p>
+        <p class="note" id="admin-note">Los cambios dentro del PMS afectan sus datos de prueba. No hay reservas reales. El permiso del copiloto para crear reservas simuladas depende de la configuración que muestra la vista Huésped.</p>
       </div>
       <iframe id="admin-frame" class="admin-frame" title="PMS simulado de Hotel Bordeluz" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      <div class="journey-actions" aria-label="Continuar desde el PMS">
+        <button type="button" class="text-button" data-demo-view="recepcion">← Revisar la cola de recepción</button>
+        <button type="button" class="text-button" data-demo-view="huesped">Probar una consulta al copiloto →</button>
+      </div>
       <div class="admin-links">
         <a id="admin-metrics" class="button ghost" target="_blank" rel="noopener">Métricas del piloto <span aria-hidden="true">→</span></a>
       </div>
@@ -328,6 +332,7 @@
 <script src="config.js?v=20261107a" defer></script>
 <script src="demo.js?v=20261108a" defer></script>
 <script src="voice.js?v=20261108a" defer></script>
-<script src="console.js?v=20261107a" defer></script>
+<script src="console.js?v=20261109a" defer></script>
+<script src="demo-journey.js?v=20261109a" defer></script>
 </body>
 </html>
