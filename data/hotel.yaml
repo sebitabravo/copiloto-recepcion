@@ -3,6 +3,8 @@
 # Los precios, la distribución de las 20 habitaciones y el horario de turno son SIMULADOS o por validar.
 hotel:
   name: Hotel Boutique Bordeluz
+  # Prefijo del número de solicitud que ve recepción (BDL-001, BDL-002…).
+  request_prefix: BDL
   address: "Sector Molco, Camino Villarrica-Pucón Km 12.5, Las Chilcas, Villarrica, Araucanía"
   maps_url: "https://www.google.com/maps/search/?api=1&query=Hotel+Boutique+Bordeluz+Villarrica"
   whatsapp: "+56 963949710"

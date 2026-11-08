@@ -146,8 +146,6 @@ services:
     environment:
       COPILOTO_ENV: production
       HOTEL_DATA_PATH: /app/data/hotel.yaml
-      # /demo usa un alojamiento ficticio (Hostería Demo Villarrica) y su inventario de prueba.
-      DEMO_HOTEL_DATA_PATH: /app/data/hosteria-demo.yaml
       COPILOTO_DB_PATH: /var/lib/copiloto/copiloto.sqlite
       CHATWOOT_URL: http://chatwoot:3000
       CHATWOOT_PUBLIC_URL: ${CHATWOOT_PUBLIC_URL:-http://localhost:3000}

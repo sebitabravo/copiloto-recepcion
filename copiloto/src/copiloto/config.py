@@ -34,8 +34,6 @@ def float_env(env: dict[str, str], name: str, default: float | None) -> float | 
 @dataclass(frozen=True)
 class Settings:
     hotel_data_path: str = "../data/hotel.yaml"
-    # Alojamiento ficticio de /demo (Hostería Demo Villarrica). Si falta el archivo, la demo usa el del hotel.
-    demo_hotel_data_path: str = "../data/hosteria-demo.yaml"
     db_path: str = "./copiloto.sqlite"
     chatwoot_url: str = "http://chatwoot:3000"
     chatwoot_public_url: str = "http://localhost:3000"
@@ -114,7 +112,6 @@ class Settings:
         team = env.get("CHATWOOT_TEAM_ID")
         return cls(
             hotel_data_path=env.get("HOTEL_DATA_PATH", cls.hotel_data_path),
-            demo_hotel_data_path=env.get("DEMO_HOTEL_DATA_PATH", cls.demo_hotel_data_path),
             db_path=env.get("COPILOTO_DB_PATH", cls.db_path),
             chatwoot_url=env.get("CHATWOOT_URL", cls.chatwoot_url),
             chatwoot_public_url=env.get("CHATWOOT_PUBLIC_URL", cls.chatwoot_public_url),

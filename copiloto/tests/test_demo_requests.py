@@ -1,7 +1,8 @@
 """Recorrido de la EVA 3 en la demo: huésped → solicitud → recepción → respuesta en el mismo hilo.
 
-Fija, con el flujo guiado (sin modelo) y la Hostería Demo Villarrica (ficticia):
+Fija, con el flujo guiado (sin modelo), el Hotel Boutique Bordeluz de la portada y el PMS simulado:
 - D02 ubicación y FAQ aprobadas antes de pedir datos; «Hablar con recepción» deriva sin fechas.
+- Paso 03 de la portada: el resumen muestra la lectura del PMS con su hora, preliminar; sin PMS no promete.
 - D03 fechas invertidas: error entendible y lo correcto (adultos) no se vuelve a pedir.
 - D04 la solicitud queda con ID, fechas, huéspedes y canal, vinculada al hilo del huésped.
 - D05 tomar → «En atención» con responsable; responder → «Respondida»; la reserva sigue pendiente.
@@ -64,7 +65,7 @@ def demo(settings, harness):
 
 def canonical(demo, **extra):
     """Caso canónico: ubicación, fechas, 2 adultos, sin niños, enviar."""
-    demo.say("¿Dónde queda la hostería?", **extra)
+    demo.say("¿Dónde queda el hotel?", **extra)
     demo.say("Consultar fechas", **extra)
     demo.say("20–22 nov · 2 adultos", **extra)
     demo.say("Sin niños", **extra)
@@ -72,12 +73,14 @@ def canonical(demo, **extra):
 
 
 def test_location_and_faq_are_answered_before_asking_for_stay_data(demo):
-    body = demo.say("¿Dónde queda la hostería?")
-    assert body["messages"][-1]["body"].startswith("Cerca de la costanera de Villarrica.")
+    body = demo.say("¿Dónde queda el hotel?")
+    assert body["messages"][1]["body"].startswith("Hola, soy el asistente virtual de Hotel Boutique Bordeluz.")
+    assert body["messages"][-1]["body"].startswith("Ubicación: Estamos en el sector Molco")
     assert "¿Para qué fechas?" not in body["reply"], "la ubicación no exige dar fechas"
-    faq = demo.say("¿A qué hora es el check-in?")
-    assert faq["messages"][-1]["body"] == "El check-in es desde las 15:00 y el check-out hasta las 11:00."
+    faq = demo.say("¿Tienen piscina?")
+    assert faq["messages"][-1]["body"].startswith("Tenemos piscina temperada")
     assert faq["request"] is None and faq["handled_by"] == "asistente"
+    assert "963949710" not in body["reply"] + faq["reply"], "la demo nunca da el número real del hotel"
 
 
 def test_talk_to_reception_works_without_dates_and_pending_fields_are_explicit(demo):
@@ -102,6 +105,8 @@ def test_guest_can_correct_the_summary_before_sending(demo):
     demo.say("Quiero consultar del 20 al 22 de noviembre para 2 adultos")
     summary = demo.say("sin niños")
     assert "Revisa tu solicitud" in summary["reply"]
+    assert "Disponible según lectura del PMS a las 15:00" in summary["reply"], "sello de hora de la lectura"
+    assert "lectura preliminar" in summary["reply"] and "nada queda reservado" in summary["reply"]
     assert summary["quick_replies"] == ["Enviar a recepción", "Corregir fechas", "Corregir huéspedes"]
     corrected = demo.say("mejor 3 adultos")
     assert "3 adultos" in corrected["reply"] and "20 nov" in corrected["reply"]
@@ -116,7 +121,8 @@ def test_canonical_case_end_to_end(demo):
     sent = canonical(demo)
     assert sent["messages"][-1]["body"].startswith("Solicitud enviada a recepción. Te responderán por aquí.")
     code = sent["request"]["code"]
-    assert code.startswith("VLL-") and code in sent["reply"]
+    assert code.startswith("BDL-") and code in sent["reply"]
+    assert "lectura del PMS es preliminar" in sent["reply"]
 
     inbox = demo.inbox()
     item = inbox["requests"][0]
@@ -132,8 +138,9 @@ def test_canonical_case_end_to_end(demo):
     assert taken["commercial_at"] == item["commercial_at"], "asignar no reinicia el reloj"
 
     inventory = demo.sofia.post(f"/api/panel/requests/{item['id']}/inventory", json={}).json()
-    assert inventory["ok"] is True and inventory["simulated"] is True
-    assert {offer["code"]: offer["available_units"] for offer in inventory["offers"]} == {"doble": 1}
+    assert inventory["ok"] is True and inventory["simulated"] is True and inventory["source"] == "PMS simulado"
+    assert {offer["code"]: offer["available_units"] for offer in inventory["offers"]} == {
+        "doble_con_jacuzzi": 2, "doble_sin_vista": 1}
 
     demo.clock.advance(15)
     answered = demo.sofia.post(f"/api/panel/requests/{item['id']}/reply", json={"body": REPLY}).json()["request"]
@@ -225,7 +232,7 @@ def test_off_shift_request_is_saved_with_the_next_opening_and_kept_out_of_the_ta
 
 
 def test_the_clock_starts_when_the_commercial_query_enters_and_an_ack_does_not_stop_it(demo):
-    demo.say("¿Dónde queda la hostería?")
+    demo.say("¿Dónde queda el hotel?")
     entered = demo.say("Consultar fechas")
     demo.say("20–22 nov · 2 adultos")
     demo.say("Sin niños")
@@ -260,30 +267,38 @@ async def test_a_missed_target_is_recorded_as_a_breach_in_the_demo_thread(demo):
     assert demo.chatwoot.messages == [] and demo.chatwoot.labels == {}, "el aviso se queda en la demo"
 
 
-def test_inventory_unknown_dates_or_outage_never_report_availability(demo):
-    demo.say("Quiero consultar del 10 al 12 de mayo para 2 adultos")
-    demo.say("Sin niños")
-    demo.say("Enviar a recepción")
-    request_id = demo.inbox()["requests"][0]["id"]
-    demo.sofia.post(f"/api/panel/requests/{request_id}/take")
-    unknown = demo.sofia.post(f"/api/panel/requests/{request_id}/inventory", json={}).json()
-    assert unknown["ok"] is False and "cupo desconocido" in unknown["reason"]
-    down = demo.sofia.post(f"/api/panel/requests/{request_id}/inventory", json={"simulate_down": True}).json()
-    assert down["ok"] is False and "caída simulada" in down["reason"]
-    notes = [m["body"] for m in down["request"]["messages"] if m["role"] == "note"]
+def test_a_pms_outage_never_reports_availability_and_stays_with_reception(demo, harness):
+    harness.pms.down = True
+    demo.say("Quiero consultar del 10 al 12 de diciembre para 2 adultos")
+    summary = demo.say("Sin niños")
+    assert "No pude consultar el sistema de reservas" in summary["reply"]
+    assert "Disponible" not in summary["reply"], "sin lectura no se promete cupo"
+    sent = demo.say("Enviar a recepción")
+    assert "Disponibilidad por verificar" in sent["reply"]
+    item = demo.inbox()["requests"][0]
+    assert item["reason_label"] == "Cupos sin verificar (PMS sin respuesta)"
+    demo.sofia.post(f"/api/panel/requests/{item['id']}/take")
+    down = demo.sofia.post(f"/api/panel/requests/{item['id']}/inventory", json={}).json()
+    assert down["ok"] is False and down["reason"] == "el PMS no respondió"
+    harness.pms.down = False
+    simulated = demo.sofia.post(f"/api/panel/requests/{item['id']}/inventory", json={"simulate_down": True}).json()
+    assert simulated["ok"] is False and "caída simulada" in simulated["reason"]
+    notes = [m["body"] for m in simulated["request"]["messages"] if m["role"] == "note"]
     assert any("Cupo desconocido: no informar disponibilidad" in note for note in notes)
 
 
 def test_guest_sessions_are_isolated(demo):
     canonical(demo)
-    other = demo.say("¿Dónde queda la hostería?", session=OTHER)
+    other = demo.say("¿Dónde queda el hotel?", session=OTHER)
     assert other["request"] is None and other["handled_by"] == "asistente"
     bodies = [m["body"] for m in other["messages"]]
     assert REPLY not in bodies and "Sin niños" not in bodies
 
 
 def test_faq_latency_is_reported_per_question(demo):
-    demo.say("¿Dónde queda la hostería?")
+    demo.say("¿Dónde queda el hotel?")
+    demo.say("¿Tienen piscina?")
     demo.say("Hablar con recepción")
     detail = demo.inbox(selected=demo.inbox()["requests"][0]["id"])["selected"]
-    assert detail["faq"] == [{"faq_id": "ubicacion", "latency_s": 0.0, "met": True}]
+    assert detail["faq"] == [{"faq_id": "ubicacion", "latency_s": 0.0, "met": True},
+                             {"faq_id": "piscina", "latency_s": 0.0, "met": True}]

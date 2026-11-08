@@ -107,13 +107,13 @@ def test_handoff_marks_the_demo_conversation_as_waiting_for_a_person(ai_settings
 
 def test_demo_detail_returns_the_transcript(ai_settings, harness):
     client = demo_client(ai_settings, harness)
-    body = chat(client, "¿Dónde queda la hostería?").json()
+    body = chat(client, "¿Dónde queda el hotel?").json()
     conversation_id = body["conversation_id"]
 
     snapshot = client.get(f"/api/panel/{conversation_id}").json()
     roles = [message["role"] for message in snapshot["messages"]]
     assert roles[0] == "guest" and roles[-1] == "assistant"
-    assert snapshot["messages"][0]["body"] == "¿Dónde queda la hostería?"
+    assert snapshot["messages"][0]["body"] == "¿Dónde queda el hotel?"
     assert snapshot["messages"][-1]["body"] in body["reply"]
 
 
