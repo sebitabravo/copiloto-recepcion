@@ -18,8 +18,8 @@ S5. Restricción de producto ya expresada por el usuario en `odd/tasks/landing-p
 
 | ID | Alcance | Ruta | Specs | Estado | Commit / evidencia |
 | --- | --- | --- | --- | --- | --- |
-| T1 | Sincronizar `design/system.md` y `design/system.html` con las fuentes visuales actuales | Delegado: `gentle-ai-worker` (context backstop; superficies exactas en el handoff) | S2, S4 | in_progress: validado; commit pendiente | Plan: `docs(design): refresh current design system` |
-| T2 | Crear tres direcciones visuales distintas para `/demo` y elegir la que mejor cuenta el valor del proyecto | Padre con Gentle Design | S1, S2, S5 | pending | Plan: `design(demo): add guided demo directions` |
+| T1 | Sincronizar `design/system.md` y `design/system.html` con las fuentes visuales actuales | Delegado: `gentle-ai-worker` (context backstop; superficies exactas en el handoff) | S2, S4 | done | `49310ba` — `docs(design): refresh current demo design system` |
+| T2 | Crear tres direcciones visuales distintas para `/demo` y elegir la que mejor cuenta el valor del proyecto | Padre con Gentle Design | S1, S2, S5 | in_progress | Plan: `design(demo): add guided demo directions` |
 | T3 | Implementar la dirección elegida en la ruta de demo conservando las capacidades existentes | Padre, inline | S1, S2, S3, S5 | pending | Plan: `feat(demo): clarify product story and role views` |
 | T4 | Verificar interacciones, accesibilidad y adaptación de la demo; registrar cualquier runner no disponible | Padre | S3 | pending | Sin commit |
 | T5 | Cerrar unidades revisadas, registrar commits y comunicar resultado y límites | Padre | S1–S4 | pending | Pendiente |
@@ -49,3 +49,7 @@ L10 (restricción vigente): `odd/tasks/landing-producto.md`, L6 conserva el pedi
 L11 (incidente Git, antes de commit): `pwd -W` reportó `C:/Users/sebitabravo/Developer/copiloto-recepcion`, pero `git rev-parse --show-toplevel` y la lista de worktrees identificaron `D:/Projects/copiloto-recepcion` como raíz principal y no incluyeron la ruta C:. No se hizo `git add` ni commit antes de resolver la diferencia.
 
 L12 (resolución y autorización): el usuario eligió “Autoriza la raíz D:”. La comparación de rutas mostró el mismo dispositivo e inode para ambas carpetas y hashes idénticos para `design/system.md`, `design/system.html` y `odd/tasks/demo-route-ux.md`; C: es un alias del mismo árbol que Git identifica en D:. Se continúa allí.
+
+L13 (T1 completada): el trabajador actualizó solo los dos documentos del sistema; el CSS fuente no cambió. `git diff --check` y la comprobación del commit pasaron; árbol limpio tras `49310ba` (`docs(design): refresh current demo design system`). ASSESS sobre el commit dio riesgo medio por el board HTML, `reviewDue: false` (`under_budget`) y sin verificador independiente; no se inició revisión nativa.
+
+L14 (T2 diseño y selección): `design/demo-route-ux/` contiene tres direcciones y su `design.json`: A `01-recorrido-guiado.html`, B `02-consola-por-roles.html`, C `03-caso-punta-a-punta.html`, con tradeoffs en el manifiesto. Seleccionada A por empezar con el valor, revelar detalle progresivamente y conservar Huésped/Recepción/Administración en `/demo`, sin confundir la derivación simulada con el canal real. Las tres se revisaron visualmente en Gentle Design (48%); la auditoría de colores confirmó solo valores del sistema, las familias usan los fallbacks del board y seis combinaciones de texto/superficie pasaron WCAG AA. Preview: `http://127.0.0.1:51399/WJ3iCRsZSHtc9WykToYWHD5w2dnL0NPj/d/demo-route-ux/`. Los 19 errores de consola correspondieron al servicio del canvas (CSP con fuentes IPv6 inválidas y favicon 404 inicial), no a las artboards.

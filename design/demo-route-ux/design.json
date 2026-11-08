@@ -1,0 +1,28 @@
+{
+  "title": "Demo de producto · ruta guiada",
+  "brief": "Presentar el valor de la demo con una jerarquía clara y preservar las perspectivas de huésped, recepción y administración en la misma ruta. Distinguir la derivación simulada del canal real.",
+  "feature": "odd/tasks/demo-route-ux.md",
+  "artboards": [
+    {
+      "file": "01-recorrido-guiado.html",
+      "title": "A · Recorrido guiado",
+      "tradeoff": "Cuenta primero el valor y mantiene la conversación como punto de entrada; deja el detalle operativo para después.",
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "file": "02-consola-por-roles.html",
+      "title": "B · Consola por roles",
+      "tradeoff": "Hace visibles las tres perspectivas desde el inicio; ofrece menos narrativa y exige elegir una vista antes de comprender el flujo.",
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "file": "03-caso-punta-a-punta.html",
+      "title": "C · Caso de punta a punta",
+      "tradeoff": "Hace muy claro el límite entre simulación y decisión humana; la interacción real queda subordinada a un solo caso.",
+      "width": 1440,
+      "height": 1000
+    }
+  ]
+}
