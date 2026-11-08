@@ -17,7 +17,21 @@ OPERATIONAL_SOURCE = "chatwoot"
 
 @contextmanager
 def transaction(db: sqlite3.Connection):
-    """Agrupa escrituras en una transacción: o quedan todas o ninguna si el proceso falla a mitad."""
+    """Agrupa escrituras en una transacción: o quedan todas o ninguna si el proceso falla a mitad.
+
+    Anidada (dentro de otra) usa un SAVEPOINT: la transacción de afuera decide el COMMIT final. Nunca debe
+    abarcar un `await`: la conexión es compartida y otra corrutina escribiría dentro de esta transacción.
+    """
+    if db.in_transaction:
+        db.execute("SAVEPOINT nested")
+        try:
+            yield
+        except BaseException:
+            db.execute("ROLLBACK TO nested")
+            db.execute("RELEASE nested")
+            raise
+        db.execute("RELEASE nested")
+        return
     db.execute("BEGIN IMMEDIATE")
     try:
         yield
@@ -25,6 +39,57 @@ def transaction(db: sqlite3.Connection):
         db.execute("ROLLBACK")
         raise
     db.execute("COMMIT")
+
+
+# ---------- llaves de idempotencia de las acciones ----------
+
+
+class DuplicateAction(Exception):
+    """La acción con esta llave ya terminó: el reintento devuelve el estado actual sin repetir nada."""
+
+
+class ActionConflict(Exception):
+    """La llave ya se usó con otro contenido: se rechaza en vez de descartar el mensaje nuevo en silencio."""
+
+
+def fingerprint(*parts: str) -> str:
+    return hashlib.sha256("\x1f".join(parts).encode()).hexdigest()
+
+
+def get_action(db: sqlite3.Connection, scope: str, client_id: str) -> sqlite3.Row | None:
+    return db.execute(
+        "SELECT * FROM action_keys WHERE scope = ? AND client_id = ?", (scope, client_id)
+    ).fetchone()
+
+
+def check_action(db: sqlite3.Connection, scope: str, client_id: str, digest: str) -> sqlite3.Row | None:
+    """La acción ya registrada con esta llave (o None). Con otro contenido levanta ActionConflict."""
+    row = get_action(db, scope, client_id)
+    if row is not None and row["fingerprint"] != digest:
+        raise ActionConflict("Esa llave ya se usó con otro mensaje")
+    return row
+
+
+def claim_action(
+    db: sqlite3.Connection, scope: str, client_id: str, digest: str, now: float, state: str,
+    message_id: int | None = None,
+) -> None:
+    """Registra la llave DENTRO de la transacción que guarda el efecto: o quedan ambos o ninguno."""
+    existing = check_action(db, scope, client_id, digest)
+    if existing is not None:
+        raise DuplicateAction(existing["state"])
+    db.execute(
+        """INSERT INTO action_keys(scope, client_id, fingerprint, state, message_id, created_at, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (scope, client_id, digest, state, message_id, now, now if state == "done" else None),
+    )
+
+
+def complete_action(db: sqlite3.Connection, scope: str, client_id: str, now: float) -> None:
+    db.execute(
+        "UPDATE action_keys SET state = 'done', completed_at = ? WHERE scope = ? AND client_id = ?",
+        (now, scope, client_id),
+    )
 
 
 @dataclass
@@ -405,8 +470,13 @@ def reset_demo_conversation(db: sqlite3.Connection, session_id: str) -> None:
     with transaction(db):
         db.execute("DELETE FROM demo_messages WHERE conversation_id = ?", (conversation_id,))
         db.execute("DELETE FROM staff_notes WHERE conversation_id = ?", (conversation_id,))
-        db.execute("DELETE FROM requests WHERE conversation_id = ?", (conversation_id,))
         db.execute("DELETE FROM prebookings WHERE conversation_id = ?", (conversation_id,))
+        db.execute(
+            "DELETE FROM action_keys WHERE scope = ? OR scope IN "
+            "(SELECT 'staff:' || id FROM requests WHERE conversation_id = ?)",
+            (f"guest:{session_id}", conversation_id),
+        )
+        db.execute("DELETE FROM requests WHERE conversation_id = ?", (conversation_id,))
         db.execute("DELETE FROM demo_conversations WHERE session_id = ?", (session_id,))
         db.execute("DELETE FROM conversation_state WHERE conversation_id = ?", (conversation_id,))
 
@@ -425,6 +495,7 @@ def purge_personal_data(db: sqlite3.Connection, now: float, retention_days: int,
     cursor_state = db.execute("DELETE FROM conversation_state WHERE updated_at < ?", (cutoff,))
     cursor_pre = db.execute("DELETE FROM prebookings WHERE created_at < ?", (cutoff,))
     cursor_msgs = db.execute("DELETE FROM processed_messages WHERE ts < ?", (cutoff,))
+    db.execute("DELETE FROM action_keys WHERE created_at < ?", (cutoff,))
     cursor_ai = db.execute("DELETE FROM ai_sessions WHERE updated_at < ?", (cutoff,))
     cursor_notes = db.execute("DELETE FROM staff_notes WHERE created_at < ?", (cutoff,))
     cursor_requests = db.execute("DELETE FROM requests WHERE updated_at < ?", (cutoff,))
@@ -672,15 +743,19 @@ def take_request(db: sqlite3.Connection, request_id: int, assignee: str, now: fl
 
 
 def staff_reply(
-    db: sqlite3.Connection, request_id: int, author: str, body: str, kind: str, now: float
+    db: sqlite3.Connection, request_id: int, author: str, body: str, kind: str, now: float,
+    client_id: str | None = None,
 ) -> tuple[sqlite3.Row, dict]:
     """Respuesta escrita por recepción en el mismo hilo del huésped.
 
     Una respuesta pertinente (`answer`) deja la solicitud «Respondida» y, si es la primera, detiene el
     reloj y registra `human_first_reply`. Un acuse (`ack`) se envía igual pero NO cuenta como respuesta.
-    Todo ocurre en una transacción: o queda el mensaje con su estado, o nada (se puede reintentar).
+    Todo ocurre en una transacción —llave, mensaje, cambio de estado y evento—: o queda todo, o nada. Así un
+    reintento con la misma `client_id` nunca duplica una respuesta ya guardada (DuplicateAction).
     """
     with transaction(db):
+        if client_id is not None:
+            claim_action(db, f"staff:{request_id}", client_id, fingerprint(kind, body), now, "done")
         row = get_request_row(db, request_id)
         if row is None:
             raise LookupError(request_id)
@@ -691,6 +766,11 @@ def staff_reply(
                                   else f"La atiende {row['assignee']}")
         message = insert_demo_message(db, row["conversation_id"], "staff", body, now, author=author, kind=kind,
                                        request_id=request_id)
+        if client_id is not None:
+            db.execute(
+                "UPDATE action_keys SET message_id = ? WHERE scope = ? AND client_id = ?",
+                (message["id"], f"staff:{request_id}", client_id),
+            )
         conversation_id = row["conversation_id"]
         if kind == "answer":
             first = row["first_answer_at"] is None

@@ -12,55 +12,15 @@ Fija, con el flujo guiado (sin modelo), el Hotel Boutique Bordeluz de la portada
   un vencimiento queda registrado.
 """
 
-from dataclasses import replace
-
-import pytest
-from conftest import FakeChatwoot, FakeClock, local_epoch
-from copiloto.app import create_app
+from conftest import DEMO_SESSION
 from fastapi.testclient import TestClient
 
 from copiloto import store
 
-SESSION = "eva3-huesped-0000000001"
+# La fixture `demo` (huésped + Sofía de recepción sobre la misma app) vive en conftest.py.
+SESSION = DEMO_SESSION
 OTHER = "eva3-huesped-0000000002"
 REPLY = "Hay una habitación doble para esas fechas. ¿Quieres avanzar con la reserva?"
-
-
-@pytest.fixture
-def demo(settings, harness):
-    """App con reloj en turno (domingo 8-nov-2026 10:14, Chile), huésped y recepción en sesiones distintas."""
-    clock = FakeClock(local_epoch(2026, 11, 8, 10, 14))
-    chatwoot = FakeChatwoot()
-    app = create_app(
-        replace(settings, demo_ai=False),
-        chatwoot=chatwoot,
-        pms=harness.pms,
-        clock=clock,
-        run_workers=False,
-        db=harness.db,
-    )
-
-    class Demo:
-        pass
-
-    d = Demo()
-    d.app, d.clock, d.db, d.chatwoot = app, clock, harness.db, chatwoot
-    d.guest = TestClient(app)
-    d.sofia = TestClient(app)
-    assert d.sofia.post("/api/demo/session", json={"name": "Sofía"}).status_code == 204
-
-    def say(text, session=SESSION, **extra):
-        d.clock.advance(3)
-        response = d.guest.post("/api/demo/chat", json={"session_id": session, "message": text, **extra})
-        assert response.status_code == 200, response.text
-        return response.json()
-
-    def inbox(selected=None):
-        params = {"selected": selected} if selected else {}
-        return d.sofia.get("/api/panel/requests", params=params).json()
-
-    d.say, d.inbox = say, inbox
-    return d
 
 
 def canonical(demo, **extra):

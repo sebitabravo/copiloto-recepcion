@@ -19,8 +19,15 @@ Con `DEMO_AI=1` y un modelo configurado, el turno lo responde el asistente con I
  "client_message_id": "<8-64 [A-Za-z0-9-], opcional>", "shift": "open | closed (opcional)"}
 ```
 
-- `client_message_id`: llave de idempotencia. Si llega repetida, el turno **no** se vuelve a ejecutar: la
-  respuesta trae el hilo completo con `"duplicate": true`. El cliente reintenta siempre con la misma llave.
+- `client_message_id`: llave de idempotencia, **por sesión** (la misma llave en otra sesión es otra acción). El
+  mensaje y su llave se guardan en una sola transacción; la llave queda `started` hasta que el asistente
+  contesta y `done` al terminar. Un reintento con la misma llave:
+  - si la acción terminó, **no** se vuelve a ejecutar: trae el hilo completo con `"duplicate": true` (incluida la
+    respuesta que se perdió en la red);
+  - si el turno se cortó después de guardar el mensaje, lo termina sin volver a guardarlo (una sola solicitud);
+  - si falló antes de guardar, no quedó nada: se procesa como nuevo;
+  - con **otro texto**, responde 409 (`Esa llave ya se usó con otro mensaje`) en vez de descartarlo callado.
+  El cliente reintenta siempre con la misma llave y el mismo texto.
 - `shift`: escenario de prueba de la sesión (`open` en turno, `closed` fuera de turno). Sin él manda la hora de
   Chile y `SHIFT_START`/`SHIFT_END` (o `SHIFT_OVERRIDE` para todo el servidor).
 - Mientras la solicitud está abierta en recepción, el mensaje le llega a ella y el asistente no contesta
@@ -66,7 +73,7 @@ una cookie HttpOnly. Esa sesión **solo** ve y escribe solicitudes de la demo; e
 | `GET /api/panel/requests?selected=<id>` | Bandeja ordenada (pendientes con más espera primero) y, en la misma lectura, el detalle de `selected`. |
 | `GET /api/panel/requests/{id}` | Detalle: datos, `messages` (con notas internas), `events`, `faq` (latencias), `measurement`, `actions`. |
 | `POST /api/panel/requests/{id}/take` | Asigna a quien llama: **Pendiente de recepción → En atención**. No reinicia el reloj. Otra persona: 409. |
-| `POST /api/panel/requests/{id}/reply` | `{"body": "…", "kind": "answer"\|"ack", "client_id": "…"}`. `answer` deja **Respondida** y, si es la primera, detiene el reloj (`human_first_reply`). `ack` se envía pero no cuenta. Sin tomarla: 409. Con `client_id` repetido: `"duplicate": true`, sin duplicar. |
+| `POST /api/panel/requests/{id}/reply` | `{"body": "…", "kind": "answer"\|"ack", "client_id": "…"}`. `answer` deja **Respondida** y, si es la primera, detiene el reloj (`human_first_reply`). `ack` se envía pero no cuenta. Sin tomarla: 409. `client_id` es **por solicitud** y se guarda en la misma transacción que el mensaje, el estado y el evento: repetido devuelve `"duplicate": true` sin reenviar; con otro texto, 409. |
 | `POST /api/panel/requests/{id}/inventory` | `{"simulate_down": false}`. Lee el **PMS simulado**: origen, hora y las 4 opciones más económicas (`more` cuenta el resto), preliminar. PMS caído o `simulate_down`: `ok: false` y nota «cupo desconocido». |
 | `POST /api/panel/requests/{id}/close` | **Cerrada**: el hilo vuelve al asistente; una consulta nueva crea otra solicitud. |
 

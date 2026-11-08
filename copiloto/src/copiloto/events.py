@@ -78,6 +78,21 @@ CREATE TABLE IF NOT EXISTS processed_messages (
     ts REAL NOT NULL
 );
 
+-- Llaves de idempotencia de las acciones de la demo (mensaje del huésped, respuesta de recepción).
+-- scope = 'guest:<sesión>' o 'staff:<solicitud>': la misma llave en otra sesión u otro caso es otra acción.
+-- fingerprint = hash del contenido: reutilizar la llave con otro texto es un conflicto, no un duplicado.
+-- state: 'started' = el mensaje quedó guardado y falta terminar el turno; 'done' = la acción terminó.
+CREATE TABLE IF NOT EXISTS action_keys (
+    scope TEXT NOT NULL,
+    client_id TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    state TEXT NOT NULL,
+    message_id INTEGER,
+    created_at REAL NOT NULL,
+    completed_at REAL,
+    PRIMARY KEY (scope, client_id)
+);
+
 CREATE TABLE IF NOT EXISTS conversation_state (
     conversation_id INTEGER PRIMARY KEY,
     step TEXT NOT NULL DEFAULT 'start',
