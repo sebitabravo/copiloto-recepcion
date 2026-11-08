@@ -7,6 +7,10 @@ Extracted verbatim from two separate CSS sources. **These are two distinct syste
 
 Values below are only what is actually declared in those files. No invented tokens. Both files define light values in `:root` and override them under `@media (prefers-color-scheme: dark)`.
 
+Source shorthand in every table below: **landing** = `landing/demo.css`; **panel** = `copiloto/src/copiloto/static/theme.css`; **both** = those two exact paths. This is an extraction, not a proposed starter system.
+
+Inventory (unique named properties, not counting dark overrides): landing **27 colors, 3 font stacks, 1 spacing token, 0 radius tokens, 3 shadows**; panel **15 colors, 2 font stacks, 0 spacing/radius tokens, 1 shadow, 1 easing token**. The board uses system-font fallbacks without loading the source webfonts. Board-only layout and swatch geometry are presentation, not additional product tokens.
+
 ---
 
 ## 1. Colors
@@ -46,7 +50,9 @@ Values below are only what is actually declared in those files. No invented toke
 | `--muted` | `#6b5943` | `#a4947d` | Muted text | `landing/demo.css` `:root` / dark block |
 | `--line-soft` | `rgb(46 32 18 / 9%)` | `rgb(255 240 220 / 8%)` | Hairlines, hover fills, grid lines | `landing/demo.css` |
 | `--accent-soft` | `#eaddc6` | `#33281c` | Rate-status strip background | `landing/demo.css` |
-| `--bezel` | `#241a12` | `#2e2418` | Phone bezel / 3D device frames | `landing/demo.css` |
+| `--bezel` | `#241a12` | `#2e2418` | Phone bezel / device sides | `landing/demo.css` |
+| `--ok` | `#2c6340` | `#9bd2a3` | Success text, results and status dots | `landing/demo.css` |
+| `--ok-bg` | `#e6eee2` | `#1e3125` | Success ticket and risk badge surfaces | `landing/demo.css` |
 | `--error` | `#9c2a22` | `#ffc0b8` | Error text | `landing/demo.css` |
 | `--error-bg` | `#fbeae4` | `#432723` | Error surfaces (`.notice.error`, `.chat-error`) | `landing/demo.css` |
 
@@ -57,7 +63,7 @@ Values below are only what is actually declared in those files. No invented toke
 | `--wa-bg` | `#efeae2` | `#0b141a` | Chat wallpaper | `landing/demo.css` |
 | `--wa-in` | `#ffffff` | `#202c33` | Bot/assistant bubble background | `landing/demo.css` |
 | `--wa-out` | `#d9fdd3` | `#005c4b` | Guest (user) bubble background | `landing/demo.css` |
-| `--wa-header` | `#f0f2f5` | `#202c33` | Phone header / composer / status bar | `landing/demo.css` |
+| `--wa-header` | `#f0f2f5` | `#202c33` | Phone header / composer | `landing/demo.css` |
 | `--wa-ink` | `#111b21` | `#e9edef` | Bubble text | `landing/demo.css` |
 | `--wa-muted` | `#667781` | `#8696a0` | Timestamps, placeholders, status dot default | `landing/demo.css` |
 | `--wa-line` | `#e2ddd4` | `#2a3942` | Header/composer borders, quick-reply borders | `landing/demo.css` |
@@ -67,12 +73,11 @@ Values below are only what is actually declared in those files. No invented toke
 
 | Value | Used for | Source |
 | --- | --- | --- |
-| `#00a884` | WhatsApp send button bg, `.hc-tool b` accent | `landing/demo.css` |
+| `#00a884` | `.composer .send-button` background | `landing/demo.css` |
 | `#019475` | Send button hover bg | `landing/demo.css` |
 | `#25d366` | `.status-dot.ready` (+ `rgb(37 211 102 / 18%)` ring) | `landing/demo.css` |
 | `#53bdeb` | Message tick marks | `landing/demo.css` |
-| `#40230d` | Color-mix endpoint in brand-mark/avatar/button gradients | `landing/demo.css` |
-| `#0a0806` | Device camera bar | `landing/demo.css` |
+| `#40230d` | Color-mix endpoint in `.brand-mark`, `.gh .av` and `.avatar` gradients | `landing/demo.css` |
 | `#fff` | Send button text | `landing/demo.css` |
 
 ### Panel-only tokens
@@ -101,7 +106,8 @@ The panel has **no** `--line-soft`, `--accent-soft`, `--bezel`, `--ok-bg`, `--er
 | Easing | `cubic-bezier(.2, .8, .3, 1)` | `--ease: cubic-bezier(.22, 1, .36, 1)` | both |
 | Shadow scale | 3 tokens (`sm/md/lg`) | 1 token (`--shadow`) | both |
 | Inter weight range (`@font-face`) | `400 700` | `100 900` | both |
-| Webfont loading | `font-display: optional` | `font-display: swap` | both |
+
+Webfont loading is now identical: all three `@font-face` rules in each source use `font-display: swap`.
 
 The panel also renames roles: landing `--error`/`--error-bg` vs panel `--bad`/`--warn` (no bg variants).
 
@@ -115,17 +121,20 @@ The panel also renames roles: landing `--error`/`--error-bg` vs panel `--bad`/`-
 | --- | --- | --- |
 | Display (serif) | `"Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif` | both `:root` (`--font-display`); `@font-face` for Instrument Serif 400 normal + italic in both |
 | UI (sans) | `Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif` | landing `--font-ui` |
-| UI (sans) | `Inter, system-ui, -apple-system, "Segoe UI", sans-serif` | panel `--font-body` (no `ui-sans-serif` step) |
+| UI (sans) | `"Inter", system-ui, -apple-system, "Segoe UI", sans-serif` | panel `--font-body` (no `ui-sans-serif` step) |
 | Mono | `ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace` | landing `--font-mono` (panel declares **no** mono stack) |
-| `@font-face` Inter weight range | `400 700`, `font-display: optional` (landing) / `100 900`, `font-display: swap` (panel) | both |
+| `@font-face` Inter weight range | `400 700` (landing) / `100 900` (panel); both `font-display: swap` | both |
 
 ### Weights actually used
 
-- `400` — h1, h2, display numerals (`.metrics dt`, `.step .num`, `.booking-ticket .ticket-total`), body
-- `500` — `.brand-tag`, `.ghost-trace b`
-- `600` — h3, `.button`, `.brand`, nav-cta, `.pill`, `.phone-contact strong`, `.availability-head`, `.chip em`
+Landing (`landing/demo.css`):
+- `400` — h1, h2, `.booking-ticket .ticket-total`, `.booking-proposal .ticket-total`; Instrument Serif faces
+- `500` — `.brand-tag`, `.float`, `.ghost-trace b`
+- `600` — h3, `.button`, `.nav-cta`, `.pill`, `.phone-contact strong`, `.availability-head`, `.chip`, `.secondary-chat .text-button`, console controls
 - `650` — `.brand`, `.eyebrow`
-- `700` — `.event-result`, `.ticket-float em`, `.secondary-chat .text-button`
+- `700` — `.event-result`, `.float.tool b`, `.float.ticket em`
+
+Panel (`copiloto/src/copiloto/static/theme.css`): h1/h2 and Instrument Serif faces explicitly use `400`; Inter declares the `100 900` face range, not a component weight scale.
 
 ### Sizes (landing)
 
@@ -134,13 +143,12 @@ The panel also renames roles: landing `--error`/`--error-bg` vs panel `--bad`/`-
 | body | `16px` | `1.65` | `landing/demo.css` `body` |
 | h1 | `clamp(2.7rem, 5.6vw, 4.5rem)` (mobile `clamp(2.4rem, 10vw, 3.2rem)`) | `.99` | `landing/demo.css` |
 | h2 | `clamp(1.85rem, 3.4vw, 2.8rem)` | `1.05` | `landing/demo.css` |
-| h2 in `.thinking-heading` | `1.5rem` | — | `landing/demo.css` |
 | h3 | `1rem` | `1.35` | `landing/demo.css` |
-| `.subtitle` | `1.06rem` | `1.62` | `landing/demo.css` |
-| `.metrics dt` | `1.5rem` | `1.1` | `landing/demo.css` |
-| `.step .num` | `1.7rem` | `1` | `landing/demo.css` |
+| `.lede` | `1.06rem` | `1.62` | `landing/demo.css` |
+| `.stat dt` | `1.9rem` (`1.6rem` ≤620px) | `1.1` | `landing/demo.css` |
+| `.step .num` | `1.5rem` | `1` | `landing/demo.css` |
 | `.booking-ticket .ticket-total` | `1.35rem` | — | `landing/demo.css` |
-| Component text | `.58–.96rem` (e.g. eyebrow `.71rem`, pill `.72rem`, bubble `.85rem/1.6`, small `.82rem`, section-intro `.96rem`) | — | `landing/demo.css` |
+| Component text examples | eyebrow `.71rem`, pill `.72rem`, message `.85rem/1.6`, small `.82rem`, section-intro `.96rem` | — | `landing/demo.css` |
 
 ### Sizes (panel)
 
@@ -149,20 +157,22 @@ The panel also renames roles: landing `--error`/`--error-bg` vs panel `--bad`/`-
 | body | `14px` | `1.5` | `copiloto/.../theme.css` `body` |
 | h1, h2 | no size declared (family + weight 400 + `letter-spacing: -.01em` only) | — | `copiloto/.../theme.css` |
 
-Letter spacing: h1 `-.02em`, h2 `-.015em`, h3 `-.005em`, brand `-.01em`, panel h1/h2 `-.01em`; eyebrow `+.19em`, turn-label `+.12em`, stamp/chat-date `+.08–.12em` (uppercase).
+Letter spacing (`landing/demo.css` unless marked panel): h1 `-.02em`, h2 `-.015em`, h3 `-.005em`, brand `-.01em`, panel h1/h2 `-.01em`; eyebrow `.19em`, turn-label `.12em`, stamp `.12em`, chat-date `.08em` (the last four uppercase).
 
 ---
 
 ## 3. Spacing
 
-**No spacing scale is declared in either source** — no `--space-*` tokens exist. All spacing is raw values. The recurring landing values:
+No general spacing scale or `--space-*` tokens exist. Landing now declares **one spacing token**, `--section-space: clamp(60px, 8vw, 88px)` in `landing/demo.css` `:root`.
 
-- Page: `.wrap` max-width `1180px`, padding-inline `24px` (18px ≤620px); sections `padding: 76px 0` (52px mobile)
-- Cards: `.card` padding `26px` (20px mobile); `.capability`/`.live-card` padding `24px 22px`
-- Buttons: `.button` `padding: 12px 24px`, min-height `50px`; pill/label `padding: 6px 12px`
-- Touch targets: `min-height: 44px` enforced on nav links, buttons, quick replies, textarea, send button
-- Gaps used: `2, 4, 5, 6, 7, 8, 10, 12, 14, 16, 18, 20, 22, 24, 34, 40, 56px`; hero gap `56px`, demo-grid gap `34px`
-- Panel: no spacing values at all beyond `body { margin: 0 }` and the skeleton radius.
+- Landing `main > section`: `padding-block: var(--section-space)`; `main > #probar` sets `padding-top: 0`. The ≤620px `section { padding: 52px 0 }` declaration does not override the more specific direct-child rule.
+- Landing `.wrap`: max-width `1180px`, padding-inline `24px` (`18px` ≤620px).
+- Landing `.hero`: gap `56px`, padding-block `64px 56px`; ≤1000px one column, gap `34px`, padding-block `34px 54px`.
+- Landing `.card`: padding `26px` (`20px` ≤620px); `.live-card`: `24px 22px`; `.shot`: `18px`.
+- Landing `.button`: padding `12px 24px` (inline `18px` ≤620px), min-height `50px`; `.pill`: `6px 12px`.
+- Landing touch targets: min-height `44px` on buttons, nav links, quick replies, textarea, send button, demo switch and console tabs.
+- Landing `.tab-panel`: padding-block `44px 64px` (`24px 40px` ≤620px); adjacent child sections use margin-top and padding-top `34px`.
+- Panel (`copiloto/src/copiloto/static/theme.css`): no spacing tokens or component padding/gap rules; `body { margin: 0 }`.
 
 ---
 
@@ -174,21 +184,20 @@ Letter spacing: h1 `-.02em`, h2 `-.015em`, h3 `-.005em`, brand `-.01em`, panel h
 
 | Radius | Applied to |
 | --- | --- |
-| `999px` | `.button`, nav links, `.pill`, `.chip`, quick replies, `.hero-composer`, textarea-adjacent composer, `.event-source`, `.voice-typed input`, `.voice-lang select`, `.live-button`, notice buttons |
-| `50%` | `.status-dot`, `.live-dot`, `.avatar`, send button, typing dots, orbit dot |
-| `34px` / `40px` | `.hero-phone` / `.phone` |
-| `30px` (24px mobile) | `.demo-stage` |
-| `22px` (18px mobile) | `.card` |
-| `18px` | `.capability`, `.live-card`, `.hero-chat`, `.plate`, phone ≤620px |
-| `16px` | `.ticket-float` |
-| `14px` | `.event-card` |
-| `12px` | `.notice`, `.scenario-buttons button`, `.voice-line`, `.booking-proposal` |
+| `999px` | `.button`, nav links, `.pill`, `.chip`, `.float`, quick replies, `.event-source`, `.voice-typed input`, `.voice-lang select`, `.live-button`, notice buttons, `.demo-switch`, `.console-tabs` and tabs |
+| `50%` | `.status-dot`, `.live-dot`, `.avatar`, send button, typing dots, `.sd`, `.dot`, `.avail`, switch knob |
+| `40px` | `.phone` (`18px` ≤620px) |
+| `26px` | `.frame`, `.cta` |
+| `24px` | `.demo-stage` ≤820px (`0` ≤620px); no base radius declared in this source |
+| `22px` (18px ≤620px) | `.card`; `.pipeline` stays `22px` |
+| `18px` | `.shot`, `.list`, `.live-card`, `.admin-frame` |
+| `14px` | `.event-card`, `.float.ticket` |
+| `12px` | `.notice`, `.voice-line`, `.booking-proposal`, `.console-state`, `.console-notes li` |
 | `11px` | `.ghost-trace li` |
-| `10px` | `.skip`, `.availability` |
-| `9px` | `.hc` bubbles: bot `9px 9px 9px 2px`, user `9px 9px 2px 9px` |
+| `10px` | `.skip`, `.availability`, `.brand-mark`, `.console-row` |
 | `8px` | `.event-icon`, disclaimer right corners |
 | `7px` | `.chat-date` |
-| `6px` | `.hc-tool`, `.arguments span`, `.capability code` |
+| `6px` | `.arguments span`, `.tag` |
 | `5px` | `.booking-ticket .stamp` |
 | `22px` | composer `textarea` |
 | Bubbles (main demo) | `.bubble` bot `10px 10px 10px 2px`, user `10px 10px 2px 10px` |
@@ -209,7 +218,7 @@ Letter spacing: h1 `-.02em`, h2 `-.015em`, h3 `-.005em`, brand `-.01em`, panel h
 | `--shadow-md` | `0 2px 6px rgb(50 33 16 / 6%), 0 18px 42px rgb(50 33 16 / 9%)` | `0 2px 6px rgb(0 0 0 / 30%), 0 18px 42px rgb(0 0 0 / 40%)` | `landing/demo.css` |
 | `--shadow-lg` | `0 40px 90px -30px rgb(50 33 16 / 34%)` | `0 40px 90px -30px rgb(0 0 0 / 70%)` | `landing/demo.css` |
 
-Plus a repeated **bubble micro-shadow** inline (not tokenized): `0 1px 1px rgb(11 20 26 / 8–13%)` on `.bubble`, `.hc`, `.chat-date`, `textarea`, quick replies.
+Inline micro-shadows (not tokens): `0 1px 1px rgb(11 20 26 / 13%)` on `.bubble`, `.msg`, `.typing`; `0 1px 1px rgb(11 20 26 / 10%)` on `.chat-date`; `0 1px 1px rgb(11 20 26 / 8%)` on `textarea` and quick replies.
 
 ### Panel — 1 token
 
@@ -217,24 +226,28 @@ Plus a repeated **bubble micro-shadow** inline (not tokenized): `0 1px 1px rgb(1
 | --- | --- | --- | --- |
 | `--shadow` | `0 1px 2px rgb(46 32 18 / 6%), 0 10px 24px -18px rgb(46 32 18 / 45%)` | `0 1px 2px rgb(0 0 0 / 35%), 0 14px 30px -22px rgb(0 0 0 / 80%)` | `copiloto/.../theme.css` |
 
-Glow accents (landing, inline): `0 10px 26px -12px var(--accent)` on primary button; `0 0 72px -16px` accent glow on phone; status rings `0 0 0 3px color-mix(... 18–20%, transparent)`.
+Landing inline effects (`landing/demo.css`): primary button `0 10px 26px -12px var(--accent)` plus `inset 0 1px 0 rgb(255 255 255 / 28%)`; phone `inset 0 0 0 1px rgb(255 255 255 / 8%), 0 0 0 1px rgb(30 20 10 / 14%), 0 30px 70px -32px rgb(40 26 12 / 55%)`; live status rings `0 0 0 3px color-mix(in oklab, var(--ok) 20%, transparent)` (or `--error`).
 
 ---
 
 ## 6. Borders
 
-- Standard hairline: `1px solid var(--line)` (cards, buttons, pills, event cards, steps, sections) — both systems.
-- Landing dashed variants: `.ghost-trace li`, `.event-source`, `.booking-ticket .stamp`, `.stage-orbit`, `.secondary-chat` top border — `1px dashed var(--line)` or `var(--ok)`.
-- Landing accent borders: `.disclaimer` / `.ticket-float` left border `3px solid` (`--accent` / `--ok`); `.booking-proposal` `2px solid var(--accent)`; hover border `color-mix(in oklab, var(--accent) 40%, var(--line))`.
-- Landing device border: `.phone` `8px solid var(--bezel)`; focus outline `3px solid var(--accent)`, offset 3px, radius 4px.
+All component border rules here come from `landing/demo.css`; panel `theme.css` declares no component borders.
+
+- Standard hairline: `1px solid var(--line)` on cards, buttons, pills, event cards and pipeline.
+- Dashed variants: `.ghost-trace li`, `.event-source`, `.chip`, `.artifact`, `.console-state`, `.secondary-chat` top border use `var(--line)`; `.booking-ticket .stamp` uses `var(--ok)`.
+- Accent borders: `.disclaimer` / `.float.ticket` left border `3px solid` (`--accent` / `--ok`); `.booking-proposal` `2px solid var(--accent)`; `.console-state.gate` border-color `color-mix(in oklab, var(--accent) 40%, var(--line))`.
+- `.phone`: `8px solid var(--bezel)`; ≤620px `1px solid var(--line)`.
+- Focus on links, buttons, textarea and `[tabindex]`: `3px solid var(--accent)`, offset `3px`; no radius declared. `main[tabindex="-1"]:focus` and `.tab-panel:focus` suppress their outline.
 
 ---
 
 ## 7. Motion / easing
 
 ### Landing
-- Signature easing: `cubic-bezier(.2, .8, .3, 1)` (not tokenized) on transitions `.2s–.7s` and `message-in .28s`
-- Keyframes: `aurora` 18s, `ticker` 40s linear, `message-in` .28s, `typing` 1s, `stack-float` 12s; reveal transitions .5–.6s with `.08/.16/.24s` stagger delays
+- Signature easing: `cubic-bezier(.2, .8, .3, 1)` (not tokenized) on transitions `.25s–.7s` and `message-in .28s`
+- Keyframes: `aurora` 18s, `ticker` 40s linear, `message-in` .28s (`.event-card` .32s), `typing` 1s, `stack-float` 12s; reveal transitions .5–.6s with `.08/.16/.24s` stagger delays
+- `.is-offscreen`, its descendants and `body.is-hidden *` pause animations; reduced motion also neutralizes the `.frame` transform.
 - `prefers-reduced-motion: reduce` → `animation: none !important; transition: none !important` globally, `scroll-behavior: auto`, reveal states neutralized.
 
 ### Panel
@@ -256,15 +269,15 @@ Glow accents (landing, inline): `0 10px 26px -12px var(--accent)` on primary but
 
 **Card** (`.card`)
 - Padding 26px, border `1px solid var(--line)`, radius 22px, bg `var(--card)`, `--shadow-sm`
-- Gradient siblings: `.capability`, `.live-card` use `linear-gradient(180deg, var(--card), var(--card-2))`, radius 18px, hover lift `translateY(-4px)` + accent border
+- `.shot` and `.live-card` use `linear-gradient(180deg, var(--card), var(--card-2))`, radius `18px`. `.shot` has padding `18px`, `--shadow-sm` and hover lift `translateY(-4px)`; `.live-card` has padding `24px 22px`, with no card-level hover lift declared.
 
 **WhatsApp message bubbles** (`.message` / `.bubble`)
-- Container: column flex, gap 8px, padding `14px 10px`, chat bg `--wa-bg` with 1px dot pattern (`radial-gradient(circle at 1px 1px, rgb(0 0 0 / 4%) 1px, transparent 0)` at 16–18px tile)
+- `.messages`: column flex, gap `8px`, padding `14px 10px`, height `clamp(420px, 64vh, 580px)` (`min(68vh, 520px)` ≤620px). `.phone` supplies `--wa-bg` with a 1px dot pattern (`radial-gradient(circle at 1px 1px, rgb(0 0 0 / 4%) 1px, transparent 0)`) tiled at `18px 18px`.
 - Bot (assistant): `align-self: flex-start`, radius `10px 10px 10px 2px`, bg `--wa-in`, color `--wa-ink`, shadow `0 1px 1px rgb(11 20 26 / 13%)`
 - Guest (user): `align-self: flex-end`, radius `10px 10px 2px 10px`, bg `--wa-out`
-- Text: `.85rem / 1.6`, `overflow-wrap: anywhere`; timestamp `.59rem`, `--wa-muted`, tabular-nums, right-aligned
+- Text: `.85rem / 1.6`, `overflow-wrap: anywhere`; timestamp `.59rem`, `--wa-muted` (user override `color-mix(in oklab, var(--wa-ink) 55%, transparent)`), tabular-nums, right-aligned
 - Entry animation: `message-in .28s cubic-bezier(.2,.8,.3,1)`
-- Mini phone variant `.hc`: padding `7px 10px`, radius `9px 9px 9px 2px` / `9px 9px 2px 9px`, font `.7rem/1.45`
+- Hero preview `.msg`: padding `8px 11px`, the same `10px` corner patterns, font `.78rem/1.5`; `.msg time` `.58rem`. Its `.frame .guest` wallpaper tile is `17px 17px`.
 
 **Status dot** (`.status-dot`, `.live-dot`)
 - Default: `7px` circle, bg `--wa-muted`
@@ -275,17 +288,28 @@ Glow accents (landing, inline): `0 10px 26px -12px var(--accent)` on primary but
 - `.pill`: padding `6px 12px`, radius `999px`, border `1px solid var(--line)`, bg `--card`, color `--accent`, `.72rem`/600
 - `.arguments span`: mono chip, padding `3px 7px`, radius 6px, border `1px solid var(--line)`, color `--muted`, `.63rem`
 - `.event-source`: dashed border pill, padding `3px 9px`, `--muted`, `.62rem`
-- `.chip` (3D float): mono `.64rem`, padding `7px 11px`, radius `999px`, glassy `color-mix(--card 86%)` + blur
+- `.chip`: mono `.62rem`/600, padding `3px 9px`, border `1px dashed var(--line)`, radius `999px`, letter-spacing `.08em`, uppercase
+- `.float`: mono `.66rem`/500, padding `7px 12px`, radius `999px`, background `color-mix(in oklab, var(--card) 88%, transparent)`, `backdrop-filter: blur(8px)`, `--shadow-sm`
 
 **Panel rows / table rows** (landing availability list)
 - `.availability-list li`: grid `minmax(0,1fr) auto`, gap `2px 12px`, `padding-top: 8px`, `border-top: 1px solid var(--line-soft)` between rows (none on first); label `.76rem`, strong `--ink`, meta `--muted`, total `--ink`/600 right-aligned
-- `.step` rows: grid `62px 1fr`, gap 18px, `padding: 20px 0`, `border-top: 1px solid var(--line)` (last also bottom)
+- `.pipeline`: five equal columns, radius `22px`, border `1px solid var(--line)`, `--shadow-sm`. `.step`: column flex, gap `8px`, padding `22px 20px`, left separator `1px solid var(--line-soft)` except first. ≤1000px the pipeline becomes one column and separators move to the top.
 - `.voice-line`: padding `10px 14px`, radius 12px, bg `--card-2`; `.guest` variant `color-mix(--accent 10%, --card-2)`
 
 **Other landing states**
 - Error: `.notice.error`/`.chat-error` — bg `--error-bg`, color `--error`, retry button outlined `currentColor` pill
 - Success ticket: `.booking-ticket` — bg `--ok-bg`, border `color-mix(--ok 40%, --line)`, heading `--ok`
-- Focus: `:focus-visible` → `outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px`
+- Focus: supported `:focus-visible` selectors → `outline: 3px solid var(--accent); outline-offset: 3px` (no radius).
+
+**Demo console controls and states** (`landing/demo.css`)
+- `.demo-switch`: min-height `44px`, padding `0 12px`, pill radius, `--card` surface, `--muted` text, `.84rem`/600. Track `30px × 18px`, knob `14px`, checked track `--accent-2` and knob `translateX(12px)`; disabled opacity `.55`.
+- `.demo-banner`: background `color-mix(in oklab, var(--accent) 8%, var(--card))`, `--ink-2`, `.78rem`; `.is-off` uses `--card-2` / `--muted`.
+- `.console-tabs`: max-width `520px`, gap `4px`, padding `5px`, pill radius, `--card`, `--shadow-sm`. Tabs: min-height `44px`, padding `10px 12px`, `.88rem`/600, `--muted`; selected `--ink` background / `--bg` text.
+- `.console-row`: grid `minmax(0, 1fr) auto`, gap `2px 12px`, padding `10px 8px`, radius `10px`; hover `--line-soft`. Name `.84rem`; subtitle `.7rem` / `--muted`.
+- `.console-state`: flex wrap, gap `6px 16px`, padding `14px 16px` (`12px` ≤480px), dashed `1px var(--line)` border, radius `12px`, `--card-2` / `--muted`, `.86rem`. Error uses `--error-bg` / `--error` and border-color `color-mix(in oklab, var(--error) 35%, var(--line))`; rate uses solid `--line`, `--accent-soft` / `--accent`; gate uses the same surface/text with border-color `color-mix(in oklab, var(--accent) 40%, var(--line))`.
+- `.detail-list`: grid `auto minmax(0, 1fr)`, gap `6px 16px`, `.84rem`; ≤480px one column, gap `2px 0`.
+- `.console-notes li`: padding `10px 12px`, `1px solid var(--line)`, radius `12px`, `--card-2` / `--ink-2`, `.8rem`; small text `.66rem` / `--muted`.
+- `.admin-frame`: width `100%`, min-height `320px`, height `min(70vh, 720px)` (`60vh` ≤480px), border `1px solid var(--line)`, radius `18px`, `--card`.
 
 ### Panel
 
@@ -300,20 +324,22 @@ The panel stylesheet defines **no** buttons, cards, rows, or tables — those co
 
 ## 9. What is NOT defined in the sources
 
-- **Spacing scale** — no tokens in either file (raw values only)
+- **General spacing scale** — landing has only `--section-space`; no `--space-*` scale in either file
 - **Radius scale** — no tokens
 - **Panel component rules** (buttons, cards, rows) — not in `theme.css`
 - **Panel mono font stack** — not declared
 - **Panel heading sizes** — family/weight only, no size
-- **Panel spacing/typography beyond body 14px/1.5** — none
+- **Panel component spacing/type scale** — no component padding/gaps or text sizes; body is `14px/1.5` and h1/h2 family/weight/tracking are declared
 
 ---
 
 ## Excepción declarada: piel de WhatsApp del simulador
 
 El simulador de `/demo` imita a WhatsApp a propósito, así que usa los colores de marca de esa aplicación
-en la cabecera del teléfono, las burbujas y el botón de envío: `#008069` (cabecera), `#075e54` (barra de
-estado), `#00a884` (envío), `#53bdeb` (marcas de leído) y `#d9fdd3` (burbuja saliente).
+en las burbujas y el botón de envío: `#00a884` (envío), `#019475` (hover de envío), `#25d366`
+(estado listo), `#53bdeb` (marcas de leído) y `--wa-out: #d9fdd3` (burbuja saliente clara).
+Fuente: `landing/demo.css`. La cabecera usa `--wa-header: #f0f2f5` en claro / `#202c33` en oscuro.
 
-No son tokens del producto y no deben extenderse a la portada ni al panel: existen para que el huésped
-reconozca el canal simulado. Cualquier otro componente sigue usando los tokens de este documento.
+Los valores literales del canal no son tokens de marca del producto; los `--wa-*` sí están declarados
+como tokens, pero solo en la landing. No deben extenderse al panel ni al resto de la portada: existen
+para que el huésped reconozca el canal simulado. Cualquier otro componente sigue usando su sistema.

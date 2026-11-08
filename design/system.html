@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Copiloto Recepción — Design System</title>
 <style>
-  /* System font stacks only — matches the stacks declared in the sources;
-     Instrument Serif / Inter are not loaded here, so the fallbacks render. */
+  /* System-only fallback stacks from the sources; no webfonts are loaded.
+     Presentation aliases below are board-local, not new project tokens.
+     Landing: landing/demo.css; panel: copiloto/src/copiloto/static/theme.css. */
   :root {
-    --font-display: "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-    --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-display: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --section-space: clamp(60px, 8vw, 88px);
     --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 
     /* Landing tokens (landing/demo.css :root, light) */
@@ -49,7 +51,6 @@
     --wa-ready: #25d366;
     --wa-ticks: #53bdeb;
     --brand-mix: #40230d;
-    --camera: #0a0806;
     /* Panel tokens (copiloto/src/copiloto/static/theme.css, light) */
     --p-muted: #7b6953;
     --p-ok: #2e7d32;
@@ -88,15 +89,14 @@
   a { color: var(--accent); text-underline-offset: 4px; }
 
   a:focus-visible,
+  button:focus-visible,
   [tabindex]:focus-visible {
     outline: 3px solid var(--accent);
     outline-offset: 3px;
-    border-radius: 4px;
   }
 
   .artboard {
     width: 1440px;
-    max-width: 100%;
     margin: 0 auto;
     padding: 56px 0 96px;
   }
@@ -156,7 +156,7 @@
     letter-spacing: .06em;
     vertical-align: middle;
   }
-  .source-tag.panel { border-color: color-mix(in oklab, var(--accent-2) 40%, var(--line)); color: var(--accent-2); }
+  .source-tag.panel { border-color: var(--line); color: var(--accent-2); }
 
   .cols-2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 24px 40px; align-items: start; }
   .cols-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
@@ -169,7 +169,7 @@
     box-shadow: var(--shadow-sm);
   }
   .panel-card > h3, .demo-box > h3 { margin: 0 0 14px; font-size: 1rem; line-height: 1.35; font-weight: 600; letter-spacing: -.005em; }
-  .panel-card p, .demo-box p { margin: 0 0 8px; color: var(--muted-landing); font-size: .85rem; }
+  .panel-card > p, .demo-box > p { margin: 0 0 8px; color: var(--muted-landing); font-size: .85rem; }
 
   /* ---- Swatches ---- */
   .swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
@@ -207,15 +207,18 @@
   .t-h2 { font-family: var(--font-display); font-weight: 400; font-size: clamp(1.85rem, 3.4vw, 2.8rem); line-height: 1.05; letter-spacing: -.015em; }
   .t-h3 { font-size: 1rem; line-height: 1.35; font-weight: 600; letter-spacing: -.005em; }
   .t-body { font-size: 16px; line-height: 1.65; }
-  .t-subtitle { font-size: 1.06rem; line-height: 1.62; color: var(--ink-2); }
-  .t-metric { font-family: var(--font-display); font-size: 1.5rem; line-height: 1.1; letter-spacing: -.01em; }
+  .t-lede { font-size: 1.06rem; line-height: 1.62; color: var(--ink-2); }
+  .t-stat { font-family: var(--font-display); font-size: 1.9rem; line-height: 1.1; letter-spacing: -.01em; }
   .t-eyebrow { color: var(--accent); font-size: .71rem; font-weight: 650; letter-spacing: .19em; text-transform: uppercase; }
-  .t-panel-body { font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.5; }
+  .t-panel-body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.5; }
+  .type-row p { overflow-wrap: anywhere; }
+  button { font: inherit; cursor: pointer; }
+  button:disabled { cursor: not-allowed; opacity: .5; }
 
   /* ---- Spacing ---- */
   .space-row { display: grid; grid-template-columns: 90px minmax(0,1fr); gap: 16px; align-items: center; padding: 7px 0; }
   .space-row .val { font-family: var(--font-mono); font-size: .66rem; color: var(--muted-landing); text-align: right; }
-  .space-bar { height: 14px; border-radius: 7px; background: color-mix(in oklab, var(--accent) 34%, var(--card)); }
+  .space-bar { height: 14px; border-radius: 7px; background: var(--accent); }
 
   /* ---- Radii / shadows ---- */
   .radius-box, .shadow-box {
@@ -251,7 +254,7 @@
     display: flex; flex-direction: column; gap: 8px; padding: 14px 10px;
     border-radius: 18px; background: var(--wa-bg);
     background-image: radial-gradient(circle at 1px 1px, rgb(0 0 0 / 4%) 1px, transparent 0);
-    background-size: 16px 16px;
+    background-size: 18px 18px;
   }
   .message { max-width: 92%; font-size: .85rem; line-height: 1.6; overflow-wrap: anywhere; }
   .message.assistant { align-self: flex-start; }
@@ -261,12 +264,13 @@
     background: var(--wa-in); color: var(--wa-ink);
     box-shadow: 0 1px 1px rgb(11 20 26 / 13%);
   }
-  .bubble p { margin: 0; }
+  .chat .bubble p { margin: 0; color: var(--wa-ink); font-size: inherit; }
   .user .bubble { border-radius: 10px 10px 2px 10px; background: var(--wa-out); }
   .message-time {
     display: block; margin-top: 2px; color: var(--wa-muted);
     font-size: .59rem; font-variant-numeric: tabular-nums; text-align: right;
   }
+  .user .message-time { color: color-mix(in oklab, var(--wa-ink) 55%, transparent); }
 
   /* Status dots — landing/demo.css .status-dot / .live-dot */
   .dot-row { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; font-size: .82rem; color: var(--ink-2); }
@@ -300,7 +304,26 @@
   .availability-list .total { grid-column: 2; grid-row: 2; color: var(--ink); font-weight: 600; text-align: right; }
   .availability-list .right { grid-column: 2; grid-row: 1; text-align: right; }
 
-  /* Skeleton — copiloto/.../theme.css .skeleton */
+  /* Console specimens — landing/demo.css; static, not working controls. */
+  .demo-switch {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px;
+    border: 1px solid var(--line); border-radius: 999px; background: var(--card);
+    color: var(--muted-landing); font-size: .84rem; font-weight: 600;
+  }
+  .demo-switch-track { position: relative; flex: none; width: 30px; height: 18px; border-radius: 999px; background: var(--accent-2); }
+  .demo-switch-knob { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--card); box-shadow: var(--shadow-sm); transform: translateX(12px); }
+  .console-tabs { display: flex; gap: 4px; width: 100%; max-width: 520px; margin-top: 26px; padding: 5px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); box-shadow: var(--shadow-sm); }
+  .console-tabs .tab { flex: 1; min-width: 0; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted-landing); font-weight: 600; font-size: .88rem; white-space: nowrap; text-align: center; }
+  .console-tabs .selected { background: var(--ink); color: var(--bg); }
+  .console-state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 18px 0 0; padding: 14px 16px; border: 1px dashed var(--line); border-radius: 12px; background: var(--card-2); color: var(--muted-landing); font-size: .86rem; }
+  .console-state.error { border-color: color-mix(in oklab, var(--error) 35%, var(--line)); background: var(--error-bg); color: var(--error); }
+  .console-state.rate { border: 1px solid var(--line); background: var(--accent-soft); color: var(--accent); }
+  .console-state.gate { border-color: color-mix(in oklab, var(--accent) 40%, var(--line)); background: var(--accent-soft); color: var(--accent); }
+  .console-row { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; padding: 10px 8px; border: 0; border-radius: 10px; background: none; color: inherit; text-align: left; }
+  .console-row b { display: block; font-size: .84rem; }
+  .console-row .sub { display: block; color: var(--muted-landing); font-size: .7rem; }
+
+  /* Skeleton — copiloto/src/copiloto/static/theme.css .skeleton */
   .skeleton {
     border-radius: 8px; height: 16px;
     background: linear-gradient(90deg, var(--card-2) 25%, var(--card) 37%, var(--card-2) 63%);
@@ -338,7 +361,7 @@
     <div class="wrap">
       <p class="eyebrow">Design system · extracted from source</p>
       <h1>Copiloto Recepción <em>tokens</em></h1>
-      <p class="lede">Two systems live here: the <strong>public landing</strong> (<code>landing/demo.css</code>) and the <strong>reception panel</strong> (<code>copiloto/src/copiloto/static/theme.css</code>). The panel replicates the landing tokens, but several values have drifted — conflicts are rendered side by side below. Everything on this page is a value declared in one of those two files.</p>
+      <p class="lede">Two systems live here: the <strong>public landing</strong> (<code>landing/demo.css</code>) and the <strong>reception panel</strong> (<code>copiloto/src/copiloto/static/theme.css</code>). The panel replicates the landing tokens, but several values have drifted — conflicts are rendered side by side below. Product values below come only from those two files. Board layout, swatch geometry and local CSS aliases are presentation aids, not project tokens. No systems have been merged.</p>
     </div>
   </header>
 
@@ -348,7 +371,7 @@
     <section id="colors" aria-labelledby="colors-h">
       <div class="wrap">
         <h2 id="colors-h">Colors</h2>
-        <p class="section-intro">Page chrome is shared and identical. WhatsApp demo tokens, status colors and the panel's warn/bad set are system-specific. Light-mode values shown; both sources also declare dark overrides.</p>
+        <p class="section-intro">Light page chrome matches; dark accents differ. Landing declares 27 color tokens and panel 15. WhatsApp tokens belong only to landing. Sources: <code>landing/demo.css</code> and <code>copiloto/src/copiloto/static/theme.css</code>.</p>
 
         <h3 class="mini-label">Shared page chrome — identical in both sources (light)</h3>
         <div class="swatch-grid" style="margin-bottom: 28px;">
@@ -370,17 +393,16 @@
           <div class="swatch"><div class="chip-color" style="background:#6b5943"></div><dl><dt>--muted</dt><dd>#6b5943</dd><dd class="role">Muted text (landing value)</dd></dl></div>
           <div class="swatch"><div class="chip-color" style="background:rgb(46 32 18 / 9%); box-shadow: inset 0 0 0 1px #ded0b9;"></div><dl><dt>--line-soft</dt><dd>rgb(46 32 18 / 9%)</dd><dd class="role">Hairlines, hover fills</dd></dl></div>
           <div class="swatch"><div class="chip-color" style="background:#eaddc6"></div><dl><dt>--accent-soft</dt><dd>#eaddc6</dd><dd class="role">Rate-status strip</dd></dl></div>
-          <div class="swatch"><div class="chip-color" style="background:#241a12"></div><dl><dt>--bezel</dt><dd>#241a12</dd><dd class="role">Phone bezel / 3D frames</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#241a12"></div><dl><dt>--bezel</dt><dd>#241a12</dd><dd class="role">Phone bezel / device sides</dd></dl></div>
           <div class="swatch"><div class="chip-color" style="background:#2c6340"></div><dl><dt>--ok</dt><dd>#2c6340</dd><dd class="role">Success (landing value)</dd></dl></div>
           <div class="swatch"><div class="chip-color" style="background:#e6eee2"></div><dl><dt>--ok-bg</dt><dd>#e6eee2</dd><dd class="role">Success surface</dd></dl></div>
           <div class="swatch"><div class="chip-color" style="background:#9c2a22"></div><dl><dt>--error</dt><dd>#9c2a22</dd><dd class="role">Error text</dd></dl></div>
           <div class="swatch"><div class="chip-color" style="background:#fbeae4"></div><dl><dt>--error-bg</dt><dd>#fbeae4</dd><dd class="role">Error surface</dd></dl></div>
-          <div class="swatch"><div class="chip-color" style="background:#00a884"></div><dl><dt>hardcoded</dt><dd>#00a884</dd><dd class="role">WA send button, tool accent</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#00a884"></div><dl><dt>hardcoded</dt><dd>#00a884</dd><dd class="role">WA send button</dd></dl></div>
           <div class="swatch"><div class="chip-color" style="background:#019475"></div><dl><dt>hardcoded</dt><dd>#019475</dd><dd class="role">Send button hover</dd></dl></div>
           <div class="swatch"><div class="chip-color" style="background:#25d366"></div><dl><dt>hardcoded</dt><dd>#25d366</dd><dd class="role">Status dot "ready"</dd></dl></div>
           <div class="swatch"><div class="chip-color" style="background:#53bdeb"></div><dl><dt>hardcoded</dt><dd>#53bdeb</dd><dd class="role">Message ticks</dd></dl></div>
           <div class="swatch"><div class="chip-color" style="background:#40230d"></div><dl><dt>hardcoded</dt><dd>#40230d</dd><dd class="role">Gradient mix endpoint</dd></dl></div>
-          <div class="swatch"><div class="chip-color" style="background:#0a0806"></div><dl><dt>hardcoded</dt><dd>#0a0806</dd><dd class="role">Device camera bar</dd></dl></div>
         </div>
 
         <h3 class="mini-label">Landing — WhatsApp demo tokens</h3>
@@ -402,6 +424,49 @@
           <div class="swatch"><div class="chip-color" style="background:#b26a00"></div><dl><dt>--warn</dt><dd>#b26a00</dd><dd class="role">Warning (panel only)</dd></dl></div>
           <div class="swatch"><div class="chip-color" style="background:#c62828"></div><dl><dt>--bad</dt><dd>#c62828</dd><dd class="role">Failure (panel only)</dd></dl></div>
         </div>
+
+        <h3 class="mini-label">Dark color overrides — exact source values</h3>
+        <table class="conflict-table" style="margin-bottom:28px;">
+          <caption>Both sources use @media (prefers-color-scheme: dark). “Both” names the two source paths above; identical values do not make these one system.</caption>
+          <thead><tr><th scope="col">Source</th><th scope="col">Token</th><th scope="col">Dark value</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Both</th><td>--bg</td><td><span class="cv"><span class="dot" style="background:#14100b"></span>#14100b</span></td></tr>
+            <tr><th scope="row">Both</th><td>--bg-2</td><td><span class="cv"><span class="dot" style="background:#1a1410"></span>#1a1410</span></td></tr>
+            <tr><th scope="row">Both</th><td>--card</td><td><span class="cv"><span class="dot" style="background:#201a13"></span>#201a13</span></td></tr>
+            <tr><th scope="row">Both</th><td>--card-2</td><td><span class="cv"><span class="dot" style="background:#261e16"></span>#261e16</span></td></tr>
+            <tr><th scope="row">Both</th><td>--ink</td><td><span class="cv"><span class="dot" style="background:#f0e6d5"></span>#f0e6d5</span></td></tr>
+            <tr><th scope="row">Both</th><td>--ink-2</td><td><span class="cv"><span class="dot" style="background:#d6c7b1"></span>#d6c7b1</span></td></tr>
+            <tr><th scope="row">Both</th><td>--line</td><td><span class="cv"><span class="dot" style="background:#3f3427"></span>#3f3427</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--muted</td><td><span class="cv"><span class="dot" style="background:#a4947d"></span>#a4947d</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--line-soft</td><td><span class="cv"><span class="dot" style="background:rgb(255 240 220 / 8%)"></span>rgb(255 240 220 / 8%)</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--accent</td><td><span class="cv"><span class="dot" style="background:#dcaa6d"></span>#dcaa6d</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--accent-2</td><td><span class="cv"><span class="dot" style="background:#9fd0ae"></span>#9fd0ae</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--accent-ink</td><td><span class="cv"><span class="dot" style="background:#14100b"></span>#14100b</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--accent-soft</td><td><span class="cv"><span class="dot" style="background:#33281c"></span>#33281c</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--glow</td><td><span class="cv"><span class="dot" style="background:#6a4a2a"></span>#6a4a2a</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--bezel</td><td><span class="cv"><span class="dot" style="background:#2e2418"></span>#2e2418</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-bg</td><td><span class="cv"><span class="dot" style="background:#0b141a"></span>#0b141a</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-in</td><td><span class="cv"><span class="dot" style="background:#202c33"></span>#202c33</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-out</td><td><span class="cv"><span class="dot" style="background:#005c4b"></span>#005c4b</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-header</td><td><span class="cv"><span class="dot" style="background:#202c33"></span>#202c33</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-ink</td><td><span class="cv"><span class="dot" style="background:#e9edef"></span>#e9edef</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-muted</td><td><span class="cv"><span class="dot" style="background:#8696a0"></span>#8696a0</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-line</td><td><span class="cv"><span class="dot" style="background:#2a3942"></span>#2a3942</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-link</td><td><span class="cv"><span class="dot" style="background:#7ee0c6"></span>#7ee0c6</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--ok</td><td><span class="cv"><span class="dot" style="background:#9bd2a3"></span>#9bd2a3</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--ok-bg</td><td><span class="cv"><span class="dot" style="background:#1e3125"></span>#1e3125</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--error</td><td><span class="cv"><span class="dot" style="background:#ffc0b8"></span>#ffc0b8</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--error-bg</td><td><span class="cv"><span class="dot" style="background:#432723"></span>#432723</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--muted</td><td><span class="cv"><span class="dot" style="background:#a4947d"></span>#a4947d</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--accent</td><td><span class="cv"><span class="dot" style="background:#d1a971"></span>#d1a971</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--accent-2</td><td><span class="cv"><span class="dot" style="background:#8fb59c"></span>#8fb59c</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--accent-ink</td><td><span class="cv"><span class="dot" style="background:#1d1812"></span>#1d1812</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--glow</td><td><span class="cv"><span class="dot" style="background:#8d5a2b"></span>#8d5a2b</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--ok</td><td><span class="cv"><span class="dot" style="background:#66bb6a"></span>#66bb6a</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--warn</td><td><span class="cv"><span class="dot" style="background:#ffb74d"></span>#ffb74d</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--bad</td><td><span class="cv"><span class="dot" style="background:#ef5350"></span>#ef5350</span></td></tr>
+          </tbody>
+        </table>
 
         <h3 class="mini-label">Conflicts — same role, different value</h3>
         <table class="conflict-table">
@@ -429,14 +494,14 @@
     <section id="typography" aria-labelledby="typography-h">
       <div class="wrap">
         <h2 id="typography-h">Typography</h2>
-        <p class="section-intro">Families: Instrument Serif (display), Inter (UI), and a mono stack (landing only). Webfonts are declared in the sources but not loaded on this artboard — the system fallbacks (Georgia / system-ui / Menlo) render.</p>
+        <p class="section-intro">Sources declare Instrument Serif (display), Inter (UI), and mono (landing only): 3 landing stacks, 2 panel stacks. This board applies only their system-font fallbacks; actual fallback selection depends on the OS. No fonts or other assets are fetched.</p>
 
         <div class="panel-card" style="margin-bottom: 24px;">
           <h3>Families</h3>
           <p style="font-family: var(--font-display); font-size: 1.2rem; color: var(--ink);">Display — "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif <span class="source-tag">both</span></p>
           <p style="font-size: 1.2rem; color: var(--ink);">UI — Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif <span class="source-tag">landing --font-ui</span> <span class="source-tag panel">panel --font-body (no ui-sans-serif)</span></p>
           <p style="font-family: var(--font-mono); font-size: 1rem; color: var(--ink);">Mono — ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace <span class="source-tag">landing only</span></p>
-          <p>Weights used: 400 (headings, body, display numerals) · 500 · 600 · 650 (brand, eyebrow) · 700. Inter @font-face: 400–700 / <em>optional</em> (landing) vs 100–900 / <em>swap</em> (panel).</p>
+          <p>Weights used: 400 (headings, body, display numerals) · 500 · 600 · 650 (brand, eyebrow) · 700. Inter @font-face: 400–700 (landing) vs 100–900 (panel). All source faces now use <em>font-display: swap</em>.</p>
         </div>
 
         <div class="cols-2">
@@ -444,8 +509,8 @@
             <h3>Landing scale <span class="source-tag">landing/demo.css</span></h3>
             <div class="type-row"><div class="type-meta"><b>h1</b><br>clamp(2.7rem, 5.6vw, 4.5rem)<br>lh .99 · ls -.02em · w400</div><p class="t-display t-h1" style="margin:0;">Reserva confirmada</p></div>
             <div class="type-row"><div class="type-meta"><b>h2</b><br>clamp(1.85rem, 3.4vw, 2.8rem)<br>lh 1.05 · ls -.015em · w400</div><p class="t-h2" style="margin:0;">Cómo funciona</p></div>
-            <div class="type-row"><div class="type-meta"><b>metrics dt</b><br>1.5rem · lh 1.1</div><p class="t-metric" style="margin:0;">24/7</p></div>
-            <div class="type-row"><div class="type-meta"><b>subtitle</b><br>1.06rem · lh 1.62</div><p class="t-subtitle" style="margin:0;">El asistente responde al huésped en segundos.</p></div>
+            <div class="type-row"><div class="type-meta"><b>.stat dt</b><br>1.9rem · lh 1.1<br>1.6rem ≤620px</div><p class="t-stat" style="margin:0;">24/7</p></div>
+            <div class="type-row"><div class="type-meta"><b>.lede</b><br>1.06rem · lh 1.62</div><p class="t-lede" style="margin:0;">El asistente responde al huésped en segundos.</p></div>
             <div class="type-row"><div class="type-meta"><b>h3</b><br>1rem · lh 1.35 · w600</div><p class="t-h3" style="margin:0;">Herramientas en vivo</p></div>
             <div class="type-row"><div class="type-meta"><b>body</b><br>16px · lh 1.65</div><p class="t-body" style="margin:0;">Texto base del sitio público.</p></div>
             <div class="type-row"><div class="type-meta"><b>eyebrow</b><br>.71rem · w650 · ls .19em</div><p class="t-eyebrow" style="margin:0;">Demo en vivo</p></div>
@@ -453,7 +518,7 @@
           <div class="panel-card">
             <h3>Panel scale <span class="source-tag panel">copiloto/.../theme.css</span></h3>
             <div class="type-row"><div class="type-meta"><b>body</b><br>14px · lh 1.5</div><p class="t-panel-body" style="margin:0;">Texto base del panel de recepción. El sistema de panel declara solo el cuerpo: 14px / 1.5.</p></div>
-            <div class="type-row"><div class="type-meta"><b>h1 / h2</b><br>sin tamaño declarado<br>w400 · ls -.01em</div><p class="t-display" style="margin:0; font-size: 1.75rem; line-height: 1.05; letter-spacing: -.01em;">Ocupación del hotel</p></div>
+            <div class="type-row"><div class="type-meta"><b>h1 / h2</b><br>sin tamaño declarado<br>w400 · ls -.01em</div><p style="margin:0; font-family:var(--font-display); font-weight:400; letter-spacing:-.01em;">Ocupación del hotel</p></div>
             <div class="type-row"><div class="type-meta"><b>headings</b></div><p style="margin:0; font-size: .82rem;">No sizes, no mono stack, and no component text sizes are declared in <code>theme.css</code>.</p></div>
           </div>
         </div>
@@ -464,7 +529,7 @@
     <section id="spacing" aria-labelledby="spacing-h">
       <div class="wrap">
         <h2 id="spacing-h">Spacing</h2>
-        <p class="section-intro">No spacing scale is declared in either source — every value below is a raw value recurring in <code>landing/demo.css</code>. The panel declares none. Touch targets: 44px minimum on nav links, buttons, quick replies and the textarea.</p>
+        <p class="section-intro">Landing now declares one spacing token: <code>--section-space: clamp(60px, 8vw, 88px)</code>. No general spacing scale exists; bars below show raw landing measurements, not tokens. Panel declares no spacing tokens. Landing touch targets are at least 44px.</p>
         <div class="panel-card">
           <div class="space-row"><span class="val">8px</span><span class="space-bar" style="width:8px"></span></div>
           <div class="space-row"><span class="val">12px</span><span class="space-bar" style="width:12px"></span></div>
@@ -473,8 +538,8 @@
           <div class="space-row"><span class="val">26px</span><span class="space-bar" style="width:26px"></span></div>
           <div class="space-row"><span class="val">34px</span><span class="space-bar" style="width:34px"></span></div>
           <div class="space-row"><span class="val">56px</span><span class="space-bar" style="width:56px"></span></div>
-          <div class="space-row"><span class="val">76px</span><span class="space-bar" style="width:76px"></span></div>
-          <p style="margin-top:16px;">Key measurements: <code>.wrap</code> max-width 1180px · card padding 26px · section padding 76px 0 · button 12×24 padding, min-height 50px · hero gap 56px.</p>
+          <div class="space-row"><span class="val">section-space</span><span class="space-bar" style="width:var(--section-space)"></span></div>
+          <p style="margin-top:16px;">Source: <code>landing/demo.css</code>. <code>.wrap</code> max-width 1180px · card padding 26px · <code>main &gt; section</code> padding-block var(--section-space) · <code>main &gt; #probar</code> padding-top 0 · button 12×24 padding, min-height 50px · hero gap 56px. The ≤620px generic section padding (52px 0) does not override the direct-child rule.</p>
         </div>
       </div>
     </section>
@@ -485,16 +550,16 @@
         <h2 id="radii-h">Radii</h2>
         <p class="section-intro">No radius tokens. Raw values from <code>landing/demo.css</code>; the panel declares exactly one radius (skeleton, 8px).</p>
         <div class="cols-3">
-          <div class="radius-box" style="border-radius:999px;">999px — buttons, pills, inputs</div>
+          <div class="radius-box" style="border-radius:999px;">999px — buttons, pills, voice input</div>
           <div class="radius-box" style="border-radius:22px;">22px — card (18px mobile)</div>
-          <div class="radius-box" style="border-radius:18px;">18px — capability / live-card / chat</div>
+          <div class="radius-box" style="border-radius:18px;">18px — shot / live-card / admin-frame</div>
           <div class="radius-box" style="border-radius:14px;">14px — event-card</div>
           <div class="radius-box" style="border-radius:12px;">12px — notice / voice-line</div>
           <div class="radius-box" style="border-radius:10px;">10px — skip / availability</div>
-          <div class="radius-box" style="border-radius:9px 9px 9px 2px;">9 9 9 2 — mini bot bubble</div>
-          <div class="radius-box" style="border-radius:9px 9px 2px 9px;">9 9 2 9 — mini guest bubble</div>
+          <div class="radius-box" style="border-radius:26px;">26px — frame / cta</div>
+          <div class="radius-box" style="border-radius:40px;">40px — phone (18px ≤620px)</div>
           <div class="radius-box" style="border-radius:8px;">8px — event-icon · panel skeleton</div>
-          <div class="radius-box" style="border-radius:6px;">6px — arg chips, code chips</div>
+          <div class="radius-box" style="border-radius:6px;">6px — arguments / tag</div>
           <div class="radius-box" style="border-radius:10px 10px 10px 2px;">10 10 10 2 — bot bubble</div>
           <div class="radius-box" style="border-radius:10px 10px 2px 10px;">10 10 2 10 — guest bubble</div>
         </div>
@@ -505,7 +570,7 @@
     <section id="shadows" aria-labelledby="shadows-h">
       <div class="wrap">
         <h2 id="shadows-h">Shadows &amp; motion</h2>
-        <p class="section-intro">Landing declares a three-step scale; the panel declares a single <code>--shadow</code>. Both declare dark-mode overrides (not shown here). Easing differs: landing uses <code>cubic-bezier(.2, .8, .3, 1)</code>, the panel tokens <code>--ease: cubic-bezier(.22, 1, .36, 1)</code>.</p>
+        <p class="section-intro">Landing declares a three-step scale; the panel declares a single <code>--shadow</code>. Both declare dark-mode overrides (rendered separately below). Easing differs: landing uses <code>cubic-bezier(.2, .8, .3, 1)</code>, the panel tokens <code>--ease: cubic-bezier(.22, 1, .36, 1)</code>.</p>
         <div class="cols-2" style="margin-bottom: 24px;">
           <div class="cols-3">
             <div class="shadow-box" style="box-shadow: var(--shadow-sm);">--shadow-sm</div>
@@ -518,10 +583,17 @@
             <div class="shadow-box" style="box-shadow: 0 10px 26px -12px var(--accent);">primary glow (inline)</div>
           </div>
         </div>
+        <h3 class="mini-label">Dark shadows — landing/demo.css / copiloto/src/copiloto/static/theme.css</h3>
+        <div class="cols-2" style="margin-bottom:24px; background:#14100b; padding:26px;">
+          <div class="shadow-box" style="background:#201a13; color:#f0e6d5; box-shadow:0 1px 2px rgb(0 0 0 / 30%);">landing --shadow-sm<br>0 1px 2px rgb(0 0 0 / 30%)</div>
+          <div class="shadow-box" style="background:#201a13; color:#f0e6d5; box-shadow:0 2px 6px rgb(0 0 0 / 30%), 0 18px 42px rgb(0 0 0 / 40%);">landing --shadow-md<br>0 2px 6px rgb(0 0 0 / 30%), 0 18px 42px rgb(0 0 0 / 40%)</div>
+          <div class="shadow-box" style="background:#201a13; color:#f0e6d5; box-shadow:0 40px 90px -30px rgb(0 0 0 / 70%);">landing --shadow-lg<br>0 40px 90px -30px rgb(0 0 0 / 70%)</div>
+          <div class="shadow-box" style="background:#201a13; color:#f0e6d5; box-shadow:0 1px 2px rgb(0 0 0 / 35%), 0 14px 30px -22px rgb(0 0 0 / 80%);">panel --shadow<br>0 1px 2px rgb(0 0 0 / 35%), 0 14px 30px -22px rgb(0 0 0 / 80%)</div>
+        </div>
         <div class="panel-card">
           <h3>Motion</h3>
           <div class="cols-2">
-            <p><span class="source-tag">landing</span> <code>cubic-bezier(.2, .8, .3, 1)</code> on .2–.7s transitions; keyframes <code>aurora</code> 18s, <code>ticker</code> 40s linear, <code>message-in</code> .28s, <code>typing</code> 1s, <code>stack-float</code> 12s; reveal stagger .08/.16/.24s. Reduced motion: all animations and transitions disabled.</p>
+            <p><span class="source-tag">landing</span> <code>cubic-bezier(.2, .8, .3, 1)</code> on .25–.7s transitions; keyframes <code>aurora</code> 18s, <code>ticker</code> 40s linear, <code>message-in</code> .28s (.32s on .event-card), <code>typing</code> 1s, <code>stack-float</code> 12s; reveal stagger .08/.16/.24s. Reduced motion: all animations and transitions disabled.</p>
             <p><span class="source-tag panel">panel</span> <code>--ease: cubic-bezier(.22, 1, .36, 1)</code>; keyframes <code>rise</code> .42s, <code>pop</code> .5s (stagger <code>var(--i) × 60ms</code>), <code>pulse-red</code>, <code>shimmer</code> 1.4s. Reduced motion: durations .001ms.</p>
           </div>
         </div>
@@ -537,10 +609,10 @@
         <h3 class="mini-label">Buttons <span class="source-tag">landing/demo.css .button</span></h3>
         <div class="demo-box" style="margin-bottom: 24px;">
           <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
-            <span class="button primary">Confirmar reserva</span>
-            <span class="button">Ver disponibilidad</span>
-            <span class="button" style="background:transparent;">Ghost</span>
-            <span class="button" style="opacity:.5;">Disabled</span>
+            <button type="button" class="button primary">Confirmar reserva</button>
+            <button type="button" class="button">Ver disponibilidad</button>
+            <button type="button" class="button" style="background:transparent;">Ghost</button>
+            <button type="button" class="button" disabled>Disabled</button>
           </div>
           <p style="margin-top:14px;">Radius 999px · min-height 50px · padding 12×24 · primary: gradient accent + glow, accent-ink text · hover: translateY(-2px) + shadow-md · disabled: opacity .5. Panel: <strong>not defined</strong> in theme.css.</p>
         </div>
@@ -550,7 +622,7 @@
             <h3 class="mini-label">Card <span class="source-tag">landing .card</span></h3>
             <div class="demo-box">
               <h3 style="margin:0 0 8px; font-size:1rem;">Ocupación de esta semana</h3>
-              <p>Padding 26px · border 1px --line · radius 22px · bg --card · --shadow-sm. Gradient siblings (.capability, .live-card) use card→card-2 at radius 18px with a hover lift.</p>
+              <p>Padding 26px · border 1px --line · radius 22px · bg --card · --shadow-sm. Gradient siblings (.shot, .live-card) use card→card-2 at radius 18px. Only .shot has the card-level hover lift (−4px); .live-card has no such rule.</p>
             </div>
           </div>
           <div>
@@ -578,7 +650,7 @@
                   <span class="message-time">16:03</span>
                 </div>
               </div>
-              <p style="margin-top:14px;">Bot: radius 10·10·10·2 on --wa-in. Guest: 10·10·2·10 on --wa-out. Text .85rem/1.6, time .59rem tabular-nums. Mini variant (.hc) uses 9px corners at .7rem.</p>
+              <p style="margin-top:14px;">Bot: radius 10·10·10·2 on --wa-in. Guest: 10·10·2·10 on --wa-out. Text .85rem/1.6, time .59rem tabular-nums. Hero preview .msg uses the same 10px corner patterns, padding 8×11 and .78rem/1.5 text.</p>
             </div>
           </div>
           <div>
@@ -640,8 +712,28 @@
           </div>
         </div>
 
+        <h3 class="mini-label" style="margin-top:28px;">Demo console — static specimens <span class="source-tag">landing/demo.css</span></h3>
+        <div class="cols-2">
+          <div class="demo-box">
+            <span class="demo-switch" style="color:var(--ink);"><span class="demo-switch-track"><span class="demo-switch-knob"></span></span>Modo demo · activado</span>
+            <div class="console-tabs" role="group" aria-label="Console tab appearance, non-interactive specimen">
+              <span class="tab selected">Huésped</span><span class="tab">Recepción</span><span class="tab">Admin</span>
+            </div>
+            <p style="margin-top:14px;">.demo-switch: 44px minimum, 30×18 track, 14px knob, checked accent-2. .console-tabs: max-width 520px, 5px padding, 4px gap; selected tab uses ink/bg. Source selectors use aria-checked and aria-selected; these specimens are static.</p>
+            <div class="console-row"><div><b>Consulta de reserva</b><span class="sub">Esperando respuesta de recepción</span></div><span class="source-pill">En cola</span></div>
+            <p>.console-row: grid 1fr/auto, gap 2×12, padding 10×8, radius 10px; name .84rem, subtitle .7rem.</p>
+          </div>
+          <div class="demo-box">
+            <div class="console-state">Vacío · No hay conversaciones en la cola.</div>
+            <div class="console-state error">Error · No se pudo cargar la cola.</div>
+            <div class="console-state rate">Límite · Espera antes de volver a consultar.</div>
+            <div class="console-state gate">Acceso · Activa el modo demo para continuar.</div>
+            <p style="margin-top:14px;">.console-state: 14×16 padding, 12px radius, dashed border. Error: error-bg/error; rate and gate: accent-soft/accent. Rate has a solid line border; gate mixes accent 40% with line.</p>
+          </div>
+        </div>
+
         <div class="not-defined" style="margin-top: 28px;">
-          Not defined in the sources (recorded as missing, not invented): spacing scale tokens, radius scale tokens, panel component rules beyond the skeleton, panel mono font stack, panel heading sizes.
+          Not defined: a general spacing scale (landing has only --section-space), radius scale tokens, panel component rules beyond the skeleton/entrance animations, panel mono stack or panel heading sizes.
         </div>
       </div>
     </section>
