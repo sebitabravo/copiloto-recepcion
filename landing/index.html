@@ -134,8 +134,8 @@
 
   <div class="ticker" aria-hidden="true">
     <div class="ticker-track">
-      <span>Ubicación primero</span><i>·</i><span>Privacidad antes de preguntar</span><i>·</i><span>PMS con sello de hora</span><i>·</i><span>Confirmación humana</span><i>·</i><span>Menú guiado 01 · 02 · 03</span><i>·</i><span>Widget real de Chatwoot</span><i>·</i><span>Demo de voz</span><i>·</i>
-      <span>Ubicación primero</span><i>·</i><span>Privacidad antes de preguntar</span><i>·</i><span>PMS con sello de hora</span><i>·</i><span>Confirmación humana</span><i>·</i><span>Menú guiado 01 · 02 · 03</span><i>·</i><span>Widget real de Chatwoot</span><i>·</i><span>Demo de voz</span><i>·</i>
+      <span>Ubicación primero</span><i>·</i><span>Privacidad antes de preguntar</span><i>·</i><span>PMS con sello de hora</span><i>·</i><span>Confirmación humana</span><i>·</i><span>Atajos guiados</span><i>·</i><span>Widget real de Chatwoot</span><i>·</i><span>Bandeja de recepción</span><i>·</i>
+      <span>Ubicación primero</span><i>·</i><span>Privacidad antes de preguntar</span><i>·</i><span>PMS con sello de hora</span><i>·</i><span>Confirmación humana</span><i>·</i><span>Atajos guiados</span><i>·</i><span>Widget real de Chatwoot</span><i>·</i><span>Bandeja de recepción</span><i>·</i>
     </div>
   </div>
 </header>
@@ -147,14 +147,14 @@
         <p class="eyebrow">Un turno completo</p>
         <h2 id="recorrido-title">Cinco pasos, del saludo a la confirmación</h2>
       </div>
-      <p>Cada paso deja un rastro verificable: la respuesta, la traza de herramienta, la hora de lectura del PMS o la reserva confirmada por una persona. Nada de esto vive solo en la conversación.</p>
+      <p>Cada paso deja un rastro verificable: la respuesta, el evento con su hora, la lectura del PMS o la respuesta de una persona en el mismo hilo. Nada de esto vive solo en la conversación.</p>
     </div>
     <ol class="pipeline">
       <li class="step"><span class="num" aria-hidden="true">01</span><h3>El huésped escribe</h3><p>Chat web del simulador. Lo primero es la ubicación y el aviso de privacidad.</p><span class="artifact">mensaje</span></li>
-      <li class="step"><span class="num" aria-hidden="true">02</span><h3>El copiloto entiende</h3><p>Responde lo frecuente o elige la herramienta: hotel, disponibilidad, reserva o derivar.</p><span class="artifact">traza de herramienta</span></li>
+      <li class="step"><span class="num" aria-hidden="true">02</span><h3>El copiloto entiende</h3><p>Responde lo frecuente o guía la consulta: fechas y huéspedes, con un resumen que el huésped puede corregir.</p><span class="artifact">evento registrado</span></li>
       <li class="step"><span class="num" aria-hidden="true">03</span><h3>Lee el PMS simulado</h3><p>Consulta cupos y precios y responde con la hora exacta de la lectura.</p><span class="artifact">sello de hora</span></li>
-      <li class="step"><span class="num" aria-hidden="true">04</span><h3>Deriva con contexto</h3><p>La derivación queda registrada en la traza, sin notificar al equipo; el canal real es el widget de Chatwoot.</p><span class="artifact">traza de derivación</span></li>
-      <li class="step"><span class="num" aria-hidden="true">05</span><h3>Recepción confirma</h3><p>Una persona revisa la propuesta y confirma la reserva en el PMS simulado.</p><span class="artifact">reserva confirmada</span></li>
+      <li class="step"><span class="num" aria-hidden="true">04</span><h3>Deriva con contexto</h3><p>La solicitud llega a la bandeja de recepción con fechas, huéspedes y la lectura del PMS; desde ahí el bot deja de contestar ese hilo.</p><span class="artifact">solicitud BDL</span></li>
+      <li class="step"><span class="num" aria-hidden="true">05</span><h3>Recepción responde</h3><p>Una persona toma la solicitud, verifica cupos y responde en el mismo hilo. La reserva la confirma ella en el PMS.</p><span class="artifact">respuesta en el hilo</span></li>
     </ol>
   </section>
 
@@ -195,7 +195,7 @@
       </article>
     </div>
     <p class="prototype-links">Estos paneles son reales en la demo:
-      <a href="/demo" data-service="inbox" target="_blank" rel="noopener">Bandeja de recepción</a>
+      <a href="/demo?vista=recepcion">Bandeja de recepción</a>
       <span aria-hidden="true">·</span>
       <a href="/demo" data-service="pms" target="_blank" rel="noopener">PMS simulado</a>
       <span aria-hidden="true">·</span>
@@ -217,8 +217,8 @@
         <ul>
           <li><span class="mark" aria-hidden="true">✓</span><span>Responde ubicación, servicios y preguntas frecuentes aprobadas.</span></li>
           <li><span class="mark" aria-hidden="true">✓</span><span>Consulta disponibilidad y precios del PMS simulado con hora de lectura.</span></li>
-          <li><span class="mark" aria-hidden="true">✓</span><span>Propone una reserva y espera la confirmación explícita.</span></li>
-          <li><span class="mark" aria-hidden="true">✓</span><span>Deriva con contexto visible en la traza del panel técnico.</span></li>
+          <li><span class="mark" aria-hidden="true">✓</span><span>Prepara la solicitud con fechas y huéspedes, y deja corregirla antes de enviarla.</span></li>
+          <li><span class="mark" aria-hidden="true">✓</span><span>Deriva con contexto a la bandeja de recepción, en el mismo hilo del huésped.</span></li>
         </ul>
       </div>
       <div class="list">
@@ -259,7 +259,7 @@
       <a href="#recorrido">Recorrido</a>
       <a href="#recepcion">Recepción</a>
       <a href="#limites">Límites</a>
-      <a href="/demo" data-service="inbox" target="_blank" rel="noopener">Bandeja de recepción</a>
+      <a href="/demo?vista=recepcion">Bandeja de recepción</a>
       <a href="/demo" data-service="pms" target="_blank" rel="noopener">PMS simulado</a>
       <a href="/demo" data-service="metrics" target="_blank" rel="noopener">Métricas</a>
       <a href="/privacidad">Aviso de privacidad</a>
@@ -269,6 +269,6 @@
 </footer>
 
 <script src="config.js?v=20261107a" defer></script>
-<script src="site.js?v=20261107a" defer></script>
+<script src="site.js?v=20261108a" defer></script>
 </body>
 </html>
