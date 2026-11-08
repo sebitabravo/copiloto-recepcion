@@ -12,8 +12,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${STATIC_DEMO_OUT:-$ROOT/dist}"
 PUBLIC_SITE_URL="${PUBLIC_SITE_URL:-https://demo.example.com}"
 
-rm -rf "$OUT"
+# En Windows una carpeta abierta (visor, antivirus) impide borrarla: se limpia su contenido.
+rm -rf "$OUT" 2>/dev/null || true
 mkdir -p "$OUT"
+find "$OUT" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 
 # Solo lo que el sitio necesita: HTML, CSS, JS, tipografías e imágenes. Nada de pruebas ni configs.
 cp "$ROOT"/landing/*.html "$OUT"/

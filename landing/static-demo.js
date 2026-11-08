@@ -12,7 +12,6 @@
   if (window.__STATIC_DEMO__) return;
   window.__STATIC_DEMO__ = { replies: 0 };
 
-  const AVISO = 'Demostración simulada: respuestas preparadas en el navegador, sin servidor. Datos ficticios.';
   const CONVERSATION_ID = -1;
   const state = { messages: [], handoff: false, staff: [] };
 
@@ -112,7 +111,7 @@
     [/\/api\/demo\/status/, () => ({
       ai_enabled: false, mode: 'off', model: null, sandbox: true, autonomous_booking: false,
       voice: false, tts: 'browser', max_message_chars: 400, messages_per_session: 30,
-      disclaimer: AVISO
+      disclaimer: 'Demo con datos ficticios: no escribas datos personales reales.'
     })],
     [/\/api\/demo\/session/, () => null],
     [/\/api\/demo\/greeting/, () => ({text: 'Hola, bienvenido a Hotel Bordeluz. Soy el asistente de recepción de esta demostración.', quick_replies: []})],
@@ -148,14 +147,9 @@
     return json(body);
   };
 
-  // Aviso visible: nunca se presenta como un servicio con backend.
+  // Sin avisos añadidos: la propia interfaz ya declara «Flujo guiado · sin IA», «Datos ficticios, sin
+  // reservas reales» y el modo sin IA. Aquí solo se retira lo que no puede servirse sin backend.
   document.addEventListener('DOMContentLoaded', () => {
-    const banner = document.createElement('div');
-    banner.id = 'static-demo-banner';
-    banner.setAttribute('role', 'note');
-    banner.style.cssText = 'position:sticky;top:0;z-index:60;padding:8px 16px;background:#8d5a2b;color:#fffaf2;font:600 12px/1.4 system-ui,sans-serif;text-align:center';
-    banner.textContent = AVISO;
-    document.body.prepend(banner);
     // Sin backend no hay aviso de privacidad, métricas ni PMS servidos: se ocultan los enlaces rotos.
     for (const id of ['privacy-link', 'footer-inbox', 'footer-pms', 'footer-metrics', 'admin-metrics']) {
       document.querySelectorAll(`#${id}`).forEach(link => { link.removeAttribute('href'); link.hidden = true; });

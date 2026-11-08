@@ -69,8 +69,8 @@ test('the static build replaces the public URL everywhere and leaks no secrets',
 });
 
 test('the static demo declares itself and hides what it cannot serve', () => {
-  assert.match(shim, /sin servidor/);
-  assert.match(shim, /Datos ficticios/);
+  assert.doesNotMatch(shim, /static-demo-banner/, 'sin banda fija que tape la página');
+  // La honestidad la aporta la interfaz («Flujo guiado · sin IA»), no un cartel añadido.
   for (const id of ['privacy-link', 'footer-metrics', 'en-vivo']) assert.match(shim, new RegExp(id));
   assert.doesNotMatch(shim, /innerHTML/, 'el shim no interpreta HTML');
 });
