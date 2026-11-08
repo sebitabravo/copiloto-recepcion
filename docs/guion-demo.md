@@ -97,3 +97,11 @@ cupos por su procedimiento y confirma explícitamente. La escritura en un PMS re
 
 `make demo-local LIMPIO=1` deja el escenario limpio otra vez. En Docker, `make reset` borra los volúmenes
 (pide confirmación).
+
+## Integraciones opcionales (fuera del recorrido de 5 minutos)
+
+Siguen disponibles para quien despliegue el stack completo; no son necesarias para la demo:
+
+- WhatsApp con OpenWA y el puente `wa_bridge`: [docs/whatsapp-demo.md](whatsapp-demo.md) (`make wa-up`).
+- Conector del PMS Beds24 con `pms_bridge`: [docs/conector-pms.md](conector-pms.md) (`make bridge`).
+- Modelo local con llama.cpp: [docs/ia-local.md](ia-local.md) (`make model`).

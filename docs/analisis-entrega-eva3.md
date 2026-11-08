@@ -8,7 +8,7 @@
 
 | Pregunta | Respuesta |
 |---|---|
-| ¿El prototipo funciona? | **Sí.** Verificado con stack real, modelo por API, batería de 12 casos, prueba end-to-end y 483 pruebas automáticas |
+| ¿El prototipo funciona? | **Sí.** Verificado con stack real, modelo por API, batería de 12 casos, prueba end-to-end y 469 pruebas automáticas |
 | ¿Cumple la rúbrica EVA 3 completa? | **No todavía.** 3.1.1 y 3.1.3 están cubiertos con evidencia; **3.1.2 no**, porque falta la sesión con personas y los instrumentos de la unidad |
 | ¿Se puede vender? | **Como piloto instalado en 1 o 2 hoteles, sí. Como SaaS autoservicio, no.** Faltan canal WhatsApp oficial y multiinquilino |
 | ¿El diseño es homogéneo? | **Parcial.** Landing y Chatwoot comparten paleta; panel y métricas la imitan con tokens duplicados y otra tipografía |
@@ -19,7 +19,7 @@
 |---|---|
 | `make demo` (preflight) | 7/7 comprobaciones, modelo respondió en 36 s |
 | `make e2e` (4 escenarios contra el stack real) | Todos los pasos PASS: FAQ, disponibilidad, fuera de turno, PMS caído, métricas, restauración |
-| `make test` | 436 del copiloto + 47 del PMS simulado = **483 en verde** |
+| `make test` | 422 del copiloto + 47 del PMS simulado = **469 en verde** |
 | Batería de 12 conversaciones | **11/12 (91,7%)**, sin fallos bloqueantes. El caso «argumentos de disponibilidad» falló en la corrida completa y pasó 3/3 al repetirlo aislado: es inestable bajo carga, no un defecto fijo |
 | Stack | landing :8080, copiloto :8100, PMS :8200, Chatwoot :3000, todos `Up` |
 | Landing en producción (sebita.dev) | Tarjeta del copiloto y casos de estudio ES/EN responden 200 |
@@ -50,7 +50,7 @@ alimenta 3.1.3 con una iteración real.
 2. **Instrumentos de la unidad 3 ausentes.** No existe en el repositorio ningún storyboard, mock-up,
    ficha de planificación del testeo, matriz CIM, panel de metáforas ni sus versiones iteradas.
 3. **Números desactualizados en los documentos:**
-   - `docs/eva3/registro-de-iteraciones.md:214` dice «136 casos»; hoy son 483.
+   - `docs/eva3/registro-de-iteraciones.md:214` dice «136 casos»; hoy son 469.
    - `docs/escalabilidad.md:34` dice «139 casos del copiloto y 25 del PMS»; hoy son 157 + 25 + 12.
    - `docs/caso-de-estudio.md:84` dice «137 pruebas del copiloto · 25 del PMS».
    - `docs/escalabilidad.md:22` dice «Sin roles ni sesión: token en la URL del panel»; el panel ya
@@ -137,6 +137,6 @@ vendible como SaaS autoservicio hasta resolver multiinquilino y WhatsApp oficial
 ```
 make demo     7/7 comprobaciones · modelo qwen2.5-7b-instruct · primera respuesta 36 s
 make e2e      PASS en FAQ, disponibilidad, fuera de turno, PMS caído, métricas y restauración
-make test     436 + 47 = 483 pruebas en verde
+make test     422 + 47 = 469 pruebas en verde
 batería       11/12 en corrida completa · caso fallido 3/3 al repetirlo aislado · p50 25,8 s · p95 118,7 s
 ```

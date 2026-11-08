@@ -23,11 +23,11 @@ presentar:
 | Comando | Servicios | RAM en reposo | Cuándo usarlo |
 | --- | --- | --- | --- |
 | `make up` | landing, copiloto, pms-mock | ~110 MB | Presentar `/demo`: huésped → recepción → respuesta |
-| `make up-full` | los anteriores + Chatwoot, Sidekiq, Postgres, Redis | ~1,3 GB | Probar la bandeja real y el widget |
+| `make up-full` | los anteriores + Chatwoot, Sidekiq, Postgres, Redis | ~1,3 GB | Probar la bandeja real, el widget y WhatsApp |
 
 Chatwoot, Sidekiq, Postgres y Redis están detrás del perfil `full` (`docker compose --profile full`), así
-que un `docker compose up -d` normal arranca solo la demo. `seed-chatwoot.sh`, `smoke-docker.sh` y
-`backup.sh` declaran ese perfil porque operan sobre Chatwoot. `wait-healthy.sh` y
+que un `docker compose up -d` normal arranca solo la demo. `seed-chatwoot.sh`, `smoke-docker.sh`,
+`backup.sh` y `wa-e2e.sh` declaran ese perfil porque operan sobre Chatwoot. `wait-healthy.sh` y
 `preflight.sh` esperan solo los servicios que están corriendo, así que funcionan en ambos modos.
 `scripts/demo.sh up` sigue levantando el stack completo.
 
@@ -47,6 +47,7 @@ ELEVENLABS_VOICE_ID=<id>
 ELEVENLABS_VOICE_ID_EN=<id en inglés>
 ```
 
+El modelo local sigue disponible como respaldo con `infra/docker-compose.ia.yml` y `make model`.
 
 Este repo se desarrolla en Windows con Git Bash y los scripts lo tienen en cuenta: desactivan la conversión
 de rutas de MSYS (`MSYS_NO_PATHCONV`) y los comandos de Python usan `uv run python`, así que `make piloto` y
@@ -134,8 +135,8 @@ levantarlo. Prueba la restauración antes de depender de ella.
   caracteres. `/health?probe=readiness` revisa la base; el healthcheck de Docker usa la sonda `liveness`.
 - Los webhooks aceptan cuerpos de hasta 256 KB y las páginas de lectura tienen un límite de 60 solicitudes por
   minuto por IP. Si pones un proxy delante, el límite verá la IP del proxy: aplícalo también ahí.
-- CI en `.github/workflows/ci.yml` (pytest de `copiloto` y `pms_mock`, ruff sobre esos dos paquetes y
-  `scripts`, y los tests de la UI de la demo con `node --test`).
+- CI en `.github/workflows/ci.yml` (pytest de `copiloto`, `pms_mock`, `pms_bridge` y `wa_bridge`, ruff sobre
+  los mismos cuatro, y los tests de la UI de la demo con `node --test scripts/test-demo-ui.mjs`).
 
 ## Variables
 
@@ -175,12 +176,12 @@ en `.env.runtime` (gitignored). Nunca las commitees.
    `/webhooks/*`, `/panel` (HTML estático) y `/privacidad`.
 4. Cambia la URL del Dashboard App en Chatwoot (Configuración → Integraciones → Dashboard Apps) a la URL
    pública del panel, y `PMS_STAFF_URL` a la del PMS.
-5. Respalda con `make backup` (Chatwoot y las bases SQLite).
+5. Respalda con `make backup` (Chatwoot y las bases SQLite; ver `docs/whatsapp-demo.md` para el canal de WhatsApp).
 
 ## Del PMS simulado al real
 
-Apunta `PMS_URL` a un servicio que cumpla el contrato HTTP del adaptador
-(`copiloto/src/copiloto/pms.py`): lectura de solo consulta con sello de hora. Necesita credenciales del hotel y el contrato del proveedor. La
+Apunta `PMS_URL` a un servicio que cumpla `docs/conector-pms.md` (el adaptador HTTP genérico está en
+`copiloto/src/copiloto/pms.py`; `pms_bridge` lo hace para Beds24): lectura de solo consulta con sello de hora. Necesita credenciales del hotel y el contrato del proveedor. La
 confirmación sigue siendo humana.
 
 ## Límites de la demo pública

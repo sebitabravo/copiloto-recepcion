@@ -59,7 +59,7 @@ un canal conectado a recepción. Está dirigida a quien prepara su primera demos
 
 1. Este canal es opcional y distinto del simulador visual y del widget. Requiere Chatwoot, el puente de
    WhatsApp, OpenWA y una sesión vinculada con un teléfono dedicado a pruebas.
-2. El puente no oficial a WhatsApp ya no forma parte del repositorio; el canal real es Chatwoot.
+2. Antes de vincularlo, lee [WhatsApp de demostración](whatsapp-demo.md): OpenWA es una integración no oficial,
    con riesgo de suspensión del número. No conectes el número real del hotel ni lo presentes como API oficial de Meta.
 3. Solo con autorización del responsable, prepara el perfil y vincula el teléfono según esa guía.
    Los comandos de preparación no se ejecutaron como parte de esta guía.

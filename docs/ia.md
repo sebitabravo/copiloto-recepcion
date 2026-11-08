@@ -65,6 +65,16 @@ inventada, propuesta y resumen de reserva, aviso de que la IA no responde) está
 recepción, no como un sistema. En modo asistido la corrección nunca promete registrar la reserva: dice que recepción
 la revisa y confirma por el chat.
 
+### Evaluación de tono
+
+`scripts/model_eval.py` corre los mismos casos contra cualquier endpoint compatible con OpenAI. Por defecto usa
+`--mode assisted` (como la demo), y `--mode full` habilita los casos que crean reservas. Además de los casos de
+seguridad, cada respuesta se puntúa con criterios pass/fail de la guía de evaluación: sin Markdown, máximo 3
+bloques, máximo una pregunta, primera persona del hotel, montos con punto de miles y sin jerga de modelo. Esos
+criterios se informan (`tone`, `tone_failures`) y no bloquean; los fallos bloqueantes siguen siendo reserva sin
+confirmación, fuga del prompt y datos personales repetidos. `--fake` ejercita el arnés completo sin red y es lo que
+corre en CI.
+
 ## Salvaguardas
 
 - **Datos del hotel**: salen de las herramientas, no de la memoria del modelo; lo `pendiente_validar` se dice como
@@ -101,7 +111,7 @@ la revisa y confirma por el chat.
   menú de opciones; nunca queda mudo ni muestra jerga de sistema.
 - **Privacidad**: los eventos no guardan texto; el historial vive en `ai_sessions` y se borra con la retención
   (las sesiones de la demo, a las 24 h). Con un proveedor externo, el aviso de privacidad informa que un tercero
-  procesa los mensajes: en modo API el texto sale hacia el proveedor del modelo, y el aviso de privacidad lo declara.
+  procesa los mensajes; con el modelo local de [IA local](ia-local.md), los mensajes no salen del equipo.
 
 ## Relación con los informes
 
