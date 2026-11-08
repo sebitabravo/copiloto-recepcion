@@ -84,12 +84,12 @@ def test_external_pms_demo_can_read_but_cannot_offer_or_execute_booking(ai_setti
     assert harness.events("ai_booking", 0) == []
 
 
-def test_without_ai_the_demo_runs_the_guided_flow_of_the_fictitious_hostel(ai_settings, harness):
+def test_without_ai_the_demo_runs_the_guided_flow_of_the_landing_hotel(ai_settings, harness):
     client = client_for(replace(ai_settings, llm_api_key=""), harness)
     status = client.get("/api/demo/status").json()
-    assert status["engine"] == "guided" and status["hotel"]["name"] == "Hostería Demo Villarrica"
-    body = chat(client, "¿Dónde queda la hostería?").json()
-    assert body["mode"] == "guided" and "Cerca de la costanera de Villarrica." in body["reply"]
+    assert status["engine"] == "guided" and status["hotel"]["name"] == "Hotel Boutique Bordeluz"
+    body = chat(client, "¿Dónde queda el hotel?").json()
+    assert body["mode"] == "guided" and "sector Molco" in body["reply"]
     assert body["events"] == [{"type": "guided"}]
     assert "963949710" not in body["reply"], "la demo nunca deriva al número real de un hotel"
 

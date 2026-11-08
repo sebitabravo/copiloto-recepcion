@@ -4,7 +4,7 @@ Todas las métricas (`metrics.py`) salen de la tabla `events`. Convenciones de `
 
 - inbound:            {"greeting": bool}
 - faq_answered:       {"faq_id": str, "inbound_ts": float}   # ts - inbound_ts = latencia de la FAQ
-- location_shown:     {}
+- location_shown:     {"inbound_ts": float}                     # ts - inbound_ts = latencia de la ubicación
 - commercial_started: {"in_shift": bool, "inbound_ts": float}
                        # in_shift=False es una consulta nocturna. inbound_ts es cuando ENTRÓ la consulta
                        # comercial (antes de capturar datos y de asignar): ahí parte el reloj de 180 s.

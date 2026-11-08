@@ -134,7 +134,8 @@ class FlowStyle:
 
 
 PRODUCTION_STYLE = FlowStyle()
-DEMO_STYLE = FlowStyle(menu_options=DEMO_MENU, compact=True, confirm_request=True, bot_reads_pms=False)
+# La demo de la portada promete «lee el PMS simulado con hora de lectura»: el resumen la incluye.
+DEMO_STYLE = FlowStyle(menu_options=DEMO_MENU, compact=True, confirm_request=True, bot_reads_pms=True)
 
 
 def short_date(value: date) -> str:
@@ -367,7 +368,7 @@ class Copiloto:
         """Frase de privacidad del saludo. Fuera del widget el huésped lee desde su teléfono: una URL local no abre."""
         if ctx.channel == DEMO_CHANNEL:
             # El chat de prueba muestra el aviso fijo arriba de la conversación, con su enlace.
-            return "Es un chat de prueba con datos ficticios: no escribas datos personales reales."
+            return "Es un chat de prueba: no escribas datos personales reales."
         base = "Al escribirme aceptas el tratamiento de tus datos según el aviso de privacidad"
         host = urlparse(self.settings.public_url).hostname or ""
         if ctx.channel != WEB_WIDGET and is_local_host(host):
@@ -410,7 +411,8 @@ class Copiloto:
             lines.append(f"Mapa: {self.hotel.hotel['maps_url']}")
         await self._say(ctx, "\n".join(lines))
         ctx.state.data["seen_location"] = True
-        record_event(self.db, ctx.conversation_id, "location_shown", ctx.now)
+        # Con la hora de entrada del mensaje: la ubicación también se mide contra la meta de < 10 s.
+        record_event(self.db, ctx.conversation_id, "location_shown", self.clock(), {"inbound_ts": ctx.now})
 
     async def _show_distances(self, ctx: Context) -> None:
         lines = [f"• {item['place']}: {item['distance']}" for item in self.hotel.location["distances"]]
@@ -715,11 +717,49 @@ class Copiloto:
 
     async def _show_summary(self, ctx: Context) -> None:
         ctx.state.step = "confirm_request"
-        text = "\n".join(
-            ["Revisa tu solicitud antes de enviarla:", *self._stay_lines(ctx.state.data), "",
-             "Si algo no está bien, corrígelo antes de enviar."]
+        parts = ["\n".join(["Revisa tu solicitud antes de enviarla:", *self._stay_lines(ctx.state.data)])]
+        if self.style.bot_reads_pms:
+            parts.append(await self._pms_preview(ctx))
+        parts.append("Si algo no está bien, corrígelo antes de enviar.")
+        await self._ask(ctx, "\n\n".join(parts), SUBMIT_OPTIONS)
+
+    async def _pms_preview(self, ctx: Context) -> str:
+        """Lectura preliminar del PMS para el resumen: con hora, sin reservar ni prometer cupos.
+
+        Si el PMS no responde, lo dice y la solicitud entra igual: recepción verifica a mano.
+        """
+        data = ctx.state.data
+        for key in ("read_at", "read_label", "simulated", "offers", "pms_down"):
+            data.pop(key, None)
+        started = time.monotonic()
+        try:
+            reading = await self.pms.availability(
+                date.fromisoformat(data["checkin"]), date.fromisoformat(data["checkout"]),
+                data["adults"], data["children"],
+            )
+        except PmsUnavailable:
+            record_event(self.db, ctx.conversation_id, "pms_read", self.clock(), {"ok": False, "latency_ms": 0})
+            data["pms_down"] = True
+            return ("No pude consultar el sistema de reservas en este momento, así que no puedo asegurarte cupos: "
+                    "recepción los verificará y te responderá.")
+        latency_ms = int((time.monotonic() - started) * 1000)
+        record_event(self.db, ctx.conversation_id, "pms_read", self.clock(), {"ok": True, "latency_ms": latency_ms})
+        data.update(read_at=reading.read_at, read_label=read_label(reading.read_at), simulated=reading.simulated)
+        offers = sorted(reading.offers, key=lambda offer: offer.nightly_price_clp)[:3]
+        data["offers"] = [offer.code for offer in offers]
+        when = f"{self._clock_text(reading.read_at)} del {read_label(reading.read_at)[:10]}"
+        if not offers:
+            return (f"Según lectura del PMS a las {when} no veo cupo para esas fechas y huéspedes. "
+                    "Recepción revisará alternativas.")
+        lines = [
+            f"• {self._short_name(offer)}: {money(offer.nightly_price_clp)} por noche · quedan {offer.available_units}"
+            for offer in offers
+        ]
+        simulated = " (PMS simulado)" if reading.simulated else ""
+        return "\n".join(
+            [f"Disponible según lectura del PMS a las {when}{simulated}:", *lines,
+             "Es una lectura preliminar: recepción confirma cupo y precio, y nada queda reservado todavía."]
         )
-        await self._ask(ctx, text, SUBMIT_OPTIONS)
 
     async def _confirm_step(self, ctx: Context) -> None:
         data, plain = ctx.state.data, ctx.plain
@@ -759,11 +799,8 @@ class Copiloto:
         await self._after_dates(ctx)
 
     async def _submit_request(self, ctx: Context) -> None:
-        if self.style.bot_reads_pms:
-            await self._check_availability(ctx)
-        else:
-            # Fase 1: el asistente no informa cupos. Recepción los verifica por su procedimiento.
-            await self._handoff(ctx, "commercial")
+        # La lectura (si hubo) ya va en el resumen: enviar es derivar con ese contexto. Sin PMS, «pms_down».
+        await self._handoff(ctx, "pms_down" if ctx.state.data.get("pms_down") else "commercial")
 
     async def _adults_step(self, ctx: Context) -> None:
         adults, children = parse_guests(ctx.text)
@@ -977,11 +1014,12 @@ class Copiloto:
     def _compact_closing(self, ctx: Context, reason: str, in_shift: bool, now: float) -> str:
         data = ctx.state.data
         code = data.get("request_code", "")
-        pending = (
-            " · Disponibilidad por verificar: recepción revisa los cupos y te confirma."
-            if data.get("checkin") and not data.get("read_at")
-            else ""
-        )
+        if data.get("read_at"):
+            pending = " · La lectura del PMS es preliminar: recepción confirma cupo y precio."
+        elif data.get("checkin"):
+            pending = " · Disponibilidad por verificar: recepción revisa los cupos y te confirma."
+        else:
+            pending = ""
         if in_shift:
             return f"Solicitud enviada a recepción. Te responderán por aquí.\n\nN.º {code}{pending}"
         opening = self.settings.next_shift_start(now)

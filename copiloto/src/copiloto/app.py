@@ -32,7 +32,6 @@ from copiloto.ai.tools import ToolHooks
 from copiloto.chatwoot import ChatwootClient
 from copiloto.config import Settings, int_env
 from copiloto.demo_channel import DemoChannel
-from copiloto.demo_inventory import InventoryPmsAdapter
 from copiloto.events import connect, init_db, mark_processed, record_event
 from copiloto.flow import DEMO_CHANNEL, DEMO_MENU, DEMO_STYLE, Copiloto, long_date
 from copiloto.guided import guided_reply
@@ -164,12 +163,9 @@ def create_app(
     greeting_lock = asyncio.Lock()
     session_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
     core = Copiloto(settings, hotel, db, chatwoot, pms, clock, agent)
-    # Espacio de la demo: alojamiento ficticio, canal sobre la transcripción aislada e inventario de prueba.
-    demo_hotel = hotel
-    if settings.demo_hotel_data_path and Path(settings.demo_hotel_data_path).is_file():
-        demo_hotel = HotelData.load(settings.demo_hotel_data_path)
+    # Espacio de la demo: el mismo hotel y el mismo PMS simulado que la portada, con un canal propio que
+    # escribe en la transcripción aislada (nunca en Chatwoot).
     demo_channel = DemoChannel(db, clock)
-    demo_inventory = InventoryPmsAdapter(demo_hotel, clock, settings.timezone)
     # Por defecto la demo corre el flujo guiado; con DEMO_AI=1 y un modelo configurado, el asistente con IA.
     demo_uses_ai = settings.demo_ai and agent is not None
     sla = SlaWorker(settings, db, chatwoot, clock, demo_channel=demo_channel)
@@ -180,7 +176,7 @@ def create_app(
 
     def demo_engine(shift: str | None) -> Copiloto:
         return Copiloto(
-            demo_settings(shift), demo_hotel, db, demo_channel, demo_inventory, clock, None,
+            demo_settings(shift), hotel, db, demo_channel, pms, clock, None,
             style=DEMO_STYLE, source=store.DEMO_SOURCE,
         )
 
@@ -479,9 +475,10 @@ def create_app(
         detail["events"] = store.request_events(db, conversation_id, row["commercial_at"] - 0.001)
         faq = []
         for event in store.request_events(db, conversation_id, 0):
-            if event["kind"] == "faq_answered" and "inbound_ts" in event["payload"]:
+            # FAQ aprobadas y ubicación: misma meta (< 10 s desde que entró el mensaje).
+            if event["kind"] in ("faq_answered", "location_shown") and "inbound_ts" in event["payload"]:
                 latency = event["ts"] - event["payload"]["inbound_ts"]
-                faq.append({"faq_id": event["payload"].get("faq_id"), "latency_s": round(latency, 3),
+                faq.append({"faq_id": event["payload"].get("faq_id", "ubicacion"), "latency_s": round(latency, 3),
                             "met": latency < 10})
         detail["faq"] = faq
         open_ = row["status"] != "cerrada"
@@ -593,10 +590,10 @@ def create_app(
 
     @app.post("/api/panel/requests/{request_id}/inventory", dependencies=limited)
     async def panel_inventory(request_id: int, request: Request):
-        """Recepción verifica cupos en el inventario de PRUEBA. Lectura preliminar, con origen y hora.
+        """Recepción verifica cupos en el PMS simulado. Lectura preliminar, con origen y hora.
 
-        No bloquea cupos ni reserva. Ante caída o dato desconocido responde ok=false: el caso sigue
-        a cargo de recepción y nada se presenta como disponible.
+        No bloquea cupos ni reserva. Ante caída (real o simulada con `simulate_down`) responde ok=false:
+        el caso sigue a cargo de recepción y nada se presenta como disponible.
         """
         me = require_identity(request)
         row = scoped_request(request_id, request)
@@ -610,31 +607,41 @@ def create_app(
         started = time.monotonic()
         now = clock()
         try:
-            reading = await demo_inventory.availability(
+            if isinstance(body, dict) and body.get("simulate_down"):
+                # Caída simulada para la demostración: no se llama al PMS.
+                raise PmsUnavailable("el PMS no respondió (caída simulada)")
+            reading = await pms.availability(
                 date.fromisoformat(row["checkin"]), date.fromisoformat(row["checkout"]),
                 int(row["adults"] or 1), int(row["children"] or 0),
-                simulate_down=bool(isinstance(body, dict) and body.get("simulate_down")),
             )
         except PmsUnavailable as exc:
             record_event(db, row["conversation_id"], "pms_read", now, {"ok": False, "latency_ms": 0})
-            text = f"Inventario de prueba sin dato ({exc}). Cupo desconocido: no informar disponibilidad."
+            reason = str(exc) if "simulada" in str(exc) else "el PMS no respondió"
+            text = f"PMS sin lectura ({reason}). Cupo desconocido: no informar disponibilidad."
             store.add_demo_message(db, row["conversation_id"], "note", text, now, author=me, request_id=row["id"])
-            return {"ok": False, "reason": str(exc), "request": request_detail(scoped_request(request_id, request), me)}
+            return {"ok": False, "reason": reason, "request": request_detail(scoped_request(request_id, request), me)}
         latency_ms = int((time.monotonic() - started) * 1000)
         record_event(db, row["conversation_id"], "pms_read", now, {"ok": True, "latency_ms": latency_ms})
+        # Las 4 más económicas que caben: suficiente para responder sin un muro de texto (el PMS tiene 12 tipos).
+        cheapest = sorted(reading.offers, key=lambda offer: offer.nightly_price_clp)[:4]
         offers = [
             {"code": offer.code, "name": offer.name, "available_units": offer.available_units,
              "nightly_price_clp": offer.nightly_price_clp}
-            for offer in reading.offers
+            for offer in cheapest
         ]
+        more = len(reading.offers) - len(offers)
         summary = ", ".join(f"{o['name']}: {o['available_units']} libre(s)" for o in offers) or "sin cupo"
+        if more > 0:
+            summary += f" y {more} tipo(s) más"
+        source = "PMS simulado" if reading.simulated else "PMS"
         store.add_demo_message(
             db, row["conversation_id"], "note",
-            f"{reading.source} · lectura {reading.read_at[11:16]}: {summary}. Preliminar: no bloquea cupos.",
+            f"{source} · lectura {reading.read_at[11:16]}: {summary}. Preliminar: no bloquea cupos.",
             now, author=me, request_id=row["id"],
         )
-        return {"ok": True, "source": reading.source, "read_at": reading.read_at, "simulated": reading.simulated,
-                "offers": offers, "request": request_detail(scoped_request(request_id, request), me)}
+        return {"ok": True, "source": source, "read_at": reading.read_at, "simulated": reading.simulated,
+                "offers": offers, "more": max(more, 0),
+                "request": request_detail(scoped_request(request_id, request), me)}
 
     @app.get("/api/panel/{conversation_id}", dependencies=limited)
     async def panel_data(conversation_id: int, request: Request):
@@ -714,10 +721,9 @@ def create_app(
         return JSONResponse(compute_metrics(db, end - days * 86400, end + 1, settings))
 
     @app.get("/privacidad", response_class=HTMLResponse, dependencies=limited)
-    async def privacy_page(alojamiento: str = Query(default="", max_length=10)):
-        # ?alojamiento=demo: aviso del alojamiento ficticio que usa el chat de prueba.
+    async def privacy_page():
         return privacy.render(
-            demo_hotel if alojamiento == "demo" else hotel,
+            hotel,
             settings.llm_model if agent is not None else None,
             settings.llm_base_url,
             voice=tts is not None,
@@ -758,13 +764,12 @@ def create_app(
     async def demo_status():
         # El modo reportado es el que realmente sirve turnos: un agente inyectado sin AI_MODE sirve asistido.
         served_mode = (settings.ai_mode if settings.ai_mode != "off" else "assisted") if demo_uses_ai else "off"
-        demo_place = hotel if demo_uses_ai else demo_hotel
         return {
             "engine": "ai" if demo_uses_ai else "guided",
-            "hotel": {"name": demo_place.hotel["name"], "channel_label": "WhatsApp simulado"},
+            "hotel": {"name": hotel.hotel["name"], "channel_label": "WhatsApp simulado"},
             "menu": [title for title, _ in DEMO_MENU],
             "shift": shift_info(settings),
-            "privacy_url": "/privacidad?alojamiento=demo",
+            "privacy_url": "/privacidad",
             "ai_enabled": demo_uses_ai,
             "mode": served_mode,
             "model": settings.llm_model if demo_uses_ai else None,
