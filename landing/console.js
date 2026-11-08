@@ -230,7 +230,60 @@
     converted: 'reserva confirmada', superseded: 'pre-reserva reemplazada'
   };
 
+  // La misma instantánea alimenta resumen y filtros: nunca se ordena ni modifica la respuesta.
+  let queueSnapshot = null;
+  const queueToolbar = create('div', 'queue-toolbar');
+  const queueSearch = create('input');
+  queueSearch.id = 'queue-search';
+  queueSearch.type = 'search';
+  queueSearch.setAttribute('aria-describedby', 'queue-tools-help');
+  const queueFilter = create('select');
+  queueFilter.id = 'queue-filter';
+  queueFilter.setAttribute('aria-describedby', 'queue-tools-help');
+  for (const [value, label] of [['all', 'Todas'], ['human', 'Necesita una persona'], ['warn', 'Por vencer'], ['bad', 'Vencidas']]) {
+    const option = create('option', '', label);
+    option.value = value;
+    queueFilter.append(option);
+  }
+  queueFilter.value = 'all';
+  for (const [control, text] of [[queueSearch, 'Buscar en la cola'], [queueFilter, 'Prioridad']]) {
+    const field = create('div', 'queue-tool-field');
+    const label = create('label', '', text);
+    label.setAttribute('for', control.id);
+    field.append(label, control);
+    queueToolbar.append(field);
+  }
+  const queueRefresh = retryButton('Actualizar cola', () => refreshQueue());
+  queueRefresh.id = 'queue-refresh';
+  const queueResultCount = create('p');
+  queueResultCount.id = 'queue-result-count';
+  queueResultCount.setAttribute('role', 'status');
+  queueResultCount.setAttribute('aria-live', 'polite');
+  queueResultCount.setAttribute('aria-atomic', 'true');
+  const queueHelp = create('p', 'small', 'Búsqueda y filtros locales · fuente: GET /api/panel/queue · orden del servidor. No modifica conversaciones.');
+  queueHelp.id = 'queue-tools-help';
+  const queueFilterEmpty = create('p', 'queue-filter-empty', 'No hay coincidencias con esta búsqueda y filtro. Cambia los criterios para ver más conversaciones.');
+  queueToolbar.append(queueRefresh, queueResultCount, queueHelp);
+  const toolsHost = get('reception-tools');
+  if (toolsHost) toolsHost.append(queueToolbar, queueFilterEmpty);
+  else {
+    const container = recepcionQueue.parentElement;
+    if (container) {
+      container.insertBefore(queueToolbar, recepcionQueue);
+      container.insertBefore(queueFilterEmpty, recepcionQueue);
+    } else get('recepcion-console').append(queueToolbar, queueFilterEmpty);
+  }
+  queueToolbar.hidden = true;
+  queueFilterEmpty.hidden = true;
+  const applyQueueCriteria = () => {
+    if (queueSnapshot) renderQueue(queueSnapshot.items, queueSnapshot.data);
+  };
+  queueSearch.addEventListener('input', applyQueueCriteria);
+  queueFilter.addEventListener('change', applyQueueCriteria);
+
   function setState(kind, message, actions = []) {
+    queueToolbar.hidden = true;
+    queueFilterEmpty.hidden = true;
     recepcionDetail.hidden = selectedId === null;
     recepcionQueue.hidden = true;
     if (recepcionSummary) recepcionSummary.hidden = true;
@@ -300,9 +353,6 @@
       }
       const data = await response.json();
       const items = Array.isArray(data && data.conversations) ? data.conversations : [];
-      if (!items.length) {
-        return setState('', 'Sin conversaciones todavía. Cuando un huésped escriba, aparece acá.');
-      }
       renderQueue(items, data);
     } catch (_) {
       setState('error', 'Sin conexión con el servidor de recepción. Levanta el stack y reintenta.', [retryButton('Reintentar', () => refreshQueue())]);
@@ -334,15 +384,29 @@
   }
 
   function renderQueue(items, data) {
+    queueSnapshot = {items, data};
     const amber = Number(data && data.amber_s);
     const red = Number(data && data.red_s);
+    const fullQueue = items.filter(item => item && typeof item === 'object');
+    const query = queueSearch.value.trim().toLocaleLowerCase('es');
+    const visible = fullQueue.filter(item => {
+      const haystack = [guestLabel(item.contact_name, item.conversation_id), item.conversation_id,
+        item.step, STEP_LABELS[item.step]].join(' ').toLocaleLowerCase('es');
+      const matchesRisk = queueFilter.value === 'all' ||
+        (queueFilter.value === 'human' ? item.needs_human === true :
+          waitRisk(item.waiting_s, amber, red) === queueFilter.value);
+      return matchesRisk && (!query || haystack.includes(query));
+    });
     recepcionState.hidden = true;
     recepcionDetail.hidden = true;
-    recepcionQueue.hidden = false;
+    recepcionQueue.hidden = !visible.length;
     recepcionQueue.replaceChildren();
-    renderSummary(items.filter(item => item && typeof item === 'object'), amber, red);
-    for (const item of items) {
-      if (!item || typeof item !== 'object') continue;
+    if (!fullQueue.length) setState('', 'Sin conversaciones todavía. Cuando un huésped escriba, aparece acá.');
+    renderSummary(fullQueue, amber, red);
+    queueResultCount.textContent = `Mostrando ${visible.length} de ${fullQueue.length} conversaciones`;
+    queueToolbar.hidden = false;
+    queueFilterEmpty.hidden = !fullQueue.length || visible.length > 0;
+    for (const item of visible) {
       const row = document.createElement('li');
       const button = create('button', 'console-row');
       button.type = 'button';

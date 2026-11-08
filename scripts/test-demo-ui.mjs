@@ -38,14 +38,26 @@ class Element {
   get textContent() { return this.ownText + this.children.map(x => x.textContent).join(' '); }
   get lastElementChild() { return this.children.at(-1) || null; }
   getAttribute(key) { return key in this.attributes ? this.attributes[key] : null; }
-  append(...nodes) { for (const node of nodes) { node.remove(); node.parentElement = this; this.children.push(node); } }
+  append(...nodes) {
+    for (let node of nodes) {
+      if (typeof node === 'string') { const text = new Element('#text'); text.textContent = node; node = text; }
+      node.remove(); node.parentElement = this; this.children.push(node);
+    }
+  }
   appendChild(node) { this.append(node); }
+  insertBefore(node, reference) {
+    if (reference === null) { this.append(node); return node; }
+    node.remove();
+    const index = this.children.indexOf(reference);
+    if (index < 0) throw new Error('NotFoundError: reference is not a child');
+    node.parentElement = this; this.children.splice(index, 0, node); return node;
+  }
   remove() { if (this.parentElement) this.parentElement.children = this.parentElement.children.filter(x => x !== this); }
   replaceChildren(...nodes) { this.children = []; this.ownText = ''; this.append(...nodes); }
   setAttribute(key, value) { this.attributes[key] = value; }
   removeAttribute(key) { delete this.attributes[key]; }
   addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn); }
-  async emit(name) { if (this.disabled) return; for (const fn of this.listeners[name] || []) await fn({preventDefault() {}}); }
+  async emit(name, event = {}) { if (this.disabled) return; for (const fn of this.listeners[name] || []) await fn({preventDefault() {}, ...event}); }
   focus() { this.focusCalls = (this.focusCalls || 0) + 1; }
   contains(node) { return this === node || this.children.some(child => child.contains(node)); }
   matches(selector) { return selector.startsWith('.') ? this.className.split(' ').includes(selector.slice(1)) : this.tagName === selector; }
@@ -240,22 +252,46 @@ test('voice talk button keeps its microphone icon and labels itself for assistiv
   assert.equal(ids.get('voice-state').textContent, 'Tu turno: toca el micrófono o escribe abajo.');
 });
 
-async function consoleApp(conversations, snapshot = {}) {
+async function consoleApp(conversations, snapshot = {}, options = {}) {
   const ids = new Map([...html.matchAll(/id="([^"]+)"/g)].map(([, id]) => [id, new Element()]));
-  const window = {COPILOTO_CONFIG: {}, localStorage: {getItem() { return null; }, setItem() {}},
-    setInterval() { return 1; }, clearInterval() {}};
-  const document = {getElementById: id => ids.get(id), createElement: tag => new Element(tag), querySelectorAll: () => []};
+  const body = new Element('body');
+  const get = id => ids.get(id) || body.querySelectorAll('*').find(node => node.id === id || node.getAttribute('id') === id);
+  const tablist = new Element();
+  tablist.append(...['huesped', 'recepcion', 'admin'].map(name => get(`tab-${name}`)));
+  body.append(tablist, get('panel-huesped'), get('panel-recepcion'), get('panel-admin'));
+  const container = get('recepcion-console');
+  get('panel-recepcion').append(container);
+  // Explicitly exercise both sides of the A/B seam, independent of the checked-in HTML.
+  ids.delete('reception-tools');
+  if (options.toolsHost) { const host = new Element(); host.id = 'reception-tools'; container.append(host); }
+  container.append(get('recepcion-summary'), get('recepcion-state'), get('recepcion-detail'));
+  if (!options.detachedQueue) container.append(get('recepcion-queue'));
+  get('recepcion-detail').append(get('recepcion-back'), get('recepcion-detail-body'));
+  const requests = []; const intervals = new Map(); const pollDelays = []; const stored = [];
+  let timerId = 0;
+  const window = {COPILOTO_CONFIG: {}, localStorage: {getItem() { return options.mode === false ? '0' : null; }, setItem(...args) { stored.push(args); }},
+    setInterval(fn, delay) { pollDelays.push(delay); intervals.set(++timerId, fn); return timerId; },
+    clearInterval(id) { intervals.delete(id); }};
+  const document = {body, getElementById: get, createElement: tag => new Element(tag), querySelectorAll: () => []};
   vm.runInNewContext(consoleSource, {window, document, Intl, Date,
-    fetch: async url => {
+    fetch: async (url, init = {}) => {
+      const request = {path: new URL(url).pathname, ...init, method: init.method || 'GET'};
+      requests.push(request);
+      if (options.respond) {
+        const response = await options.respond(request, requests);
+        if (response) return response;
+      }
       const data = url.endsWith('/api/panel/queue') ? {conversations, amber_s: 120, red_s: 180} :
-        url.includes('/api/panel/') ? snapshot : {demo: true};
+        url.includes('/api/panel/') ? snapshot : {demo: options.available !== false};
       return {ok: true, status: 200, json: async () => data};
     }});
   const settle = async () => { for (let i = 0; i < 100; i++) await Promise.resolve(); };
   await settle();
-  await ids.get('tab-recepcion').emit('click');
-  await settle();
-  return {get: id => ids.get(id), settle};
+  if (options.enter !== false) { await get('tab-recepcion').emit('click'); await settle(); }
+  return {get, settle, container, requests, intervals, pollDelays, stored,
+    async change(id, value, event = 'input') { get(id).value = value; await get(id).emit(event); await settle(); },
+    async click(id) { await get(id).emit('click'); await settle(); },
+    async poll() { for (const fn of intervals.values()) fn(); await settle(); }};
 }
 
 test('reception queue names anonymous visitors, reads long waits in hours and summarizes risk', async () => {
@@ -285,6 +321,249 @@ test('reception queue names anonymous visitors, reads long waits in hours and su
   assert.equal(detail.querySelectorAll('.console-notes-title').length, 1);
 });
 
+// Unsorted API order is deliberate: the UI must neither sort nor mutate these records.
+const triageQueue = () => [
+  {conversation_id: 41, contact_name: 'cool-mountain-791', waiting_s: 180, needs_human: true, step: 'handed_off'},
+  {conversation_id: 9, contact_name: 'Camila Rojas', waiting_s: 120, step: 'ask_dates'},
+  {conversation_id: 17, contact_name: 'Camila Soto', waiting_s: 181, needs_human: true, step: 'menu'},
+  {conversation_id: 2, contact_name: 'En espera', waiting_s: 119, needs_human: true, step: 'pick_room'},
+  {conversation_id: 88, contact_name: '', waiting_s: 0, needs_human: false},
+  {conversation_id: 3, contact_name: '<img src=x onerror=alert(1)>', waiting_s: null, step: '<script>bad()</script>'}
+];
+const queueNames = ui => ui.get('recepcion-queue').querySelectorAll('b').map(node => node.textContent);
+const allQueueNames = ['Visitante web · 791', 'Camila Rojas', 'Camila Soto', 'En espera', 'Conversación 88', '<img src=x onerror=alert(1)>'];
+const fullSummary = '6 conversaciones 2 vencidas 1 por vencer 2 en plazo';
+const assertReadOnly = ui => {
+  assert.equal(ui.requests.filter(req => req.method === 'POST').length, 1, 'only the existing mocked session POST');
+  assert.ok(ui.requests.every(req => (req.path === '/api/demo/session' && ['GET', 'POST'].includes(req.method)) ||
+    (req.path.startsWith('/api/panel/') && req.method === 'GET')), 'no operational writes or unexpected endpoints');
+  for (const req of ui.requests.filter(req => req.path.startsWith('/api/panel/'))) {
+    assert.equal(req.method, 'GET'); assert.equal(req.body, undefined);
+    assert.equal(req.credentials, 'include'); assert.equal(req.cache, 'no-store');
+  }
+};
+
+test('triage controls have labels, live counts and API provenance in the optional host or fallback', async () => {
+  for (const [toolsHost, detachedQueue] of [[false, false], [true, false], [false, true]]) {
+    const ui = await consoleApp(triageQueue(), {}, {toolsHost, detachedQueue});
+    const toolbar = ui.container.querySelector('.queue-toolbar');
+    assert.ok(toolbar, 'reception gets a toolbar without requiring HTML changes');
+    assert.equal(toolbar.hidden, false);
+    assert.equal(toolbar.parentElement, toolsHost ? ui.get('reception-tools') : ui.container);
+    const labels = toolbar.querySelectorAll('label');
+    for (const [id, label] of [['queue-search', 'Buscar en la cola'], ['queue-filter', 'Prioridad']]) {
+      assert.equal(labels.find(node => node.getAttribute('for') === id)?.textContent, label);
+      const help = ui.get(ui.get(id).getAttribute('aria-describedby'));
+      assert.match(help.textContent, /locales.*fuente: GET \/api\/panel\/queue.*orden del servidor/);
+    }
+    assert.equal(ui.get('queue-search').type, 'search');
+    assert.deepEqual(ui.get('queue-filter').children.map(node => [node.value, node.textContent]),
+      [['all', 'Todas'], ['human', 'Necesita una persona'], ['warn', 'Por vencer'], ['bad', 'Vencidas']]);
+    assert.equal(ui.get('queue-refresh').textContent, 'Actualizar cola');
+    assert.equal(ui.get('queue-refresh').type, 'button');
+    const count = ui.get('queue-result-count');
+    assert.equal(count.getAttribute('role'), 'status');
+    assert.equal(count.getAttribute('aria-live'), 'polite');
+    assert.equal(count.textContent, 'Mostrando 6 de 6 conversaciones');
+    assert.deepEqual(queueNames(ui), allQueueNames);
+    assertReadOnly(ui);
+  }
+});
+
+test('search intersects human and exact SLA filters locally, preserving full totals, order and safe text', async () => {
+  const sourceQueue = triageQueue(); const original = JSON.stringify(sourceQueue);
+  const ui = await consoleApp(sourceQueue);
+  const requestsBefore = ui.requests.length;
+  for (const [filter, names] of [
+    ['human', [allQueueNames[0], 'Camila Soto', 'En espera']],
+    ['warn', ['Camila Rojas']], ['bad', [allQueueNames[0], 'Camila Soto']], ['all', allQueueNames]
+  ]) {
+    await ui.change('queue-filter', filter, 'change');
+    assert.deepEqual(queueNames(ui), names, filter);
+    assert.equal(ui.get('queue-result-count').textContent, `Mostrando ${names.length} de 6 conversaciones`);
+    assert.equal(ui.get('recepcion-summary').textContent, fullSummary);
+  }
+  await ui.change('queue-search', '  CAMILA  ');
+  assert.deepEqual(queueNames(ui), ['Camila Rojas', 'Camila Soto']);
+  for (const [filter, name] of [['human', 'Camila Soto'], ['warn', 'Camila Rojas'], ['bad', 'Camila Soto']]) {
+    await ui.change('queue-filter', filter, 'change');
+    assert.deepEqual(queueNames(ui), [name]);
+    assert.equal(ui.get('queue-result-count').textContent, 'Mostrando 1 de 6 conversaciones');
+    assert.equal(ui.get('recepcion-summary').textContent, fullSummary);
+  }
+  await ui.change('queue-filter', 'all', 'change');
+  for (const [query, name] of [['Visitante web', allQueueNames[0]], ['791', allQueueNames[0]], ['88', 'Conversación 88'],
+    ['eligiendo habitación', 'En espera'], ['pick_room', 'En espera'], ['<img', allQueueNames[5]]]) {
+    await ui.change('queue-search', query);
+    assert.deepEqual(queueNames(ui), [name], query);
+  }
+  assert.equal(ui.get('recepcion-queue').querySelectorAll('img').length, 0);
+  assert.equal(ui.get('recepcion-queue').querySelectorAll('script').length, 0);
+  assert.match(ui.get('recepcion-queue').textContent, /<script>bad\(\)<\/script>/);
+  await ui.change('queue-search', '');
+  assert.deepEqual(queueNames(ui), allQueueNames);
+  assert.equal(ui.get('queue-result-count').textContent, 'Mostrando 6 de 6 conversaciones');
+  assert.equal(JSON.stringify(sourceQueue), original);
+  assert.equal(ui.requests.length, requestsBefore, 'criteria changes never fetch or write');
+  assertReadOnly(ui);
+});
+
+test('unmatched local criteria differ from an empty backend and keep refresh available', async () => {
+  const ui = await consoleApp(triageQueue());
+  await ui.change('queue-search', 'nadie coincide');
+  assert.deepEqual(queueNames(ui), []);
+  assert.equal(ui.get('queue-result-count').textContent, 'Mostrando 0 de 6 conversaciones');
+  const empty = ui.container.querySelector('.queue-filter-empty');
+  assert.equal(empty.hidden, false);
+  assert.equal(empty.textContent, 'No hay coincidencias con esta búsqueda y filtro. Cambia los criterios para ver más conversaciones.');
+  assert.equal(ui.get('recepcion-state').hidden, true);
+  assert.equal(ui.get('recepcion-summary').textContent, fullSummary);
+  await ui.change('queue-search', '');
+  assert.equal(empty.hidden, true);
+  assert.deepEqual(queueNames(ui), allQueueNames);
+  const backend = await consoleApp([]);
+  assert.equal(backend.get('recepcion-state').hidden, false);
+  assert.equal(backend.get('recepcion-state').textContent, 'Sin conversaciones todavía. Cuando un huésped escriba, aparece acá.');
+  assert.equal(backend.get('recepcion-queue').hidden, true);
+  assert.equal(backend.container.querySelector('.queue-filter-empty').hidden, true);
+  assert.equal(backend.container.querySelector('.queue-toolbar').hidden, false);
+  assert.equal(backend.get('queue-result-count').textContent, 'Mostrando 0 de 0 conversaciones');
+  assert.equal(backend.get('recepcion-summary').textContent, '0 conversaciones');
+  const before = backend.requests.length;
+  await backend.click('queue-refresh');
+  assert.equal(backend.requests.length, before + 1);
+  assertReadOnly(ui); assertReadOnly(backend);
+});
+
+test('detail/back and explicit refresh retain criteria and hide tools while loading or reading detail', async () => {
+  let release; let defer = false;
+  const conversations = triageQueue();
+  const ui = await consoleApp(conversations, {
+    contact_name: 'Camila Soto', step: 'menu', data: {}, notes: [{body: '<b>Nota segura</b>', author: 'Turno', created_at: 1000}]
+  }, {respond: req => {
+    if (defer && req.path === '/api/panel/queue') return new Promise(resolve => { release = resolve; });
+  }});
+  await ui.change('queue-search', 'Camila'); await ui.change('queue-filter', 'human', 'change');
+  await ui.get('recepcion-queue').querySelector('button').emit('click'); await ui.settle();
+  const toolbar = ui.container.querySelector('.queue-toolbar');
+  assert.equal(toolbar.hidden, true);
+  assert.equal(ui.get('recepcion-detail').hidden, false);
+  assert.match(ui.get('recepcion-detail-body').textContent, /Camila Soto.*menú.*<b>Nota segura<\/b>/);
+  assert.equal(ui.requests.at(-1).path, '/api/panel/17');
+  await ui.click('recepcion-back');
+  assert.equal(toolbar.hidden, false);
+  assert.equal(ui.get('queue-search').value, 'Camila');
+  assert.equal(ui.get('queue-filter').value, 'human');
+  assert.deepEqual(queueNames(ui), ['Camila Soto']);
+  defer = true;
+  const refreshing = ui.click('queue-refresh');
+  await ui.settle();
+  assert.equal(toolbar.hidden, true);
+  assert.equal(ui.get('recepcion-summary').hidden, true);
+  assert.equal(ui.get('recepcion-queue').hidden, true);
+  assert.equal(ui.get('recepcion-state').textContent, 'Consultando la cola de recepción…');
+  release({ok: true, status: 200, json: async () => ({conversations: [...conversations,
+    {conversation_id: 29, contact_name: 'Camila Nueva', needs_human: true, waiting_s: 30}], amber_s: 120, red_s: 180})});
+  await refreshing; await ui.settle();
+  assert.equal(toolbar.hidden, false);
+  assert.deepEqual(queueNames(ui), ['Camila Soto', 'Camila Nueva']);
+  assert.equal(ui.get('queue-result-count').textContent, 'Mostrando 2 de 7 conversaciones');
+  assert.equal(ui.get('recepcion-summary').textContent, '7 conversaciones 2 vencidas 1 por vencer 3 en plazo');
+  assert.equal(ui.get('queue-search').value, 'Camila'); assert.equal(ui.get('queue-filter').value, 'human');
+  assertReadOnly(ui);
+});
+
+test('existing tab keys, deferred admin and single queue poll preserve triage criteria', async () => {
+  const ui = await consoleApp(triageQueue(), {}, {enter: false});
+  assert.equal(ui.get('admin-frame').getAttribute('src'), null);
+  assert.equal(ui.intervals.size, 0);
+  await ui.click('tab-recepcion'); await ui.click('tab-recepcion');
+  assert.equal(ui.intervals.size, 1); assert.deepEqual(ui.pollDelays, [10000]);
+  await ui.change('queue-filter', 'bad', 'change');
+  await ui.poll();
+  assert.deepEqual(queueNames(ui), [allQueueNames[0], 'Camila Soto']);
+  assert.equal(ui.get('queue-filter').value, 'bad');
+  await ui.click('tab-huesped');
+  assert.equal(ui.intervals.size, 0);
+  const before = ui.requests.length; await ui.poll(); assert.equal(ui.requests.length, before);
+  await ui.get('tab-huesped').parentElement.emit('keydown', {key: 'End'}); await ui.settle();
+  assert.equal(ui.get('tab-admin').getAttribute('aria-selected'), 'true');
+  assert.equal(ui.get('tab-admin').focusCalls, 1);
+  assert.equal(ui.get('panel-admin').hidden, false);
+  assert.equal(ui.get('admin-frame').getAttribute('src'), 'http://localhost:8200/admin?demo=1');
+  await ui.click('tab-recepcion');
+  assert.equal(ui.intervals.size, 1);
+  assert.deepEqual(queueNames(ui), [allQueueNames[0], 'Camila Soto']);
+  await ui.get('recepcion-queue').querySelector('button').emit('click'); await ui.settle();
+  const detailRequests = ui.requests.length; await ui.poll(); assert.equal(ui.requests.length, detailRequests);
+  await ui.click('tab-huesped'); await ui.click('tab-recepcion');
+  assert.equal(ui.requests.at(-1).path, '/api/panel/41', 'return to reception refreshes the selected detail');
+  assertReadOnly(ui);
+});
+
+test('existing session gates and queue retry errors hide triage without bypassing access', async () => {
+  const off = await consoleApp(triageQueue(), {}, {mode: false});
+  assert.match(off.get('recepcion-state').textContent, /^Modo demo desactivado:/);
+  assert.equal(off.container.querySelector('.queue-toolbar').hidden, true);
+  assert.ok(off.requests.every(req => req.method === 'GET' && !req.path.startsWith('/api/panel/')));
+  const disabled = await consoleApp(triageQueue(), {}, {available: false});
+  assert.equal(disabled.get('demo-mode-switch').disabled, true);
+  assert.match(disabled.get('demo-banner-text').textContent, /^Demo deshabilitada en el servidor:/);
+  let ready;
+  const starting = await consoleApp(triageQueue(), {}, {respond: req => {
+    if (req.path === '/api/demo/session' && req.method === 'POST') return new Promise(resolve => { ready = resolve; });
+  }});
+  assert.equal(starting.get('recepcion-state').textContent, 'Preparando la sesión de recepción…');
+  assert.equal(starting.container.querySelector('.queue-toolbar').hidden, true);
+  assert.ok(starting.requests.every(req => !req.path.startsWith('/api/panel/')));
+  ready({ok: true, status: 200}); await starting.settle();
+  assert.deepEqual(queueNames(starting), allQueueNames);
+  assertReadOnly(starting);
+  for (const [status, message] of [[403, 'Demo deshabilitada en el servidor:'], [404, 'Demo deshabilitada en el servidor:'],
+    [429, 'Límite temporal de la demo alcanzado.'], [500, 'No se pudo conectar con el servidor de recepción.'], [0, 'No se pudo conectar con el servidor de recepción.']]) {
+    let fail = true;
+    const ui = await consoleApp(triageQueue(), {}, {respond: req => {
+      if (fail && req.path === '/api/demo/session' && req.method === 'POST') {
+        if (!status) throw new Error('mock offline');
+        return {ok: false, status};
+      }
+    }});
+    assert.ok(ui.get('recepcion-state').textContent.startsWith(message), status);
+    assert.equal(ui.container.querySelector('.queue-toolbar').hidden, true);
+    assert.ok(ui.requests.every(req => !req.path.startsWith('/api/panel/')));
+    fail = false;
+    await ui.get('recepcion-state').querySelector('button').emit('click'); await ui.settle();
+    assert.deepEqual(queueNames(ui), allQueueNames);
+  }
+  for (const [status, message] of [[401, 'Sin sesión de recepción:'], [403, 'Sin sesión de recepción:'],
+    [429, 'Límite temporal de la demo alcanzado.'], [500, 'La cola no respondió bien (código 500).'], [0, 'Sin conexión con el servidor de recepción.']]) {
+    let fail = true;
+    const ui = await consoleApp(triageQueue(), {}, {respond: req => {
+      if (fail && req.path === '/api/panel/queue') {
+        if (!status) throw new Error('mock offline');
+        return {ok: false, status};
+      }
+    }});
+    assert.ok(ui.get('recepcion-state').textContent.startsWith(message), status);
+    assert.equal(ui.container.querySelector('.queue-toolbar').hidden, true);
+    assert.equal(ui.get('recepcion-queue').hidden, true);
+    fail = false;
+    await ui.get('recepcion-state').querySelector('button').emit('click'); await ui.settle();
+    assert.equal(ui.container.querySelector('.queue-toolbar').hidden, false);
+    assert.deepEqual(queueNames(ui), allQueueNames);
+    assert.ok(ui.requests.filter(req => req.path.startsWith('/api/panel/')).every(req => req.method === 'GET'));
+  }
+  const ui = await consoleApp(triageQueue());
+  await ui.change('queue-search', 'Camila'); await ui.click('demo-mode-switch');
+  assert.equal(ui.container.querySelector('.queue-toolbar').hidden, true);
+  assert.equal(ui.intervals.size, 0);
+  assert.deepEqual(ui.stored, [['copiloto.demo', '0']]);
+  await ui.click('demo-mode-switch');
+  assert.equal(ui.container.querySelector('.queue-toolbar').hidden, false);
+  assert.equal(ui.get('queue-search').value, 'Camila');
+  assert.deepEqual(queueNames(ui), ['Camila Rojas', 'Camila Soto']);
+});
+
 test('guided availability stops before room selection, name or confirmation', async () => {
   const ui = await app();
   await ui.scenarios[1].emit('click'); await ui.settle();
@@ -311,9 +590,18 @@ test('server proposal is visible in chat before an explicit one-shot confirmatio
   const ui = await app({}, [{reply: 'Revisa la propuesta.', events: [proposal], quick_replies: ['Sí, confirmo la reserva']}]);
   await ui.send('Mi nombre ficticio es Huésped Ficticio');
   assert.equal(ui.sent.length, 1);
-  assert.equal(ui.get('actions-panel').hidden, false);
+  assert.equal(ui.get('actions-panel').hidden, true);
+  assert.equal(ui.get('toggle-actions').getAttribute('aria-expanded'), 'false');
   const text = ui.get('messages').textContent;
   for (const value of ['Huésped Ficticio', 'Suite Jardín', 'suite', '2027-03-15', '2027-03-18', '3 noches', '2 adultos', '1 niños', '240.000']) assert.ok(text.includes(value), value);
+  await ui.get('toggle-actions').emit('click');
+  assert.equal(ui.get('actions-panel').hidden, false);
+  assert.equal(ui.get('toggle-actions').getAttribute('aria-expanded'), 'true');
+  assert.equal(ui.get('timeline-empty').hidden, true);
+  assert.equal(ui.get('timeline').textContent, 'Turno 1 · acciones del asistente');
+  await ui.get('toggle-actions').emit('click');
+  assert.equal(ui.get('actions-panel').hidden, true);
+  assert.equal(ui.get('toggle-actions').getAttribute('aria-expanded'), 'false');
   const buttons = ui.get('messages').querySelectorAll('button').filter(el => el.textContent === 'Sí, confirmo la reserva');
   assert.equal(buttons.length, 1);
   await buttons[0].emit('click'); await ui.settle(); await buttons[0].emit('click'); await ui.settle();
@@ -365,12 +653,19 @@ test('existing availability results, booking tickets and optional trace remain u
     {type: 'booking_created', booking_id: 7, room_name: 'Suite Jardín', checkin: '2027-03-15', checkout: '2027-03-18', nights: 3, adults: 2, children: 0, total_clp: 240000}
   ]}]);
   await ui.send('Consulta');
+  assert.match(ui.get('messages').textContent, /Resultado de demostración/);
+  assert.equal(ui.get('actions-panel').hidden, true);
+  assert.equal(ui.get('toggle-actions').getAttribute('aria-expanded'), 'false');
+  assert.match(html, /id="toggle-actions"[^>]*aria-controls="actions-panel"/);
+  await ui.get('toggle-actions').emit('click');
+  assert.equal(ui.get('actions-panel').hidden, false);
+  assert.equal(ui.get('toggle-actions').getAttribute('aria-expanded'), 'true');
   assert.match(ui.get('timeline').textContent, /Suite Jardín.*queda 1.*80.000.*240.000/);
   assert.match(ui.get('timeline').textContent, /Reserva #7 creada en el PMS simulado/);
-  assert.equal(ui.get('actions-panel').hidden, false);
   await ui.get('toggle-actions').emit('click');
   assert.equal(ui.get('actions-panel').hidden, true);
-  assert.match(ui.get('toggle-actions').textContent, /Ver acciones/);
+  assert.equal(ui.get('toggle-actions').getAttribute('aria-expanded'), 'false');
+  assert.match(ui.get('toggle-actions').textContent, /Ver traza técnica/);
   assert.equal(ui.scripts().length, 0, 'Chatwoot SDK stays unloaded during simulator use');
 });
 
