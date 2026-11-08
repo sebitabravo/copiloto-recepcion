@@ -31,7 +31,7 @@
 <link rel="preload" href="fonts/instrument-serif-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="demo.css?v=20261107a">
-<link rel="stylesheet" href="demo-console.css?v=20261109e">
+<link rel="stylesheet" href="demo-console.css?v=20261110c">
 </head>
 <body>
 <a class="skip" href="#main">Saltar al contenido</a>
@@ -93,8 +93,17 @@
         <div class="device">
           <span class="device-side device-side-a" aria-hidden="true"></span>
           <span class="device-side device-side-b" aria-hidden="true"></span>
+          <span class="device-side device-side-c" aria-hidden="true"></span>
           <div class="phone">
-            <div class="wa-status" aria-hidden="true"><span>9:41</span><span class="wa-status-icons">▮▮ ⌁</span></div>
+            <span class="dynamic-island" aria-hidden="true"></span>
+            <div class="wa-status" aria-hidden="true">
+              <span class="wa-time">9:41</span>
+              <span class="wa-status-icons">
+                <svg viewBox="0 0 18 12" width="17" height="11"><rect x="0" y="8" width="3" height="4" rx="1" fill="currentColor"/><rect x="4.5" y="6" width="3" height="6" rx="1" fill="currentColor"/><rect x="9" y="3.5" width="3" height="8.5" rx="1" fill="currentColor"/><rect x="13.5" y="1" width="3" height="11" rx="1" fill="currentColor"/></svg>
+                <svg viewBox="0 0 16 12" width="15" height="11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 4.4a10.2 10.2 0 0 1 14 0"/><path d="M3.7 7a7 7 0 0 1 8.6 0"/><circle cx="8" cy="10" r="1.1" fill="currentColor" stroke="none"/></svg>
+                <svg viewBox="0 0 25 12" width="24" height="11"><rect x="0.6" y="0.6" width="20.8" height="10.8" rx="3" fill="none" stroke="currentColor" stroke-opacity=".45"/><rect x="2.2" y="2.2" width="14" height="7.6" rx="1.8" fill="currentColor"/><path d="M23 4.2v3.6a2 2 0 0 0 0-3.6z" fill="currentColor" fill-opacity=".6"/></svg>
+              </span>
+            </div>
             <div class="wa-header">
               <span class="wa-back" aria-hidden="true">‹</span>
               <div class="wa-avatar" aria-hidden="true">B</div>
@@ -160,15 +169,22 @@
                 </button>
               </form>
               <div class="call-actions">
+                <div class="call-action">
                 <button id="voice-talk" class="call-round" type="button" aria-pressed="false" hidden aria-label="Tocar para hablar" title="Tocar para hablar">
                   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
                 </button>
+                <span class="call-action-label">Micrófono</span>
+                </div>
+                <div class="call-action">
                 <button id="voice-hangup" class="call-round call-hangup" type="button" hidden aria-label="Colgar" title="Colgar">
                   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v2a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 3.2 2 2 0 0 1 4.1 1h2a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L7.2 8.8a16 16 0 0 0 6 6l1.2-1.1a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>
                 </button>
+                <span class="call-action-label">Colgar</span>
+                </div>
               </div>
               <p class="call-fineprint">Datos ficticios. Tu voz pasa por el reconocimiento del navegador; no guardamos audio.</p>
             </div>
+            <span class="home-indicator" aria-hidden="true"></span>
           </div>
         </div>
         <p class="device-caption">Simulador tipo WhatsApp · la conversación corre contra el servidor de la demo, sin pasar por WhatsApp.
