@@ -254,8 +254,7 @@ cat <<EOF
 
 listo · demo local con datos de prueba
   Abre:                 http://localhost:$LANDING_PORT/demo   (huésped y recepción en una sola pantalla)
-  Huésped (ventana):    http://localhost:$LANDING_PORT/demo?vista=huesped
-  Recepción (ventana):  http://localhost:$LANDING_PORT/demo?vista=recepcion
+  Dos ventanas:         en /demo, «Abrir huésped/recepción en otra ventana» (comparten la corrida ?corrida=)
   Portada:              http://localhost:$LANDING_PORT
   PMS simulado:         http://localhost:$PMS_PORT/admin?demo=1
   Fuera del horario de recepción, activa «Simular en turno» en la barra de la demo.
