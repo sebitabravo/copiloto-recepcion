@@ -260,6 +260,9 @@ def create_app(
 
     @app.post("/webhooks/chatwoot")
     async def chatwoot_webhook(request: Request, background: BackgroundTasks):
+        if not settings.chatwoot_enabled:
+            # Sin integración configurada el webhook queda cerrado: no lee el cuerpo ni procesa nada.
+            raise HTTPException(status_code=503, detail="chatwoot_disabled")
         raw = await read_capped(request, settings.max_body_bytes)
         if not verify_signature(settings, request.headers, raw, clock()):
             raise HTTPException(status_code=401, detail="Firma inválida")

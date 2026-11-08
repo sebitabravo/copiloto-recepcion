@@ -9,6 +9,45 @@ la confirma una persona en el PMS (en la demo, el modo `full` reserva en un PMS 
 > Prototipo académico, no es el sitio oficial del hotel. Todos los datos de huéspedes son ficticios; los
 > precios, los cupos y la distribución de las 20 habitaciones del PMS son simulados.
 
+## Probar la demo (arranque oficial de la evaluación)
+
+Requisitos: [`uv`](https://docs.astral.sh/uv/) y Python 3. Sin Docker, sin Chatwoot, sin modelo y sin
+credenciales externas.
+
+```bash
+make demo-local
+```
+
+Sin `make` (Windows con Git Bash) es lo mismo: `./scripts/demo-local.sh`. El lanzador comprueba que los
+puertos 8080, 8100 y 8200 estén libres, espera (90 s como máximo, `DEMO_TIMEOUT=180` para más) a que
+respondan la portada, el copiloto y el PMS simulado, y recién entonces imprime **«listo»**. Si un servicio
+falla, dice cuál, muestra el final de su log (`.demo-local/logs/`) y detiene solo lo que él inició.
+
+Abre **http://localhost:8080/demo**:
+
+- **Vista partida** (una pantalla): el chat del huésped a la izquierda y la bandeja de recepción a la
+  derecha, dentro del marco de la portada.
+- **Dos ventanas**: `http://localhost:8080/demo?vista=huesped` y `http://localhost:8080/demo?vista=recepcion`
+  (o los enlaces «Abrir … en otra ventana» de la barra). Recepción entra como **Sofía**.
+- Fuera de 08:00–22:00 (hora de Chile) el caso queda «fuera de turno»: en la barra, **Turno de recepción →
+  Simular en turno** muestra la atención con el cronómetro de 3 minutos.
+
+Para **detener**: Ctrl+C en la terminal del lanzador. Los datos se **conservan** entre arranques
+(`LIMPIO=0` también los conserva); para partir de cero, explícitamente: `make demo-local LIMPIO=1`
+(`./scripts/demo-local.sh --limpio`), que borra solo las bases de `.demo-local/`.
+
+El recorrido de presentación está en [guion de demo](docs/guion-demo.md) y la verificación en
+[verificación de la demo](docs/eva3/verificacion-demo.md).
+
+### Otros arranques (no son el de la evaluación)
+
+| Comando | Sin `make` | Qué hace | Cuándo |
+|---|---|---|---|
+| `make up` | `./scripts/demo.sh up` | La misma demo en Docker (portada, copiloto, PMS), sin Chatwoot | Docker disponible |
+| `make up-full` | `./scripts/demo.sh up-full` | Agrega Chatwoot, Sidekiq, Postgres y Redis (bandeja real, widget, WhatsApp) | Probar el canal real |
+| `make static-demo` | `./scripts/build-static-demo.sh` | `dist/` estático sin backend (la API corre en el navegador) | Portfolio (Vercel/Netlify) |
+| `make demo` | `./scripts/preflight.sh` | Chequeo previo al stack Docker: servicios, modelo local de IA y precalentado | Presentar con IA |
+
 ## Qué incluye
 
 | Pieza | Qué hace | URL local |
@@ -45,30 +84,30 @@ Huésped ─ widget web / Telegram / WhatsApp
 
 ## Requisitos
 
-- Docker (OrbStack o Docker Desktop) con al menos **4 GB de RAM**. Chatwoot es lo más pesado.
-- `uv` (para correr los tests y el script e2e) y `node` para los tests de la UI de la demo. No se usa npm.
+- Demo de la evaluación: `uv` y Python 3 (nada más).
+- Docker (OrbStack o Docker Desktop), solo para `make up`/`make up-full`; Chatwoot pide al menos **4 GB de RAM**.
+- `node` para los tests de la UI de la demo. No se usa npm.
 
-## Levantar
+## Levantar con Docker
 
 ```bash
-make up        # genera secretos locales, construye, migra Chatwoot, siembra datos y espera los healthchecks
-make creds     # muestra usuarios demo y contraseña locales
+make up        # perfil liviano: portada, copiloto y PMS simulado (sin Chatwoot ni su token)
+make up-full   # stack completo: migra Chatwoot, lo siembra y conecta el copiloto (varios minutos)
+make creds     # usuarios demo y contraseña locales (stack completo)
 ```
 
 En Windows con Git Bash no hace falta `make`: `./scripts/demo.sh` expone los mismos comandos
-(`up`, `seed`, `status`, `creds`, `test`, `e2e`, `smoke`, `down`, `reset`).
+(`local`, `up`, `up-full`, `seed`, `status`, `creds`, `test`, `e2e`, `smoke`, `preflight`, `down`, `reset`).
 
-El primer arranque puede tardar varios minutos. Para detener: `make down` o `./scripts/demo.sh down`.
-Para borrar todo: `make reset` o `./scripts/demo.sh reset` (ambos piden confirmación).
+En el perfil liviano el webhook de Chatwoot queda **cerrado** (503) y `CHATWOOT_BOT_TOKEN` no se exige: ese
+token solo existe después de sembrar Chatwoot con `make up-full`. Para detener: `make down` o
+`./scripts/demo.sh down`. Para borrar todo: `make reset` o `./scripts/demo.sh reset` (ambos piden confirmación).
 
 ## Demo en dos ventanas: huésped y recepción (EVA 3)
 
 `/demo` muestra **una misma consulta desde dos roles**, con la marca, los colores y el marco del hero de la
-portada: el **Hotel Boutique Bordeluz**, el flujo guiado real y el PMS simulado, sin IA ni credenciales externas:
-
-```bash
-make demo-local LIMPIO=1   # sin Docker: portada (:8080), copiloto (:8100) y PMS simulado (:8200)
-```
+portada: el **Hotel Boutique Bordeluz**, el flujo guiado real y el PMS simulado, sin IA ni credenciales externas.
+Se levanta con `make demo-local` (ver [Probar la demo](#probar-la-demo-arranque-oficial-de-la-evaluación)).
 
 1. Huésped (`/demo?vista=huesped`, «WhatsApp simulado»): pregunta **¿Dónde queda el hotel?**, toca
    **Consultar fechas**, escribe **20–22 nov · 2 adultos** y **Sin niños**: el resumen trae la lectura del PMS
@@ -125,7 +164,7 @@ El recorrido completo, las decisiones y lo que falló en el camino están en el
 make help   # lista todos los comandos
 make test   # pytest de copiloto, pms_mock y los puentes (PMS y WhatsApp)
 make ui-test # tests de la UI de la demo (node --test)
-make demo-local # demo sin Docker (portada, copiloto y PMS simulado); LIMPIO=1 parte de cero
+make demo-local # arranque oficial sin Docker (portada, copiloto y PMS simulado); LIMPIO=1 borra los datos
 make e2e    # 4 casos reales contra el stack levantado (FAQ, disponibilidad, fuera de turno, PMS caído)
 make smoke  # construye las imágenes y comprueba que arrancan (también corre en CI)
 make backup # respaldo en caliente de Chatwoot y las bases SQLite en backups/

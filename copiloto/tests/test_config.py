@@ -124,3 +124,47 @@ def test_sampling_settings_come_from_the_environment(monkeypatch):
     monkeypatch.setenv("LLM_TOP_P", "")
     blank = Settings.from_env()
     assert blank.llm_temperature == 0.3 and blank.llm_top_p is None
+
+
+# --- Perfil Docker liviano (make up): arranca sin Chatwoot sembrado y con el webhook cerrado ---
+
+LIGHT_SECRETS = {"PMS_EVENTS_SECRET": "p" * 32, "PANEL_TOKEN": "t" * 32, "PSEUDONYM_SALT": "s" * 32,
+                 "WEBHOOK_SECRET": "w" * 32, "COPILOTO_ENV": "production"}
+
+
+def test_light_profile_boots_without_the_chatwoot_bot_token(monkeypatch):
+    """Copia limpia: bootstrap crea .env, pero CHATWOOT_BOT_TOKEN solo llega al sembrar Chatwoot."""
+    for key, value in LIGHT_SECRETS.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.delenv("CHATWOOT_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("CHATWOOT_ENABLED", raising=False)
+    settings = Settings.from_env()
+    assert settings.chatwoot_enabled is False
+    settings.validate_runtime()
+
+
+def test_the_bot_token_is_required_when_the_chatwoot_integration_is_enabled(monkeypatch):
+    for key, value in LIGHT_SECRETS.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("CHATWOOT_ENABLED", "1")
+    monkeypatch.delenv("CHATWOOT_BOT_TOKEN", raising=False)
+    with pytest.raises(ValueError, match="CHATWOOT_BOT_TOKEN"):
+        Settings.from_env().validate_runtime()
+    monkeypatch.delenv("CHATWOOT_ENABLED")
+    monkeypatch.setenv("CHATWOOT_BOT_TOKEN", "b" * 32)
+    assert Settings.from_env().chatwoot_enabled is True, "con el token sembrado la integración queda activa"
+
+
+def test_the_webhook_stays_closed_without_the_integration(settings):
+    from conftest import FakeChatwoot, FakePms
+    from copiloto.app import create_app
+    from copiloto.events import connect, init_db
+    from fastapi.testclient import TestClient
+
+    db = connect(":memory:")
+    init_db(db)
+    closed = TestClient(create_app(replace(settings, chatwoot_enabled=False), chatwoot=FakeChatwoot(), pms=FakePms(),
+                                   run_workers=False, db=db))
+    assert closed.post("/webhooks/chatwoot", json={"event": "message_created"}).status_code == 503
+    opened = TestClient(create_app(settings, chatwoot=FakeChatwoot(), pms=FakePms(), run_workers=False, db=db))
+    assert opened.post("/webhooks/chatwoot", json={"event": "message_created"}).status_code == 401, "sin firma"
