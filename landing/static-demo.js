@@ -191,20 +191,22 @@
     afterDates(db, conv);
   }
   function handoff(db, conv, reason, scenario) {
+    // `shift`: ¿recepción atiende al derivar? (mensaje al huésped). `intake`: turno al ingreso (decide la meta).
     const shift = inShift(scenario);
+    const intake = conv.data.commercial_in_shift ?? shift;
     db.seq.req += 1;
     const t = now();
     const d = conv.data;
     const request = {id: db.seq.req, code: `BDL-${String(db.seq.req).padStart(3, '0')}`, conversation_id: conv.id,
       channel: 'demo', channel_label: 'WhatsApp simulado · versión estática', reason, reason_label: REASONS[reason],
-      in_shift: shift, commercial_at: d.commercial_at || t, created_at: t, checkin: d.checkin || null,
+      in_shift: shift, intake_in_shift: intake, commercial_at: d.commercial_at || t, created_at: t, checkin: d.checkin || null,
       checkout: d.checkout || null, adults: d.adults ?? null, children: d.children ?? null, status: 'pendiente',
       reservation_status: 'pendiente_confirmacion', reservation_label: 'Pendiente de confirmación', assignee: null,
       taken_at: null, first_answer_at: null, last_guest_at: null, breached_at: null, closed_at: null, updated_at: t};
     db.requests.push(request);
     conv.step = 'handed_off';
-    event(db, conv, 'request_created', {request_id: request.id, code: request.code, in_shift: shift});
-    if (!shift) event(db, conv, 'night_capture', {complete: Boolean(d.checkin)});
+    event(db, conv, 'request_created', {request_id: request.id, code: request.code, in_shift: intake});
+    if (!intake) event(db, conv, 'night_capture', {complete: Boolean(d.checkin), request_id: request.id});
     add(db, conv, 'note', ['Pre-información del copiloto (versión estática)', `Solicitud: ${request.code}`,
       `Fechas: ${d.checkin ? `${d.checkin} → ${d.checkout}` : 'sin fechas capturadas'}`,
       `Huéspedes: ${d.adults ? `${d.adults} adultos, ${d.children ?? '?'} niños` : 'sin huéspedes capturados'}`,
@@ -246,7 +248,8 @@
       return say(db, conv, faq[1]);
     }
     if (/consultar fechas|reserv|disponib|fechas/.test(plain) || parseStay(text)) {
-      conv.data.commercial_at = conv.data.commercial_at || now();
+      // Ingreso de la consulta comercial: su hora y su turno quedan fijos (el turno al derivar puede ser otro).
+      if (!conv.data.commercial_at) { conv.data.commercial_at = now(); conv.data.commercial_in_shift = inShift(scenario); }
       conv.step = 'ask_dates';
       if (!conv.data.seen_location) { conv.data.seen_location = true; say(db, conv, `Antes de tus fechas, te cuento dónde estamos: ${LOCATION}`); }
       if (parseStay(text)) return dates(db, conv, text);
@@ -277,7 +280,7 @@
       handled_by: handledBy, quick_replies: handledBy === 'asistente' && last && last.role === 'assistant' && last.options ? last.options : []};
   }
   function measurement(r) {
-    if (!r.in_shift) return {state: 'fuera_de_turno', elapsed_s: null, target_s: 180, label: 'Fuera de turno: no cuenta para la meta de primera respuesta'};
+    if (!r.intake_in_shift) return {state: 'fuera_de_turno', elapsed_s: null, target_s: 180, label: 'Fuera de turno: no cuenta para la meta de primera respuesta'};
     const clock = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
     if (r.first_answer_at) {
       const s = Math.floor(r.first_answer_at - r.commercial_at);
@@ -353,7 +356,9 @@
     if (path.startsWith('/api/panel/') && !me) return json({detail: 'Sesión del panel requerida'}, 401);
     if (path === '/api/panel/requests') {
       const items = db.requests.map(r => requestView(db, r, me))
-        .sort((a, b) => order[a.status] - order[b.status] || (a.status === 'cerrada' ? b.id - a.id : a.commercial_at - b.commercial_at));
+        // Mismo orden que el servidor: abiertas por espera (empate: la que llegó antes), cerradas al final.
+        .sort((a, b) => order[a.status] - order[b.status]
+          || (a.status === 'cerrada' ? b.id - a.id : a.commercial_at - b.commercial_at || a.id - b.id));
       const selected = items.find(r => r.id === +query.get('selected')) || null;
       return json({now: now(), me, target_s: 180, amber_s: 120,
         shift: {start: SHIFT.start, end: SHIFT.end, in_shift: inShift(''), next_opening: nextOpening()}, requests: items, selected});

@@ -447,7 +447,8 @@ def create_app(
         if panel_identity(request) is None:
             raise HTTPException(status_code=401, detail="Sesión del panel requerida")
         now = clock()
-        return {"hours": hours, **store.shift_summary(db, now - hours * 3600, now)}
+        source = store.DEMO_SOURCE if panel_is_demo(request) else store.OPERATIONAL_SOURCE
+        return {"hours": hours, **store.shift_summary(db, now - hours * 3600, now, source)}
 
     # ---------- bandeja de solicitudes ----------
 
@@ -722,7 +723,9 @@ def create_app(
         from copiloto.metrics import compute_metrics
 
         end = clock()
-        return JSONResponse(compute_metrics(db, end - days * 86400, end + 1, settings))
+        # Cada sesión ve su mundo: la demo nunca se suma a las métricas de la operación (ni al revés).
+        scope = "demo" if panel_is_demo(request) else "operation"
+        return JSONResponse(compute_metrics(db, end - days * 86400, end + 1, settings, scope=scope))
 
     @app.get("/privacidad", response_class=HTMLResponse, dependencies=limited)
     async def privacy_page():

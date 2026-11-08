@@ -5,15 +5,16 @@ Todas las métricas (`metrics.py`) salen de la tabla `events`. Convenciones de `
 - inbound:            {"greeting": bool}
 - faq_answered:       {"faq_id": str, "inbound_ts": float}   # ts - inbound_ts = latencia de la FAQ
 - location_shown:     {"inbound_ts": float}                     # ts - inbound_ts = latencia de la ubicación
-- commercial_started: {"in_shift": bool, "inbound_ts": float}
-                       # in_shift=False es una consulta nocturna. inbound_ts es cuando ENTRÓ la consulta
-                       # comercial (antes de capturar datos y de asignar): ahí parte el reloj de 180 s.
-- night_capture:      {"complete": bool}                     # complete=True si hay fechas y huéspedes
+- commercial_started: {"in_shift": bool, "inbound_ts": float, "handoff_in_shift": bool, "request_id": int}
+                       # in_shift = turno AL INGRESO (inbound_ts, cuando ENTRÓ la consulta comercial, antes de
+                       # capturar datos y de asignar): ahí parte el reloj de 180 s y eso decide si cuenta para
+                       # la meta. handoff_in_shift = si recepción atendía al derivar (solo para el mensaje).
+- night_capture:      {"complete": bool, "request_id": int}  # complete=True si hay fechas y huéspedes
 - pms_read:           {"ok": bool, "latency_ms": int}
 - handoff:            {"reason": "commercial" | "pms_down" | "human_requested"
                        | "no_entendi_tres_veces" | "error" | "ai_handoff"}
-- human_first_reply:  {"user_id": int}                      # primera respuesta pertinente: detiene el reloj
-- human_ack:          {"author": str}                         # acuse («ya te reviso»): NO detiene el reloj
+- human_first_reply:  {"user_id": int, "request_id": int}  # primera respuesta pertinente: detiene el reloj
+- human_ack:          {"author": str, "request_id": int}     # acuse («ya te reviso»): NO detiene el reloj
 - request_created:    {"request_id": int, "code": str, "in_shift": bool}
 - request_taken:      {"request_id": int, "assignee": str}    # asignar no reinicia el reloj
 - request_closed:     {"request_id": int}
@@ -30,7 +31,10 @@ Todas las métricas (`metrics.py`) salen de la tabla `events`. Convenciones de `
 - ai_booking:         {"booking_id": int}
 - ai_guardrail:       {"rule": str}      # la salida de la IA se corrigió (p. ej. confirmación sin reserva)
 
-`ts` son segundos epoch UTC (REAL).
+`ts` son segundos epoch UTC (REAL). Cada evento guarda su `source` (columna): 'demo' o 'chatwoot' (operación),
+para que la demo nunca se mezcle con las métricas reales. `request_id` en el payload mide por SOLICITUD (dos
+solicitudes del mismo hilo son dos mediciones). Los eventos anteriores a esa columna y a `request_id` son datos
+históricos incompletos: metrics.py los mide por conversación y lo informa aparte.
 """
 
 import json
@@ -196,7 +200,14 @@ MIGRATIONS = (
     ("demo_messages", "author", "TEXT"),
     ("demo_messages", "kind", "TEXT"),
     ("demo_messages", "request_id", "INTEGER"),
+    # Turno al ingreso de la consulta comercial (decide la meta); in_shift queda como el turno al derivar.
+    ("requests", "intake_in_shift", "INTEGER"),
+    # Origen del evento: 'demo' u operación ('chatwoot'). NULL = evento histórico, anterior a la columna.
+    ("events", "source", "TEXT"),
 )
+
+DEMO = "demo"
+OPERATION = "chatwoot"
 
 
 def connect(path: str) -> sqlite3.Connection:
@@ -215,14 +226,40 @@ def init_db(connection: sqlite3.Connection) -> None:
             connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
+def event_source(connection: sqlite3.Connection, conversation_id: int) -> str:
+    """Origen de una conversación al escribir el evento (cuando todavía existe su estado).
+
+    0 = eventos de la demo sin conversación (trazas de IA). Un id negativo es de la demo si está registrado
+    como tal; los ids positivos los asigna Chatwoot (operación).
+    """
+    if conversation_id == 0:
+        return DEMO
+    row = connection.execute(
+        "SELECT source FROM conversation_state WHERE conversation_id = ?", (conversation_id,)
+    ).fetchone()
+    if row is not None:
+        return row["source"]
+    demo = connection.execute(
+        "SELECT 1 FROM demo_conversations WHERE conversation_id = ?", (conversation_id,)
+    ).fetchone()
+    return DEMO if demo is not None else OPERATION
+
+
 def record_event(
-    connection: sqlite3.Connection, conversation_id: int, kind: str, ts: float, payload: dict | None = None
+    connection: sqlite3.Connection, conversation_id: int, kind: str, ts: float, payload: dict | None = None,
+    source: str | None = None,
 ) -> int:
     if kind not in EVENT_KINDS:
         raise ValueError(f"Unknown event kind: {kind}")
     cursor = connection.execute(
-        "INSERT INTO events(conversation_id, kind, ts, payload) VALUES (?, ?, ?, ?)",
-        (conversation_id, kind, ts, json.dumps(payload or {}, ensure_ascii=False)),
+        "INSERT INTO events(conversation_id, kind, ts, payload, source) VALUES (?, ?, ?, ?, ?)",
+        (
+            conversation_id,
+            kind,
+            ts,
+            json.dumps(payload or {}, ensure_ascii=False),
+            source or event_source(connection, conversation_id),
+        ),
     )
     return cursor.lastrowid
 
