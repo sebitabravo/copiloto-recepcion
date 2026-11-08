@@ -110,4 +110,3 @@ piloto: ## Informe del piloto: métricas contra las metas de la Unidad 2 (DAYS=1
 # Tests de la UI de la demo contra los módulos de landing (corre en CI también; Ubuntu trae Node)
 ui-test: ## Tests de la UI de la demo (node --test)
 	node --test scripts/test-demo-ui.mjs
-
