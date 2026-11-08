@@ -8,16 +8,16 @@ el reinicio borra solo lo de demo y la migración deja las bases existentes como
 import sqlite3
 
 from conftest import FakeChatwoot
-from copiloto import events, store
 from copiloto.app import create_app
 from fastapi.testclient import TestClient
+
+from copiloto import events, store
 
 SESSION = "demo-guardas-0123456789"
 OPERATIONAL_ID = 7
 
 
-def client_for(settings, harness, llm=None):
-    agent = Agent(llm, harness.hotel, harness.pms, settings, lambda: harness.clock()) if llm else None
+def client_for(settings, harness):
     app = create_app(
         settings,
         chatwoot=FakeChatwoot(),
@@ -25,7 +25,6 @@ def client_for(settings, harness, llm=None):
         clock=harness.clock,
         run_workers=False,
         db=harness.db,
-        llm_agent=agent,
     )
     return TestClient(app)
 
@@ -111,9 +110,14 @@ def test_reset_clears_only_the_demo_space(ai_settings, harness):
 
     db = harness.db
     assert db.execute("SELECT 1 FROM demo_messages WHERE conversation_id = ?", (conversation_id,)).fetchone() is None
-    assert db.execute("SELECT 1 FROM demo_conversations WHERE session_id = ?", (SESSION,)).fetchone() is None
-    assert db.execute("SELECT 1 FROM staff_notes WHERE conversation_id = ?", (conversation_id,)).fetchone() is None
-    assert db.execute("SELECT 1 FROM conversation_state WHERE conversation_id = ?", (conversation_id,)).fetchone() is None
+    def gone(sql):
+        return db.execute(sql, (conversation_id,)).fetchone() is None
+
+    assert db.execute(
+        "SELECT 1 FROM demo_conversations WHERE session_id = ?", (SESSION,)
+    ).fetchone() is None
+    assert gone("SELECT 1 FROM staff_notes WHERE conversation_id = ?")
+    assert gone("SELECT 1 FROM conversation_state WHERE conversation_id = ?")
     assert operational_row(harness) == before, "reiniciar la demo no toca la operación real"
     assert demo.get("/api/panel/queue").json()["conversations"] == []
 
