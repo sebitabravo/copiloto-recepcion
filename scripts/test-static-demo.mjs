@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync, mkdtempSync, rmSync, readdirSync, statSync} from 'node:fs';
+import {readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, readdirSync, statSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -63,6 +63,30 @@ test('the static build replaces the public URL everywhere and leaks no secrets',
     const shimTag = demo.indexOf('src="static-demo.js"');
     const appTag = demo.indexOf('src="demo.js');
     assert.ok(shimTag > -1 && appTag > -1 && shimTag < appTag, 'el shim se carga antes que demo.js');
+  } finally {
+    rmSync(work, {recursive: true, force: true});
+  }
+});
+
+test('the build only ever cleans its own output directory', () => {
+  const script = read('scripts/build-static-demo.sh');
+  // OUT solo puede salir de la raíz del repo o de STATIC_DEMO_OUT, siempre entre comillas.
+  assert.match(script, /OUT="\$\{STATIC_DEMO_OUT:-\$ROOT\/dist\}"/);
+  assert.match(script, /rm -rf "\$OUT" 2>\/dev\/null \|\| true/);
+  assert.match(script, /find "\$OUT" -mindepth 1 -maxdepth 1/);
+  assert.doesNotMatch(script, /rm -rf "\$ROOT"/, 'nunca se borra la raíz del repo');
+
+  const work = mkdtempSync(join(tmpdir(), 'static-demo-safe-'));
+  try {
+    const out = join(work, 'out');
+    writeFileSync(join(work, 'KEEP.txt'), 'sentinel');
+    execFileSync('bash', [join(root, 'scripts/build-static-demo.sh')], {
+      cwd: root,
+      env: {...process.env, PUBLIC_SITE_URL: 'https://example.test', STATIC_DEMO_OUT: out},
+      stdio: 'pipe'
+    });
+    assert.equal(readFileSync(join(work, 'KEEP.txt'), 'utf8'), 'sentinel', 'no toca archivos vecinos');
+    assert.ok(existsSync(join(out, 'demo.html')));
   } finally {
     rmSync(work, {recursive: true, force: true});
   }

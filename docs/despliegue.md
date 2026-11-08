@@ -97,7 +97,8 @@ La demo no necesita servidor propio para la presentación. Tres caminos, de meno
    audiencia remota; para mostrarla completa hay que presentar en local.
 3. **Portfolio público, sin servidor.** `make static-demo` genera `dist/`: la landing y `/demo` con
    `static-demo.js`, que responde `/api/*` desde el navegador con guiones preparados. No hay backend, IA,
-   PMS ni Chatwoot, y un aviso fijo lo declara. Se publica gratis:
+   PMS ni Chatwoot: la propia interfaz lo declara («Flujo guiado · sin IA», «Datos ficticios, sin
+   reservas reales») y la sección «Conexiones en vivo» se retira por no poder comprobarse. Se publica gratis:
    ```sh
    PUBLIC_SITE_URL=https://mi-portfolio.vercel.app ./scripts/build-static-demo.sh
    npx vercel deploy --prod dist
