@@ -49,7 +49,8 @@
   <main>
     <header class="rise">
       <h1>Métricas · Copiloto de Recepción</h1>
-      <p class="subtitle">Hotel Boutique Bordeluz · Seguimiento de consultas y atención</p>
+      <p class="subtitle">Hotel Boutique Bordeluz · Seguimiento de consultas y atención ·
+        <strong id="scope">—</strong></p>
     </header>
     <div class="toolbar rise" style="--i:1">
       <label for="days">Período</label>
@@ -64,12 +65,15 @@
       <article class="tile rise" style="--i:2">
         <h2>Latencia de respuestas FAQ</h2>
         <p class="value" id="faq-median">—</p>
-        <p class="detail">Mediana · p95: <span id="faq-p95">—</span></p>
+        <p class="detail">Mediana · p95: <span id="faq-p95">—</span> · bajo <span id="faq-target">10</span> s:
+          <span id="faq-within">—</span></p>
       </article>
       <article class="tile rise" style="--i:3">
         <h2>Cumplimiento comercial &lt;180 s</h2>
         <p class="value" id="compliance">—</p>
-        <p class="detail">Primera respuesta humana durante el turno</p>
+        <p class="detail">Primera respuesta pertinente, por solicitud que entró en turno ·
+          mediana <span id="first-reply">—</span> · tomadas <span id="taken">—</span> · acuses
+          <span id="acks">—</span> (no cuentan como respuesta)</p>
       </article>
       <article class="tile rise" style="--i:4">
         <h2>Captura nocturna</h2>
@@ -100,6 +104,7 @@
         <tbody id="event-counts"></tbody>
       </table>
     </section>
+    <p class="detail" id="historical" hidden></p>
     <footer>Datos simulados del prototipo académico INNOVA3</footer>
   </main>
   <script>
@@ -121,6 +126,11 @@
       pms_read: "Lecturas del PMS",
       handoff: "Derivaciones a recepción",
       human_first_reply: "Primeras respuestas de recepción",
+      human_ack: "Acuses de recibo de recepción",
+      request_created: "Solicitudes creadas",
+      request_taken: "Solicitudes tomadas",
+      request_closed: "Solicitudes cerradas",
+      sla_breached: "Metas vencidas",
       night_capture: "Capturas nocturnas",
       prebooking_created: "Pre-reservas creadas",
       prebooking_expired: "Pre-reservas vencidas",
@@ -173,7 +183,20 @@
         if (request !== activeRequest) return;
         setValue("faq-median", data.faq_latency_median_s, " s");
         setValue("faq-p95", data.faq_latency_p95_s, " s");
+        document.getElementById("faq-target").textContent = data.faq_target_s;
+        setValue("faq-within", data.faq_within_target_pct, " %");
         setValue("compliance", data.commercial_response_compliance_pct, " %");
+        setValue("first-reply", data.first_reply_median_s, " s");
+        setValue("taken", data.requests_taken, "");
+        setValue("acks", data.acks, "");
+        // Cada sesión ve su mundo: la demo nunca se mezcla con la operación.
+        document.getElementById("scope").textContent =
+          data.scope === "demo" ? "Demo (datos de prueba)" : data.scope === "operation" ? "Operación" : "Todo";
+        const history = data.historical_incomplete || {};
+        const historical = document.getElementById("historical");
+        const incomplete = (history.requests_without_id || 0) + (history.events_without_source || 0);
+        historical.hidden = incomplete === 0;
+        historical.textContent = incomplete ? `Datos históricos incompletos: ${history.rule}` : "";
         setValue("night-capture", data.night_capture_rate_pct, " %");
         setValue("conversion", data.direct_conversion_pct, " %");
         setValue("cost", data.cost_per_query_clp, " CLP", true);

@@ -263,43 +263,60 @@ def list_notes(db: sqlite3.Connection, conversation_id: int, limit: int = 20) ->
     ]
 
 
-def shift_summary(db: sqlite3.Connection, since: float, now: float) -> dict:
-    """Lo que pasó en el turno: es el handover que la recepción hoy escribe a mano en un cuaderno."""
+def events_scope(source: str) -> tuple[str, list]:
+    """Filtro SQL de eventos por origen. Los históricos sin `source` siguen la regla de metrics.HISTORICAL_RULE."""
+    legacy = "conversation_id > 0" if source == OPERATIONAL_SOURCE else "conversation_id = 0"
+    return f"(source = ? OR (source IS NULL AND {legacy}))", [source]
+
+
+def shift_summary(db: sqlite3.Connection, since: float, now: float, source: str = OPERATIONAL_SOURCE) -> dict:
+    """Lo que pasó en el turno: es el handover que la recepción hoy escribe a mano en un cuaderno.
+
+    Solo cuenta el mundo pedido (`source`): la demo nunca aparece en el resumen de la operación, ni al revés.
+    """
+    scope, scope_params = events_scope(source)
 
     def events(kind: str) -> int:
         row = db.execute(
-            "SELECT COUNT(*) AS n FROM events WHERE kind = ? AND ts >= ? AND ts < ?", (kind, since, now)
+            f"SELECT COUNT(*) AS n FROM events WHERE kind = ? AND ts >= ? AND ts < ? AND {scope}",
+            (kind, since, now, *scope_params),
         ).fetchone()
         return row["n"]
 
     received = db.execute(
-        "SELECT COUNT(DISTINCT conversation_id) AS n FROM events WHERE kind = 'inbound' AND ts >= ? AND ts < ?",
-        (since, now),
+        f"SELECT COUNT(DISTINCT conversation_id) AS n FROM events WHERE kind = 'inbound' AND ts >= ? AND ts < ? "
+        f"AND {scope}",
+        (since, now, *scope_params),
     ).fetchone()["n"]
     pending = db.execute(
-        "SELECT COUNT(*) AS n FROM conversation_state WHERE sla_started_at IS NOT NULL AND sla_stopped_at IS NULL"
+        "SELECT COUNT(*) AS n FROM conversation_state WHERE sla_started_at IS NOT NULL AND sla_stopped_at IS NULL "
+        "AND source = ?",
+        (source,),
     ).fetchone()["n"]
     active = db.execute(
-        "SELECT COUNT(*) AS n FROM prebookings WHERE status = 'active' AND expires_at > ?", (now,)
-    ).fetchone()["n"]
-    booked = db.execute(
-        "SELECT COUNT(*) AS n FROM events WHERE kind = 'booking_confirmed' AND ts >= ? AND ts < ?", (since, now)
+        "SELECT COUNT(*) AS n FROM prebookings WHERE status = 'active' AND expires_at > ? AND conversation_id IN "
+        "(SELECT conversation_id FROM conversation_state WHERE source = ?)",
+        (now, source),
     ).fetchone()["n"]
     return {
         "since": since,
         "until": now,
+        "scope": "demo" if source == DEMO_SOURCE else "operation",
         "received": received,
         "faq_answered": events("faq_answered"),
         "night_capture": events("night_capture"),
         "handoffs": events("handoff"),
         "prebookings_active": active,
         "prebookings_expired": events("prebooking_expired"),
-        "bookings_confirmed": booked,
+        "bookings_confirmed": events("booking_confirmed"),
         "pending_human": pending,
     }
 
 
-SAFE_PAYLOAD_KEYS = ("greeting", "in_shift", "complete", "inbound_ts", "faq_id", "status", "ok", "latency_ms", "reason")
+SAFE_PAYLOAD_KEYS = (
+    "greeting", "in_shift", "handoff_in_shift", "complete", "inbound_ts", "faq_id", "status", "ok", "latency_ms",
+    "reason",
+)
 
 
 def list_conversations(db: sqlite3.Connection, now: float, limit: int = 40, scope: str | None = None) -> list[dict]:
@@ -503,6 +520,10 @@ def purge_personal_data(db: sqlite3.Connection, now: float, retention_days: int,
     for row in db.execute("SELECT id, payload FROM events WHERE ts < ? AND conversation_id > 0", (cutoff,)).fetchall():
         payload = json.loads(row["payload"])
         safe = {key: payload[key] for key in SAFE_PAYLOAD_KEYS if key in payload}
+        # El número interno de solicitud (entero) mantiene la medición por solicitud tras la retención; el
+        # request_id de las trazas de IA es texto con el id de la conversación y no se conserva.
+        if isinstance(payload.get("request_id"), int):
+            safe["request_id"] = payload["request_id"]
         db.execute("UPDATE events SET payload = ? WHERE id = ?", (json.dumps(safe), row["id"]))
         anonymized += 1
     for row in db.execute(
@@ -581,9 +602,12 @@ def create_request(
     commercial_at: float,
     now: float,
     data: dict,
+    intake_in_shift: bool | None = None,
 ) -> dict:
     """Solicitud nueva vinculada al hilo. Corre dentro de la transacción del traspaso (sin una propia).
 
+    `intake_in_shift` es el turno cuando ENTRÓ la consulta comercial (decide si cuenta para la meta); `in_shift`
+    es el turno al derivar (qué se le dice al huésped). Sin el primero, valen lo mismo.
     Una solicitud abierta anterior del mismo hilo queda cerrada: el huésped volvió con otra consulta.
     """
     db.execute(
@@ -592,15 +616,16 @@ def create_request(
         (now, now, conversation_id, *OPEN_STATUSES),
     )
     cursor = db.execute(
-        """INSERT INTO requests(code, conversation_id, source, channel, reason, in_shift, commercial_at,
-               created_at, checkin, checkout, adults, children, room_code, updated_at)
-           VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        """INSERT INTO requests(code, conversation_id, source, channel, reason, in_shift, intake_in_shift,
+               commercial_at, created_at, checkin, checkout, adults, children, room_code, updated_at)
+           VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             conversation_id,
             source,
             channel,
             reason,
             int(in_shift),
+            int(in_shift if intake_in_shift is None else intake_in_shift),
             commercial_at,
             now,
             data.get("checkin"),
@@ -636,12 +661,19 @@ def latest_request(db: sqlite3.Connection, conversation_id: int) -> sqlite3.Row 
     ).fetchone()
 
 
+def intake_in_shift(row) -> bool:
+    """Turno al ingreso. Solicitudes anteriores a la columna (NULL) usan el turno al derivar: dato histórico."""
+    value = row["intake_in_shift"]
+    return bool(row["in_shift"] if value is None else value)
+
+
 def measurement(row, now: float, target_s: int) -> dict:
     """Primera respuesta humana pertinente contra la meta, desde que ENTRÓ la consulta comercial.
 
-    Tomar la solicitud no reinicia ni detiene el reloj. Fuera de turno no cuenta para la meta.
+    Tomar la solicitud no reinicia ni detiene el reloj. Una consulta que entró fuera de turno no cuenta para la
+    meta aunque se derive ya en turno; una que entró en turno sí cuenta aunque se derive después del cierre.
     """
-    if not row["in_shift"]:
+    if not intake_in_shift(row):
         return {"state": "fuera_de_turno", "elapsed_s": None, "target_s": target_s,
                 "label": "Fuera de turno: no cuenta para la meta de primera respuesta"}
     if row["first_answer_at"] is not None:
@@ -674,6 +706,7 @@ def request_dict(row, now: float, target_s: int) -> dict:
         "reason": row["reason"],
         "reason_label": REASON_LABELS.get(row["reason"], row["reason"]),
         "in_shift": bool(row["in_shift"]),
+        "intake_in_shift": intake_in_shift(row),
         "commercial_at": row["commercial_at"],
         "created_at": row["created_at"],
         "checkin": row["checkin"],
@@ -698,23 +731,30 @@ def request_dict(row, now: float, target_s: int) -> dict:
 
 
 def list_requests(db: sqlite3.Connection, now: float, target_s: int, scope: str, limit: int = 50) -> list[dict]:
-    """Bandeja: primero lo pendiente con más espera, luego lo que está en atención, al final lo cerrado."""
+    """Bandeja ordenada EN SQL antes del límite: una pendiente antigua nunca queda fuera por cerradas nuevas.
+
+    1) pendientes y 2) en atención: la que más espera primero (desde que entró la consulta comercial);
+    3) respondidas (abiertas, esperan al huésped); 4) cerradas, la más reciente primero. Empate: el id menor
+    (la que llegó antes), así el orden no cambia entre lecturas.
+    """
     where, params = ("source = ?", [DEMO_SOURCE]) if scope == DEMO_SOURCE else ("source <> ?", [DEMO_SOURCE])
     rows = db.execute(
         f"""SELECT r.*, (SELECT body FROM demo_messages m WHERE m.conversation_id = r.conversation_id
                          AND m.role <> 'note' ORDER BY m.id DESC LIMIT 1) AS preview
-            FROM requests r WHERE {where} ORDER BY r.id DESC LIMIT ?""",
+            FROM requests r WHERE {where}
+            ORDER BY CASE r.status WHEN 'pendiente' THEN 0 WHEN 'en_atencion' THEN 1
+                                   WHEN 'respondida' THEN 2 ELSE 3 END,
+                     CASE WHEN r.status = 'cerrada' THEN -COALESCE(r.closed_at, r.updated_at)
+                          ELSE r.commercial_at END,
+                     CASE WHEN r.status = 'cerrada' THEN -r.id ELSE r.id END
+            LIMIT ?""",
         (*params, limit),
     ).fetchall()
-    order = {"pendiente": 0, "en_atencion": 1, "respondida": 2, "cerrada": 3}
     items = []
     for row in rows:
         item = request_dict(row, now, target_s)
         item["preview"] = row["preview"]
         items.append(item)
-    # Abiertas: la que más espera primero. Cerradas: la más reciente primero.
-    items.sort(key=lambda item: (order.get(item["status"], 9),
-                                 -item["id"] if item["status"] == "cerrada" else item["commercial_at"]))
     return items
 
 
@@ -780,10 +820,11 @@ def staff_reply(
                 (now, now, request_id),
             )
             if first and stop_sla(db, conversation_id, now):
-                _record(db, conversation_id, "human_first_reply", now, {"user_id": None, "author": author})
+                _record(db, conversation_id, "human_first_reply", now,
+                        {"user_id": None, "author": author, "request_id": request_id})
         else:
             db.execute("UPDATE requests SET updated_at = ? WHERE id = ?", (now, request_id))
-            _record(db, conversation_id, "human_ack", now, {"author": author})
+            _record(db, conversation_id, "human_ack", now, {"author": author, "request_id": request_id})
         return get_request_row(db, request_id), message
 
 

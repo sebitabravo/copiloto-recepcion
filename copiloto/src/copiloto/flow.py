@@ -560,7 +560,10 @@ class Copiloto:
         data.pop("fallbacks", None)
         # Aquí ENTRA la consulta comercial: el reloj de primera respuesta humana parte en este mensaje,
         # antes de capturar datos y de asignar (se fija una vez por consulta).
-        data.setdefault("commercial_at", ctx.now)
+        if "commercial_at" not in data:
+            # Ingreso de la consulta comercial: su hora y su turno quedan fijos (el turno al derivar puede ser otro).
+            data["commercial_at"] = ctx.now
+            data["commercial_in_shift"] = self.settings.in_shift(ctx.now)
         if not data.get("seen_location"):
             # Ubicación primero (R2): nunca se piden datos de estadía sin haber dicho dónde está el alojamiento.
             loc = self.hotel.location
@@ -978,10 +981,12 @@ class Copiloto:
         lines.append(f"Motivo: {reasons.get(reason, reason)}")
         if detail:
             lines.append(f"Detalle del asistente: {detail}")
-        if in_shift:
+        if self._intake_in_shift(data, ctx.now):
             # Misma referencia que el reloj: desde que entró la consulta, no desde el traspaso.
             deadline = self._local_text((data.get("commercial_at") or ctx.now) + self.settings.sla_red_s)
             lines.append(f"Meta: responder antes de las {deadline} ({self.settings.sla_red_s // 60}:00).")
+        elif in_shift:
+            lines.append("Entró fuera de turno: no cuenta para la meta de 3 minutos. Recepción ya atiende.")
         else:
             lines.append(f"Captura fuera de turno: atender desde las {self.settings.shift_start}.")
         return "\n".join(lines)
@@ -1029,6 +1034,11 @@ class Copiloto:
             f"{opening.strftime('%H:%M')} del {long_date(opening.date())}."
         )
 
+    def _intake_in_shift(self, data: dict, now: float) -> bool:
+        """Turno cuando entró la consulta comercial (guardado al ingreso); sin flujo comercial, el de `now`."""
+        value = data.get("commercial_in_shift")
+        return self.settings.in_shift(data.get("commercial_at") or now) if value is None else bool(value)
+
     def _persist_handoff(self, ctx: Context, reason: str, now: float, in_shift: bool, complete: bool = False) -> None:
         """La frontera del traspaso (estado, solicitud, eventos y reloj) se persiste antes de abrir la
         conversación a recepción: así una respuesta humana inmediata nunca llega antes que el cronómetro.
@@ -1039,6 +1049,9 @@ class Copiloto:
         state = ctx.state
         previous_step = state.step
         commercial_at = state.data.get("commercial_at") or ctx.now
+        # Turno AL INGRESO: decide la meta y el reloj. `in_shift` (al derivar) solo decide qué se le dice al
+        # huésped. Sin flujo comercial previo, el ingreso es este mismo mensaje.
+        intake_in_shift = self._intake_in_shift(state.data, ctx.now)
         state.step = "handed_off"
         state.data["handoff_at"] = now
         try:
@@ -1051,31 +1064,35 @@ class Copiloto:
                     channel=ctx.channel,
                     reason=reason,
                     in_shift=in_shift,
+                    intake_in_shift=intake_in_shift,
                     commercial_at=commercial_at,
                     now=now,
                     data=state.data,
                 )
                 state.data["request_id"], state.data["request_code"] = request["id"], request["code"]
                 store.save_state(self.db, state, now)
-                record_event(self.db, ctx.conversation_id, "handoff", now, {"reason": reason})
+                record_event(self.db, ctx.conversation_id, "handoff", now,
+                             {"reason": reason, "request_id": request["id"]})
                 record_event(
                     self.db,
                     ctx.conversation_id,
                     "commercial_started",
                     now,
-                    {"in_shift": in_shift, "inbound_ts": commercial_at},
+                    {"in_shift": intake_in_shift, "inbound_ts": commercial_at, "handoff_in_shift": in_shift,
+                     "request_id": request["id"]},
                 )
                 record_event(
                     self.db,
                     ctx.conversation_id,
                     "request_created",
                     now,
-                    {"request_id": request["id"], "code": request["code"], "in_shift": in_shift},
+                    {"request_id": request["id"], "code": request["code"], "in_shift": intake_in_shift},
                 )
-                if in_shift:
+                if intake_in_shift:
                     store.start_sla(self.db, ctx.conversation_id, commercial_at)
                 else:
-                    record_event(self.db, ctx.conversation_id, "night_capture", now, {"complete": complete})
+                    record_event(self.db, ctx.conversation_id, "night_capture", now,
+                                 {"complete": complete, "request_id": request["id"]})
         except BaseException:
             # Hubo rollback: el estado en memoria no puede quedar como si el traspaso ya existiera
             state.step = previous_step
@@ -1098,7 +1115,11 @@ class Copiloto:
     def on_human_reply(self, conversation_id: int, user_id: int | None, now: float) -> None:
         """Primer mensaje saliente de una persona: detiene el cronómetro del SLA."""
         if store.stop_sla(self.db, conversation_id, now):
-            record_event(self.db, conversation_id, "human_first_reply", now, {"user_id": user_id})
+            request = store.open_request(self.db, conversation_id)
+            payload = {"user_id": user_id}
+            if request is not None:
+                payload["request_id"] = request["id"]
+            record_event(self.db, conversation_id, "human_first_reply", now, payload)
         store.human_answered(self.db, conversation_id, now)
 
     async def on_booking_confirmed(

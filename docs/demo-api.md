@@ -83,6 +83,14 @@ Estados: atención `pendiente`, `en_atencion`, `respondida`, `cerrada`; reserva 
 `measurement` de una solicitud: `state` (`en_curso`, `cumplida`, `vencida`, `fuera_de_turno`), `elapsed_s` desde
 `commercial_at` (el ingreso de la consulta comercial, hora del servidor) y `target_s` (180).
 
+Turno: `intake_in_shift` es el turno **al ingreso** de la consulta comercial y decide si la solicitud cuenta para
+la meta (una consulta que entra a las 21:59:50 y se envía a las 22:00:10 sigue en turno; una que entra a las
+07:59:50 y se envía a las 08:00:10 sigue fuera). `in_shift` es el turno **al derivar** y solo decide lo que se le
+dice al huésped («te responderán por aquí» o el horario de apertura).
+
+Orden de la bandeja (en SQL, antes del límite de 50): pendientes, en atención y respondidas por espera desde
+`commercial_at` (empate: la que llegó antes); las cerradas al final, la más reciente primero.
+
 ---
 
 # Modo con IA (`DEMO_AI=1`)
@@ -228,7 +236,12 @@ cupo de mensajes y límites por IP con el chat de texto. A la respuesta del turn
 - La voz usa su API independiente y no crea reservas autónomas. Su aviso de privacidad explica el
   reconocimiento del navegador y la síntesis de ElevenLabs; no se guarda audio en el prototipo.
 - `/health?probe=readiness` comprueba proceso/SQLite, no todas las integraciones.
-- `/metricas/data.json?days=7` muestra actividad realmente registrada de la demo, no métricas de huéspedes reales.
+- `/metricas/data.json?days=7` mide solo el mundo de la sesión (`"scope": "demo"` con la sesión de la demo,
+  `"operation"` con el token o el login del panel): la demo nunca se suma a la operación. Por solicitud: FAQ
+  bajo 10 s (`faq_within_target_pct`), primera respuesta pertinente bajo 180 s para lo que entró en turno
+  (`commercial_response_compliance_pct`, `first_reply_median_s`); tomas (`requests_taken`) y acuses (`acks`) se
+  informan aparte y no cuentan. `historical_incomplete` declara cuántos eventos antiguos (sin solicitud o sin
+  origen) se midieron con la regla anterior, y cuál es esa regla.
 - El saludo y los números del hero son ilustrativos, no mediciones ni promesas de disponibilidad.
 
 Para preparar y recorrer cada canal, consulta el [flujo del proyecto](workflow.md).
