@@ -24,8 +24,8 @@
     } catch (_) { return null; }
   };
   const copiloto = trim(config.copilotoUrl || pageHost(8100));
+  // La bandeja de recepción es /demo?vista=recepcion (enlace fijo); Chatwoot solo existe con el stack completo.
   const services = {
-    inbox: config.chatwootUrl || pageHost(3000),
     pms: `${trim(config.pmsUrl || pageHost(8200))}/admin`,
     metrics: `${copiloto}/metricas`,
   };
