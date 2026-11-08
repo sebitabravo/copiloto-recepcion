@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import sqlite3
 import time
 import weakref
@@ -36,7 +37,7 @@ from copiloto.events import connect, init_db, record_event
 from copiloto.flow import DEMO_CHANNEL, DEMO_MENU, DEMO_STYLE, Copiloto, long_date
 from copiloto.guided import guided_reply
 from copiloto.hotel import HotelData
-from copiloto.pms import PmsAdapter, PmsUnavailable, build_pms_adapter
+from copiloto.pms import PmsAdapter, PmsUnavailable, build_demo_pms_adapter, build_pms_adapter
 from copiloto.ratelimit import SlidingWindowLimiter
 from copiloto.sla import SlaWorker
 from copiloto.voice import (
@@ -57,6 +58,11 @@ DEMO_SESSION_ID = re.compile(r"^[A-Za-z0-9-]{16,64}$")
 # Llave de idempotencia de una acción (mensaje del huésped o respuesta de recepción): un reintento con la
 # misma llave no duplica nada.
 ACTION_ID = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+# Corrida de la demo (la emite el servidor) y llave estable del operador (la guarda el navegador de recepción).
+RUN_ID = re.compile(r"^[A-Za-z0-9_-]{16,32}$")
+OPERATOR_KEY = re.compile(r"^[A-Za-z0-9-]{16,64}$")
+# Tope global de corridas nuevas por hora: la demo pública no puede usarse para llenar la base.
+DEMO_RUNS_PER_HOUR = 300
 DEMO_MAX_MESSAGE = 400
 STAFF_NAME = re.compile(r"^[^\W\d_][\w .'-]{0,29}$")
 
@@ -110,6 +116,7 @@ def create_app(
     llm_agent: Agent | None = None,
     tts: ElevenLabsClient | None = None,
     piper: PiperClient | None = None,
+    demo_pms: PmsAdapter | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
     if settings.env == "production":
@@ -130,17 +137,17 @@ def create_app(
         settings.chatwoot_url, settings.chatwoot_account_id, settings.chatwoot_bot_token, settings.chatwoot_team_id
     )
     pms = pms or build_pms_adapter(settings)
-    agent = llm_agent or (
-        Agent(
-            LlmClient(settings.llm_base_url, settings.llm_api_key, settings.llm_model, settings.llm_timeout_s),
-            hotel,
-            pms,
-            settings,
-            clock,
-        )
-        if settings.ai_active
-        else None
-    )
+    # La demo pública lee SU inventario de prueba: nunca el adaptador (ni el PMS) de la operación.
+    demo_pms = demo_pms or build_demo_pms_adapter(settings)
+
+    def build_agent(adapter: PmsAdapter) -> Agent | None:
+        if not settings.ai_active:
+            return None
+        llm = LlmClient(settings.llm_base_url, settings.llm_api_key, settings.llm_model, settings.llm_timeout_s)
+        return Agent(llm, hotel, adapter, settings, clock)
+
+    agent = llm_agent or build_agent(pms)
+    demo_agent = llm_agent or build_agent(demo_pms)
     if tts is None and agent is not None and settings.voice_active:
         tts = ElevenLabsClient(
             settings.elevenlabs_api_key,
@@ -167,7 +174,7 @@ def create_app(
     # escribe en la transcripción aislada (nunca en Chatwoot).
     demo_channel = DemoChannel(db, clock)
     # Por defecto la demo corre el flujo guiado; con DEMO_AI=1 y un modelo configurado, el asistente con IA.
-    demo_uses_ai = settings.demo_ai and agent is not None
+    demo_uses_ai = settings.demo_ai and demo_agent is not None
     sla = SlaWorker(settings, db, chatwoot, clock, demo_channel=demo_channel)
 
     def demo_settings(shift: str | None) -> Settings:
@@ -176,7 +183,7 @@ def create_app(
 
     def demo_engine(shift: str | None) -> Copiloto:
         return Copiloto(
-            demo_settings(shift), hotel, db, demo_channel, pms, clock, None,
+            demo_settings(shift), hotel, db, demo_channel, demo_pms, clock, None,
             style=DEMO_STYLE, source=store.DEMO_SOURCE,
         )
 
@@ -214,7 +221,7 @@ def create_app(
         CORSMiddleware,
         allow_origins=[settings.landing_origin],
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "X-Demo-Run"],
         allow_credentials=True,
         max_age=600,
     )
@@ -293,10 +300,16 @@ def create_app(
         await core.on_booking_confirmed(body.get("conversation_id"), booking_id, source)
         return {"status": "recorded"}
 
-    def panel_session(name: str, expires: int, demo: bool = False) -> str:
+    def panel_session(name: str, expires: int, demo: bool = False, run: str | None = None,
+                      operator: str | None = None) -> str:
         claims = {"n": name, "e": expires}
         if demo:
             claims["d"] = 1
+            # Corrida y operador viajan firmados: el cliente no puede elegir ni otra corrida ni otro operador.
+            if run:
+                claims["r"] = run
+            if operator:
+                claims["o"] = operator
         payload = base64.urlsafe_b64encode(json.dumps(claims).encode()).decode()
         sig = hmac.new(settings.panel_token.encode(), payload.encode(), hashlib.sha256).hexdigest()
         return f"{payload}.{sig}"
@@ -320,7 +333,15 @@ def create_app(
             return None
         if expires < clock():
             return None
-        return {"name": str(data.get("n") or "recepción"), "demo": data.get("d") == 1}
+        run, operator = data.get("r"), data.get("o")
+        if not isinstance(run, str | None) or not isinstance(operator, str | None):
+            return None
+        # Otra pestaña abrió otra corrida con esta misma cookie: esta sesión no vale para la corrida pedida.
+        wanted = request.headers.get("x-demo-run")
+        if data.get("d") == 1 and wanted and wanted != run:
+            return None
+        return {"name": str(data.get("n") or "recepción"), "demo": data.get("d") == 1, "run": run,
+                "operator": operator}
 
     def panel_identity(request: Request) -> str | None:
         """Quién mira el panel: sesión firmada por cookie, o el token del panel (app de Chatwoot)."""
@@ -330,6 +351,26 @@ def create_app(
             return "chatwoot"
         claims = panel_claims(request)
         return claims["name"] if claims else None
+
+    def viewer(request: Request) -> dict:
+        """Corrida y operador de una sesión de la demo (None fuera de la demo o sin corrida)."""
+        claims = panel_claims(request) if panel_is_demo(request) else None
+        return {"run": claims["run"], "operator": claims["operator"]} if claims else {"run": None, "operator": None}
+
+    def run_conversations(run: str | None) -> set[int]:
+        if run is None:
+            return set()
+        rows = db.execute("SELECT conversation_id FROM demo_conversations WHERE run_id = ?", (run,)).fetchall()
+        return {row["conversation_id"] for row in rows}
+
+    def conversation_visible(conversation_id: int, request: Request) -> bool:
+        """Cada sesión ve solo su mundo: la demo, solo su corrida; el personal, nunca la demo."""
+        source = store.conversation_source(db, conversation_id)
+        if source is not None and (source == store.DEMO_SOURCE) != panel_is_demo(request):
+            return False
+        if panel_is_demo(request):
+            return conversation_id in run_conversations(viewer(request)["run"])
+        return True
 
     def panel_is_demo(request: Request) -> bool:
         """Sesión de demostración: solo ve y escribe el espacio aislado, nunca la operación real."""
@@ -403,19 +444,35 @@ def create_app(
         if not settings.demo_enabled:
             raise HTTPException(status_code=403, detail="demo_disabled")
         name = "Recepción (demo)"
+        body: dict = {}
         if raw.strip():
             try:
-                wanted = " ".join(str((json.loads(raw) or {}).get("name") or "").split())
+                body = json.loads(raw) or {}
+                wanted = " ".join(str(body.get("name") or "").split())
             except (ValueError, AttributeError):
                 raise HTTPException(status_code=400, detail="JSON inválido") from None
             if wanted:
                 if not STAFF_NAME.match(wanted):
                     raise HTTPException(status_code=422, detail="Nombre inválido: letras, hasta 30 caracteres")
                 name = wanted
+        # Corrida: la recepción solo ve los casos de la corrida con que entra (sin corrida, ninguno).
+        run = body.get("run")
+        if run is not None and (not isinstance(run, str) or not RUN_ID.match(run)):
+            raise HTTPException(status_code=422, detail="Corrida inválida")
+        if run is not None and not store.demo_run_active(db, run, clock(), settings.demo_session_ttl_s):
+            raise HTTPException(status_code=404, detail="corrida_desconocida")
+        # Operador: id estable derivado de una llave que guarda este navegador. El nombre es solo una etiqueta;
+        # dos «Sofía» con llaves distintas son dos operadores.
+        key = body.get("operator_key")
+        if key is not None and (not isinstance(key, str) or not OPERATOR_KEY.match(key)):
+            raise HTTPException(status_code=422, detail="operator_key inválida")
+        key = key or secrets.token_hex(16)
+        operator = hmac.new(settings.panel_token.encode(), f"operador:{run}:{key}".encode(),
+                            hashlib.sha256).hexdigest()[:20]
         response = Response(status_code=204)
         response.set_cookie(
             PANEL_COOKIE,
-            panel_session(name, int(clock()) + PANEL_SESSION_HOURS * 3600, demo=True),
+            panel_session(name, int(clock()) + PANEL_SESSION_HOURS * 3600, demo=True, run=run, operator=operator),
             max_age=PANEL_SESSION_HOURS * 3600,
             httponly=True,
             samesite="lax",
@@ -426,7 +483,30 @@ def create_app(
     @app.get("/api/demo/session", dependencies=limited)
     async def demo_session_info(request: Request):
         """La página de la demo pregunta si el modo demo está disponible y quién es la sesión; sin secretos."""
-        return {"demo": settings.demo_enabled, "name": panel_identity(request)}
+        return {"demo": settings.demo_enabled, "name": panel_identity(request), "run": viewer(request)["run"]}
+
+    demo_run_limiter = SlidingWindowLimiter(DEMO_RUNS_PER_HOUR, 3600, clock=clock)
+
+    @app.post("/api/demo/run", dependencies=limited)
+    async def demo_run_create():
+        """Corrida nueva: el servidor emite el id que une la vista del huésped con la de recepción."""
+        if not settings.demo_enabled:
+            raise HTTPException(status_code=403, detail="demo_disabled")
+        wait = demo_run_limiter.check("global")
+        if wait is not None:
+            return JSONResponse({"detail": "La demo alcanzó su límite de corridas por hora", "retry_after_s":
+                                 int(wait) + 1}, status_code=429, headers={"Retry-After": str(int(wait) + 1)})
+        return JSONResponse({"run": store.create_demo_run(db, clock()), "ttl_s": settings.demo_session_ttl_s},
+                            status_code=201)
+
+    @app.get("/api/demo/run/{run_id}", dependencies=limited)
+    async def demo_run_info(run_id: str):
+        """¿Sigue viva la corrida del enlace? (otra ventana o una recarga). Vencida o inventada: 404."""
+        if not settings.demo_enabled:
+            raise HTTPException(status_code=403, detail="demo_disabled")
+        if not RUN_ID.match(run_id) or not store.demo_run_active(db, run_id, clock(), settings.demo_session_ttl_s):
+            raise HTTPException(status_code=404, detail="corrida_desconocida")
+        return {"run": run_id}
 
     @app.get("/api/panel/queue", dependencies=limited)
     async def panel_queue(request: Request):
@@ -438,7 +518,8 @@ def create_app(
             "red_s": settings.sla_red_s,
             # La demo ve solo su espacio; el personal nunca recibe las conversaciones de prueba.
             "conversations": store.list_conversations(
-                db, clock(), scope=store.DEMO_SOURCE if panel_is_demo(request) else "operational"
+                db, clock(), scope=store.DEMO_SOURCE if panel_is_demo(request) else "operational",
+                run_id=viewer(request)["run"],
             ),
         }
 
@@ -448,7 +529,8 @@ def create_app(
             raise HTTPException(status_code=401, detail="Sesión del panel requerida")
         now = clock()
         source = store.DEMO_SOURCE if panel_is_demo(request) else store.OPERATIONAL_SOURCE
-        return {"hours": hours, **store.shift_summary(db, now - hours * 3600, now, source)}
+        summary = store.shift_summary(db, now - hours * 3600, now, source, run_id=viewer(request)["run"])
+        return {"hours": hours, **summary}
 
     # ---------- bandeja de solicitudes ----------
 
@@ -463,13 +545,16 @@ def create_app(
         row = store.get_request_row(db, request_id)
         if row is None or (row["source"] == store.DEMO_SOURCE) != panel_is_demo(request):
             raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+        # En la demo, además, solo la corrida de la sesión: otra corrida no sabe ni que existe.
+        if panel_is_demo(request) and (viewer(request)["run"] is None or row["run_id"] != viewer(request)["run"]):
+            raise HTTPException(status_code=404, detail="Solicitud no encontrada")
         return row
 
     def require_demo(request: Request) -> None:
         if not panel_is_demo(request):
             raise HTTPException(status_code=403, detail="La operación real se atiende en Chatwoot")
 
-    def request_detail(row, me: str) -> dict:
+    def request_detail(row, me: str, operator: str | None = None) -> dict:
         now = clock()
         detail = store.request_dict(row, now, settings.sla_red_s)
         conversation_id = row["conversation_id"]
@@ -486,10 +571,13 @@ def create_app(
                             "met": latency < 10})
         detail["faq"] = faq
         open_ = row["status"] != "cerrada"
+        # Permisos por operador (id estable): dos personas con el mismo nombre no comparten casos.
+        mine = store.owned_by(row, me, operator)
+        detail["mine"] = mine
         detail["actions"] = {
             "take": demo and open_ and not row["assignee"],
-            "reply": demo and open_ and row["assignee"] == me,
-            "close": demo and open_ and row["assignee"] == me,
+            "reply": demo and open_ and mine,
+            "close": demo and open_ and mine,
             "inventory": demo and open_ and bool(row["checkin"]),
         }
         return detail
@@ -511,25 +599,28 @@ def create_app(
         """Bandeja y, en la misma lectura, el detalle de la solicitud abierta (un solo sondeo por ciclo)."""
         me = require_identity(request)
         scope = store.DEMO_SOURCE if panel_is_demo(request) else "operational"
+        who = viewer(request)
         detail = None
         if selected is not None:
-            row = store.get_request_row(db, selected)
-            if row is not None and (row["source"] == store.DEMO_SOURCE) == (scope == store.DEMO_SOURCE):
-                detail = request_detail(row, me)
+            try:
+                detail = request_detail(scoped_request(selected, request), me, who["operator"])
+            except HTTPException:
+                detail = None
         return {
             "now": clock(),
             "me": me,
             "target_s": settings.sla_red_s,
             "amber_s": settings.sla_amber_s,
             "shift": shift_info(settings),
-            "requests": store.list_requests(db, clock(), settings.sla_red_s, scope),
+            "requests": store.list_requests(db, clock(), settings.sla_red_s, scope, run_id=who["run"],
+                                            operator=who["operator"]),
             "selected": detail,
         }
 
     @app.get("/api/panel/requests/{request_id}", dependencies=limited)
     async def panel_request(request_id: int, request: Request):
         me = require_identity(request)
-        return request_detail(scoped_request(request_id, request), me)
+        return request_detail(scoped_request(request_id, request), me, viewer(request)["operator"])
 
     @app.post("/api/panel/requests/{request_id}/take", dependencies=limited)
     async def panel_take(request_id: int, request: Request):
@@ -537,12 +628,13 @@ def create_app(
         me = require_identity(request)
         row = scoped_request(request_id, request)
         require_demo(request)
+        operator = viewer(request)["operator"]
         try:
-            row, _ = store.take_request(db, row["id"], me, clock())
+            row, _ = store.take_request(db, row["id"], me, clock(), assignee_id=operator)
         except store.RequestConflict as exc:
-            current = request_detail(scoped_request(request_id, request), me)
+            current = request_detail(scoped_request(request_id, request), me, operator)
             return JSONResponse({"detail": str(exc), "request": current}, status_code=409)
-        return request_detail(row, me)
+        return request_detail(row, me, operator)
 
     @app.post("/api/panel/requests/{request_id}/reply", dependencies=limited)
     async def panel_request_reply(request_id: int, request: Request):
@@ -553,6 +645,7 @@ def create_app(
         me = require_identity(request)
         row = scoped_request(request_id, request)
         require_demo(request)
+        operator = viewer(request)["operator"]
         try:
             body = json.loads(await read_capped(request, 8192))
         except ValueError:
@@ -571,17 +664,18 @@ def create_app(
         now = clock()
         try:
             # La llave (por caso), el mensaje, el estado y el evento se guardan en UNA transacción.
-            updated, message = store.staff_reply(db, row["id"], me, text, kind, now, client_id=client_id)
+            updated, message = store.staff_reply(db, row["id"], me, text, kind, now, client_id=client_id,
+                                                 author_id=operator)
         except store.DuplicateAction:
             # Reintento de una respuesta ya guardada (p. ej. se perdió la respuesta HTTP): no se reenvía.
-            current = request_detail(scoped_request(request_id, request), me)
+            current = request_detail(scoped_request(request_id, request), me, operator)
             return {"duplicate": True, "message": None, "request": current}
         except store.ActionConflict as exc:
             return JSONResponse({"detail": str(exc)}, status_code=409)
         except store.RequestConflict as exc:
-            current = request_detail(scoped_request(request_id, request), me)
+            current = request_detail(scoped_request(request_id, request), me, operator)
             return JSONResponse({"detail": str(exc), "request": current}, status_code=409)
-        return {"duplicate": False, "message": message, "request": request_detail(updated, me)}
+        return {"duplicate": False, "message": message, "request": request_detail(updated, me, operator)}
 
     @app.post("/api/panel/requests/{request_id}/close", dependencies=limited)
     async def panel_close(request_id: int, request: Request):
@@ -589,9 +683,10 @@ def create_app(
         me = require_identity(request)
         row = scoped_request(request_id, request)
         require_demo(request)
-        if row["assignee"] and row["assignee"] != me:
+        operator = viewer(request)["operator"]
+        if row["assignee"] and not store.owned_by(row, me, operator):
             return JSONResponse({"detail": f"La atiende {row['assignee']}"}, status_code=409)
-        return request_detail(store.close_request(db, row["id"], clock()), me)
+        return request_detail(store.close_request(db, row["id"], clock()), me, operator)
 
     @app.post("/api/panel/requests/{request_id}/inventory", dependencies=limited)
     async def panel_inventory(request_id: int, request: Request):
@@ -615,16 +710,18 @@ def create_app(
             if isinstance(body, dict) and body.get("simulate_down"):
                 # Caída simulada para la demostración: no se llama al PMS.
                 raise PmsUnavailable("el PMS no respondió (caída simulada)")
-            reading = await pms.availability(
+            # Inventario de PRUEBA de la demo: este endpoint nunca toca el PMS de la operación.
+            reading = await demo_pms.availability(
                 date.fromisoformat(row["checkin"]), date.fromisoformat(row["checkout"]),
                 int(row["adults"] or 1), int(row["children"] or 0),
             )
         except PmsUnavailable as exc:
             record_event(db, row["conversation_id"], "pms_read", now, {"ok": False, "latency_ms": 0})
             reason = str(exc) if "simulada" in str(exc) else "el PMS no respondió"
-            text = f"PMS sin lectura ({reason}). Cupo desconocido: no informar disponibilidad."
+            text = f"Disponibilidad por verificar: PMS sin lectura ({reason}). No informar cupos al huésped."
             store.add_demo_message(db, row["conversation_id"], "note", text, now, author=me, request_id=row["id"])
-            return {"ok": False, "reason": reason, "request": request_detail(scoped_request(request_id, request), me)}
+            return {"ok": False, "reason": reason, "label": "Disponibilidad por verificar",
+                    "request": request_detail(scoped_request(request_id, request), me, viewer(request)["operator"])}
         latency_ms = int((time.monotonic() - started) * 1000)
         record_event(db, row["conversation_id"], "pms_read", now, {"ok": True, "latency_ms": latency_ms})
         # Las 4 más económicas que caben: suficiente para responder sin un muro de texto (el PMS tiene 12 tipos).
@@ -646,16 +743,17 @@ def create_app(
         )
         return {"ok": True, "source": source, "read_at": reading.read_at, "simulated": reading.simulated,
                 "offers": offers, "more": max(more, 0),
-                "request": request_detail(scoped_request(request_id, request), me)}
+                "request": request_detail(scoped_request(request_id, request), me, viewer(request)["operator"])}
 
     @app.get("/api/panel/{conversation_id}", dependencies=limited)
     async def panel_data(conversation_id: int, request: Request):
         if panel_identity(request) is None:
             raise HTTPException(status_code=401, detail="Sesión del panel requerida")
-        # Cada sesión ve solo su mundo: la demo no lee la operación real y el personal no lee la demo.
-        source = store.conversation_source(db, conversation_id)
-        if source is not None and (source == store.DEMO_SOURCE) != panel_is_demo(request):
+        # Cada sesión ve solo su mundo: la demo no lee la operación real (ni otra corrida) y el personal no
+        # lee la demo.
+        if not conversation_visible(conversation_id, request):
             raise HTTPException(status_code=404, detail="Conversación no encontrada")
+        source = store.conversation_source(db, conversation_id)
         state = store.get_state(db, conversation_id)
         data = dict(state.data)
         room = hotel.room(data["room_code"]) if data.get("room_code") else None
@@ -697,8 +795,7 @@ def create_app(
         author = panel_identity(request)
         if author is None:
             raise HTTPException(status_code=401, detail="Sesión del panel requerida")
-        source = store.conversation_source(db, conversation_id)
-        if source is not None and (source == store.DEMO_SOURCE) != panel_is_demo(request):
+        if not conversation_visible(conversation_id, request):
             raise HTTPException(status_code=404, detail="Conversación no encontrada")
         try:
             body = json.loads(await read_capped(request, 4096))
@@ -723,9 +820,13 @@ def create_app(
         from copiloto.metrics import compute_metrics
 
         end = clock()
-        # Cada sesión ve su mundo: la demo nunca se suma a las métricas de la operación (ni al revés).
-        scope = "demo" if panel_is_demo(request) else "operation"
-        return JSONResponse(compute_metrics(db, end - days * 86400, end + 1, settings, scope=scope))
+        # Cada sesión ve su mundo: la demo nunca se suma a las métricas de la operación (ni al revés), y una
+        # sesión de la demo ve solo su corrida.
+        if panel_is_demo(request):
+            ids = run_conversations(viewer(request)["run"])
+            return JSONResponse(compute_metrics(db, end - days * 86400, end + 1, settings, scope="demo",
+                                                conversation_ids=ids))
+        return JSONResponse(compute_metrics(db, end - days * 86400, end + 1, settings, scope="operation"))
 
     @app.get("/privacidad", response_class=HTMLResponse, dependencies=limited)
     async def privacy_page():
@@ -873,6 +974,16 @@ def create_app(
         if client_id is not None and (not isinstance(client_id, str) or not ACTION_ID.match(client_id)):
             return demo_error(422, "client_message_id inválido")
         shift = body.get("shift") if body.get("shift") in ("open", "closed") else None
+        # Corrida (la emite el servidor): une este chat con la recepción que lo atiende. Una sesión no cambia de
+        # corrida. Sin corrida (clientes antiguos o de prueba) el caso no llega a ninguna bandeja.
+        run = body.get("run")
+        if run is not None:
+            if not isinstance(run, str) or not RUN_ID.match(run):
+                return demo_error(422, "Corrida inválida")
+            if not store.demo_run_active(db, run, clock(), settings.demo_session_ttl_s):
+                return demo_error(404, "corrida_desconocida")
+            if store.demo_session_run(db, session_id) not in (None, run):
+                return demo_error(409, "Esta conversación es de otra corrida: empieza con «Otro huésped»")
         scope, digest = f"guest:{session_id}", store.fingerprint(message)
         action = None
         if client_id:
@@ -899,7 +1010,7 @@ def create_app(
             # Ingreso atómico: el mensaje y su llave quedan juntos o no queda ninguno. Con recepción a cargo el
             # turno termina aquí ('done'); si no, queda 'started' hasta que el asistente conteste.
             with store.transaction(db):
-                conversation_id = store.ensure_demo_conversation(db, session_id, now)
+                conversation_id = store.ensure_demo_conversation(db, session_id, now, run_id=run)
                 open_row = store.guest_wrote_to_reception(db, conversation_id, now)
                 saved = store.insert_demo_message(
                     db, conversation_id, "guest", message, now, request_id=open_row["id"] if open_row else None
@@ -1008,11 +1119,15 @@ def create_app(
 
     @app.get("/api/demo/conversation", dependencies=limited)
     async def demo_conversation(
-        session_id: str = Query(min_length=1, max_length=64), after: int = Query(default=0, ge=0)
+        session_id: str = Query(min_length=1, max_length=64), after: int = Query(default=0, ge=0),
+        run: str | None = Query(default=None, max_length=32),
     ):
         """Lo que ve el huésped: su hilo (sin notas internas), su solicitud y las respuestas de recepción."""
         if not settings.demo_enabled:
             raise HTTPException(status_code=404, detail="demo_disabled")
+        if run is not None and store.demo_session_run(db, session_id) not in (None, run):
+            # Una sesión de otra corrida se responde como desconocida: no se confirma que exista.
+            return guest_snapshot(None)
         return guest_snapshot(store.demo_conversation_for_session(db, session_id), after_id=after)
 
     async def synthesize(text: str, language: str = "es") -> tuple[str | None, str | None, str | None]:

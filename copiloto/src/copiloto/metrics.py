@@ -32,12 +32,15 @@ def _event_scope(row) -> str | None:
     return None
 
 
-def compute_metrics(conn: sqlite3.Connection, start: float, end: float, config, scope: str | None = None) -> dict:
+def compute_metrics(
+    conn: sqlite3.Connection, start: float, end: float, config, scope: str | None = None,
+    conversation_ids: set[int] | None = None,
+) -> dict:
     """Calcula indicadores sobre el intervalo UTC semiabierto [start, end).
 
     `scope`: "demo", "operation" o None (todo, para compatibilidad). La primera respuesta humana se mide por
     SOLICITUD y solo para consultas que entraron en turno; tomar la solicitud y acusar recibo se informan aparte
-    y nunca cuentan como respuesta.
+    y nunca cuentan como respuesta. `conversation_ids` limita a esas conversaciones (la corrida de una demo).
     """
     wanted = SCOPES.get(scope) if scope is not None else None
     if scope is not None and wanted is None:
@@ -59,6 +62,8 @@ def compute_metrics(conn: sqlite3.Connection, start: float, end: float, config, 
         return ("request", request_id) if isinstance(request_id, int) else ("conversation", conversation_id)
 
     for row in rows:
+        if conversation_ids is not None and row["conversation_id"] not in conversation_ids:
+            continue
         origin = _event_scope(row)
         if origin is None:
             unknown_source += 1

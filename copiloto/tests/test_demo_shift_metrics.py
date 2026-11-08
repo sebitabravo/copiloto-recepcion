@@ -25,7 +25,8 @@ def booking_across(demo, intake, handoff):
     """Consulta comercial que entra a la hora `intake` y se envía a recepción a la hora `handoff`."""
     demo.clock.now = intake - 3
     # El salto de reloj supera la sesión firmada de recepción (horas): Sofía vuelve a entrar.
-    assert demo.sofia.post("/api/demo/session", json={"name": "Sofía"}).status_code == 204
+    assert demo.sofia.post("/api/demo/session", json={"name": "Sofía", "run": demo.run,
+                                                      "operator_key": "operadora-sofia-0001"}).status_code == 204
     demo.say("Consultar fechas")
     demo.say("20–22 nov · 2 adultos")
     demo.say("Sin niños")
@@ -46,7 +47,7 @@ def metrics(demo, scope="demo", days=30):
 # ---------- turno al ingreso ----------
 
 def test_intake_at_21_59_50_keeps_the_shift_after_a_handoff_at_22_00_10(demo):
-    intake, handoff = local_epoch(2026, 11, 9, 21, 59, 50), local_epoch(2026, 11, 9, 22, 0, 10)
+    intake, handoff = local_epoch(2026, 11, 8, 21, 59, 50), local_epoch(2026, 11, 8, 22, 0, 10)
     body = booking_across(demo, intake, handoff)
     item = only_request(demo)
     assert item["commercial_at"] == intake
@@ -173,7 +174,7 @@ def test_historical_events_without_request_are_reported_as_incomplete(demo):
 # ---------- cola ----------
 
 def demo_request(demo, index, commercial_at, now):
-    conversation_id = store.ensure_demo_conversation(demo.db, f"eva3-cola-{index:016d}", now)
+    conversation_id = store.ensure_demo_conversation(demo.db, f"eva3-cola-{index:016d}", now, run_id=demo.run)
     with store.transaction(demo.db):
         return store.create_request(
             demo.db, conversation_id, prefix="BDL", source=store.DEMO_SOURCE, channel="demo",
@@ -198,9 +199,9 @@ def test_open_requests_come_first_by_priority_and_wait_with_a_stable_tiebreak(de
     rows = [demo_request(demo, index, now - 100, now) for index in range(4)]
     store.take_request(demo.db, rows[1]["id"], "Sofía", now)
     store.close_request(demo.db, rows[2]["id"], now)
-    order = [item["id"] for item in store.list_requests(demo.db, now, TARGET, store.DEMO_SOURCE)]
+    order = [item["id"] for item in store.list_requests(demo.db, now, TARGET, store.DEMO_SOURCE, run_id=demo.run)]
     # Pendientes (misma espera → la más antigua por id), luego en atención, al final las cerradas.
     assert order == [rows[0]["id"], rows[3]["id"], rows[1]["id"], rows[2]["id"]]
-    again = [item["id"] for item in store.list_requests(demo.db, now, TARGET, store.DEMO_SOURCE)]
+    again = [item["id"] for item in store.list_requests(demo.db, now, TARGET, store.DEMO_SOURCE, run_id=demo.run)]
     assert again == order, "orden estable entre lecturas"
 

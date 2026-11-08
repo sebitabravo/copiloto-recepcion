@@ -225,15 +225,33 @@ def make_ai(ai_settings, clock):
 DEMO_SESSION = "eva3-huesped-0000000001"
 
 
+def new_run(client) -> str:
+    """Corrida emitida por el servidor (como la pide /demo al abrir)."""
+    response = client.post("/api/demo/run")
+    assert response.status_code == 201, response.text
+    return response.json()["run"]
+
+
+def staff_login(client, name, run, key=None):
+    """Recepción entra a una corrida con su llave de operador (la que guarda su navegador)."""
+    body = {"name": name, "run": run}
+    if key is not None:
+        body["operator_key"] = key
+    response = client.post("/api/demo/session", json=body)
+    assert response.status_code == 204, response.text
+
+
 @pytest.fixture
 def demo(settings, harness):
-    """App con reloj en turno (domingo 8-nov-2026 10:14, Chile), huésped y recepción en sesiones distintas."""
+    """App con reloj en turno (domingo 8-nov-2026 10:14, Chile): huésped y recepción en la MISMA corrida y en
+    sesiones distintas. La demo lee el PMS de prueba del arnés (`demo_pms`), separado del operativo."""
     clock = FakeClock(local_epoch(2026, 11, 8, 10, 14))
     chatwoot = FakeChatwoot()
     app = create_app(
         replace(settings, demo_ai=False),
         chatwoot=chatwoot,
         pms=harness.pms,
+        demo_pms=harness.pms,
         clock=clock,
         run_workers=False,
         db=harness.db,
@@ -246,11 +264,13 @@ def demo(settings, harness):
     d.app, d.clock, d.db, d.chatwoot = app, clock, harness.db, chatwoot
     d.guest = TestClient(app)
     d.sofia = TestClient(app)
-    assert d.sofia.post("/api/demo/session", json={"name": "Sofía"}).status_code == 204
+    d.run = new_run(d.guest)
+    staff_login(d.sofia, "Sofía", d.run, key="operadora-sofia-0001")
 
-    def say(text, session=DEMO_SESSION, **extra):
+    def say(text, session=DEMO_SESSION, run=None, **extra):
         d.clock.advance(3)
-        response = d.guest.post("/api/demo/chat", json={"session_id": session, "message": text, **extra})
+        body = {"session_id": session, "message": text, "run": run or d.run, **extra}
+        response = d.guest.post("/api/demo/chat", json=body)
         assert response.status_code == 200, response.text
         return response.json()
 
@@ -258,5 +278,10 @@ def demo(settings, harness):
         params = {"selected": selected} if selected else {}
         return d.sofia.get("/api/panel/requests", params=params).json()
 
-    d.say, d.inbox = say, inbox
+    def staff(name, key=None, run=None):
+        client = TestClient(app)
+        staff_login(client, name, run or d.run, key=key)
+        return client
+
+    d.say, d.inbox, d.staff = say, inbox, staff
     return d

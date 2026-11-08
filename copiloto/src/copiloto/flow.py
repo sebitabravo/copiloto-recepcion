@@ -743,8 +743,8 @@ class Copiloto:
         except PmsUnavailable:
             record_event(self.db, ctx.conversation_id, "pms_read", self.clock(), {"ok": False, "latency_ms": 0})
             data["pms_down"] = True
-            return ("No pude consultar el sistema de reservas en este momento, así que no puedo asegurarte cupos: "
-                    "recepción los verificará y te responderá.")
+            return ("Disponibilidad por verificar: no pude consultar el sistema de reservas en este momento, así "
+                    "que no puedo asegurarte cupos. Recepción los verificará y te responderá.")
         latency_ms = int((time.monotonic() - started) * 1000)
         record_event(self.db, ctx.conversation_id, "pms_read", self.clock(), {"ok": True, "latency_ms": latency_ms})
         data.update(read_at=reading.read_at, read_label=read_label(reading.read_at), simulated=reading.simulated)

@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import json
+import secrets
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -269,12 +270,22 @@ def events_scope(source: str) -> tuple[str, list]:
     return f"(source = ? OR (source IS NULL AND {legacy}))", [source]
 
 
-def shift_summary(db: sqlite3.Connection, since: float, now: float, source: str = OPERATIONAL_SOURCE) -> dict:
+RUN_CONVERSATIONS = "conversation_id IN (SELECT conversation_id FROM demo_conversations WHERE run_id = ?)"
+
+
+def shift_summary(
+    db: sqlite3.Connection, since: float, now: float, source: str = OPERATIONAL_SOURCE, run_id: str | None = None
+) -> dict:
     """Lo que pasó en el turno: es el handover que la recepción hoy escribe a mano en un cuaderno.
 
-    Solo cuenta el mundo pedido (`source`): la demo nunca aparece en el resumen de la operación, ni al revés.
+    Solo cuenta el mundo pedido (`source`): la demo nunca aparece en el resumen de la operación, ni al revés; y
+    en la demo, solo la corrida de la sesión (sin corrida, nada).
     """
     scope, scope_params = events_scope(source)
+    owned, owned_params = "1 = 1", []
+    if source == DEMO_SOURCE:
+        owned, owned_params = RUN_CONVERSATIONS, [run_id]
+    scope, scope_params = f"{scope} AND {owned}", [*scope_params, *owned_params]
 
     def events(kind: str) -> int:
         row = db.execute(
@@ -290,13 +301,13 @@ def shift_summary(db: sqlite3.Connection, since: float, now: float, source: str 
     ).fetchone()["n"]
     pending = db.execute(
         "SELECT COUNT(*) AS n FROM conversation_state WHERE sla_started_at IS NOT NULL AND sla_stopped_at IS NULL "
-        "AND source = ?",
-        (source,),
+        f"AND source = ? AND {owned}",
+        (source, *owned_params),
     ).fetchone()["n"]
     active = db.execute(
         "SELECT COUNT(*) AS n FROM prebookings WHERE status = 'active' AND expires_at > ? AND conversation_id IN "
-        "(SELECT conversation_id FROM conversation_state WHERE source = ?)",
-        (now, source),
+        f"(SELECT conversation_id FROM conversation_state WHERE source = ?) AND {owned}",
+        (now, source, *owned_params),
     ).fetchone()["n"]
     return {
         "since": since,
@@ -319,7 +330,9 @@ SAFE_PAYLOAD_KEYS = (
 )
 
 
-def list_conversations(db: sqlite3.Connection, now: float, limit: int = 40, scope: str | None = None) -> list[dict]:
+def list_conversations(
+    db: sqlite3.Connection, now: float, limit: int = 40, scope: str | None = None, run_id: str | None = None
+) -> list[dict]:
     """Cola de recepción: primero lo que corre riesgo de vencerse, después lo reciente.
 
     Sin esto, la persona de recepción solo puede mirar una conversación si ya sabe su id.
@@ -328,7 +341,10 @@ def list_conversations(db: sqlite3.Connection, now: float, limit: int = 40, scop
     """
     where, params = "", []
     if scope == DEMO_SOURCE:
-        where, params = "WHERE source = ?", [DEMO_SOURCE]
+        # Solo las conversaciones de la corrida de la sesión; sin corrida, ninguna.
+        where = ("WHERE source = ? AND conversation_id IN "
+                 "(SELECT conversation_id FROM demo_conversations WHERE run_id = ?)")
+        params = [DEMO_SOURCE, run_id]
     elif scope:
         where, params = "WHERE source <> ?", [DEMO_SOURCE]
     rows = db.execute(
@@ -373,18 +389,51 @@ def demo_conversation_id(session_id: str) -> int:
     return -(int.from_bytes(digest[:6], "big") + 1)
 
 
-def ensure_demo_conversation(db: sqlite3.Connection, session_id: str, now: float) -> int:
-    """Una conversación de demo por sesión, marcada para que la operación real no la reciba."""
+class RunMismatch(Exception):
+    """La sesión del huésped ya pertenece a otra corrida: no se mezcla con esta."""
+
+
+def create_demo_run(db: sqlite3.Connection, now: float) -> str:
+    """Corrida nueva emitida por el servidor: id aleatorio, imposible de adivinar o de elegir desde el cliente."""
+    run_id = secrets.token_urlsafe(12)
+    db.execute("INSERT INTO demo_runs(run_id, created_at, last_seen) VALUES (?, ?, ?)", (run_id, now, now))
+    return run_id
+
+
+def demo_run_active(db: sqlite3.Connection, run_id: str, now: float, ttl_s: int) -> bool:
+    """True si la corrida existe y no venció; cada uso la mantiene viva."""
+    cursor = db.execute(
+        "UPDATE demo_runs SET last_seen = ? WHERE run_id = ? AND last_seen >= ?", (now, run_id, now - ttl_s)
+    )
+    return cursor.rowcount == 1
+
+
+def demo_session_run(db: sqlite3.Connection, session_id: str) -> str | None:
+    row = db.execute("SELECT run_id FROM demo_conversations WHERE session_id = ?", (session_id,)).fetchone()
+    return row["run_id"] if row is not None else None
+
+
+def ensure_demo_conversation(db: sqlite3.Connection, session_id: str, now: float, run_id: str | None = None) -> int:
+    """Una conversación de demo por sesión, marcada para que la operación real no la reciba.
+
+    Con `run_id`, la sesión queda unida a esa corrida; si ya era de otra, `RunMismatch` (nunca se cambia de
+    corrida: recepción de la otra corrida dejaría de ver su caso, o vería uno ajeno).
+    """
     row = db.execute(
-        "SELECT conversation_id FROM demo_conversations WHERE session_id = ?", (session_id,)
+        "SELECT conversation_id, run_id FROM demo_conversations WHERE session_id = ?", (session_id,)
     ).fetchone()
     if row is not None:
+        if run_id is not None and row["run_id"] not in (None, run_id):
+            raise RunMismatch(session_id)
+        if run_id is not None and row["run_id"] is None:
+            db.execute("UPDATE demo_conversations SET run_id = ? WHERE session_id = ?", (run_id, session_id))
         return row["conversation_id"]
     conversation_id = demo_conversation_id(session_id)
     with transaction(db):
         db.execute(
-            "INSERT OR IGNORE INTO demo_conversations(session_id, conversation_id, created_at) VALUES (?, ?, ?)",
-            (session_id, conversation_id, now),
+            "INSERT OR IGNORE INTO demo_conversations(session_id, conversation_id, created_at, run_id) "
+            "VALUES (?, ?, ?, ?)",
+            (session_id, conversation_id, now, run_id),
         )
         created = db.execute(
             "SELECT 1 FROM conversation_state WHERE conversation_id = ?", (conversation_id,)
@@ -558,6 +607,7 @@ def purge_demo(db: sqlite3.Connection, cutoff: float) -> int:
     ).fetchall()
     for row in rows:
         reset_demo_conversation(db, row["session_id"])
+    db.execute("DELETE FROM demo_runs WHERE last_seen < ?", (cutoff,))
     return len(rows)
 
 
@@ -615,10 +665,14 @@ def create_request(
         f"WHERE conversation_id = ? AND status IN ({','.join('?' for _ in OPEN_STATUSES)})",
         (now, now, conversation_id, *OPEN_STATUSES),
     )
+    # Una solicitud de la demo hereda la corrida de la sesión del huésped: solo esa recepción la ve.
+    run = db.execute(
+        "SELECT run_id FROM demo_conversations WHERE conversation_id = ?", (conversation_id,)
+    ).fetchone() if source == DEMO_SOURCE else None
     cursor = db.execute(
         """INSERT INTO requests(code, conversation_id, source, channel, reason, in_shift, intake_in_shift,
-               commercial_at, created_at, checkin, checkout, adults, children, room_code, updated_at)
-           VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               commercial_at, created_at, checkin, checkout, adults, children, room_code, updated_at, run_id)
+           VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             conversation_id,
             source,
@@ -634,6 +688,7 @@ def create_request(
             data.get("children"),
             data.get("room_code"),
             now,
+            run["run_id"] if run is not None else None,
         ),
     )
     request_id = cursor.lastrowid
@@ -730,14 +785,23 @@ def request_dict(row, now: float, target_s: int) -> dict:
     }
 
 
-def list_requests(db: sqlite3.Connection, now: float, target_s: int, scope: str, limit: int = 50) -> list[dict]:
+def list_requests(
+    db: sqlite3.Connection, now: float, target_s: int, scope: str, limit: int = 50, run_id: str | None = None,
+    operator: str | None = None,
+) -> list[dict]:
     """Bandeja ordenada EN SQL antes del límite: una pendiente antigua nunca queda fuera por cerradas nuevas.
 
     1) pendientes y 2) en atención: la que más espera primero (desde que entró la consulta comercial);
     3) respondidas (abiertas, esperan al huésped); 4) cerradas, la más reciente primero. Empate: el id menor
     (la que llegó antes), así el orden no cambia entre lecturas.
     """
-    where, params = ("source = ?", [DEMO_SOURCE]) if scope == DEMO_SOURCE else ("source <> ?", [DEMO_SOURCE])
+    if scope == DEMO_SOURCE:
+        # La demo ve solo su corrida; una sesión sin corrida no ve ningún caso.
+        if run_id is None:
+            return []
+        where, params = "source = ? AND run_id = ?", [DEMO_SOURCE, run_id]
+    else:
+        where, params = "source <> ?", [DEMO_SOURCE]
     rows = db.execute(
         f"""SELECT r.*, (SELECT body FROM demo_messages m WHERE m.conversation_id = r.conversation_id
                          AND m.role <> 'note' ORDER BY m.id DESC LIMIT 1) AS preview
@@ -754,11 +818,24 @@ def list_requests(db: sqlite3.Connection, now: float, target_s: int, scope: str,
     for row in rows:
         item = request_dict(row, now, target_s)
         item["preview"] = row["preview"]
+        item["mine"] = operator is not None and owned_by(row, None, operator)
         items.append(item)
     return items
 
 
-def take_request(db: sqlite3.Connection, request_id: int, assignee: str, now: float) -> tuple[sqlite3.Row, bool]:
+def owned_by(row, name: str | None, operator: str | None) -> bool:
+    """¿La solicitud es de esta persona? Por id de operador (estable); el nombre es solo una etiqueta.
+
+    Dos «Sofía» son dos operadores distintos. Las filas sin id (anteriores) se comparan por nombre.
+    """
+    if row["assignee_id"]:
+        return operator is not None and row["assignee_id"] == operator
+    return bool(row["assignee"]) and name is not None and row["assignee"] == name
+
+
+def take_request(
+    db: sqlite3.Connection, request_id: int, assignee: str, now: float, assignee_id: str | None = None
+) -> tuple[sqlite3.Row, bool]:
     """Asigna responsable y pasa de «Pendiente de recepción» a «En atención». Idempotente para la misma persona.
 
     Devuelve (fila, cambió). Si otra persona ya la tomó, `RequestConflict`: no se pisa al responsable.
@@ -769,14 +846,14 @@ def take_request(db: sqlite3.Connection, request_id: int, assignee: str, now: fl
             raise LookupError(request_id)
         if row["status"] == "cerrada":
             raise RequestConflict("La solicitud está cerrada")
-        if row["assignee"] and row["assignee"] != assignee:
+        if row["assignee"] and not owned_by(row, assignee, assignee_id):
             raise RequestConflict(f"Ya la tomó {row['assignee']}")
-        if row["assignee"] == assignee:
+        if row["assignee"]:
             return row, False
         status = "en_atencion" if row["status"] == "pendiente" else row["status"]
         db.execute(
-            "UPDATE requests SET assignee = ?, taken_at = ?, status = ?, updated_at = ? WHERE id = ?",
-            (assignee, now, status, now, request_id),
+            "UPDATE requests SET assignee = ?, assignee_id = ?, taken_at = ?, status = ?, updated_at = ? WHERE id = ?",
+            (assignee, assignee_id, now, status, now, request_id),
         )
         _record(db, row["conversation_id"], "request_taken", now, {"request_id": request_id, "assignee": assignee})
         return get_request_row(db, request_id), True
@@ -784,7 +861,7 @@ def take_request(db: sqlite3.Connection, request_id: int, assignee: str, now: fl
 
 def staff_reply(
     db: sqlite3.Connection, request_id: int, author: str, body: str, kind: str, now: float,
-    client_id: str | None = None,
+    client_id: str | None = None, author_id: str | None = None,
 ) -> tuple[sqlite3.Row, dict]:
     """Respuesta escrita por recepción en el mismo hilo del huésped.
 
@@ -801,7 +878,7 @@ def staff_reply(
             raise LookupError(request_id)
         if row["status"] == "cerrada":
             raise RequestConflict("La solicitud está cerrada")
-        if row["assignee"] != author:
+        if not owned_by(row, author, author_id):
             raise RequestConflict("Toma la solicitud antes de responder" if not row["assignee"]
                                   else f"La atiende {row['assignee']}")
         message = insert_demo_message(db, row["conversation_id"], "staff", body, now, author=author, kind=kind,

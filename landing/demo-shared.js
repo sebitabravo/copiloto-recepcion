@@ -20,6 +20,9 @@
     } catch (_) { return String(raw).replace(/\/+$/, ''); }
   }
   const configured = typeof config.copilotoUrl === 'string' && config.copilotoUrl !== '';
+  // Corrida de la demo: la emite el servidor y la página la guarda en ?corrida=. Une la vista del huésped con la
+  // de recepción; recepción la manda en una cabecera para que una cookie de otra corrida no abra esta.
+  let run = null;
   const base = configured ? resolveUrl(config.copilotoUrl) : (config.staticDemo ? '' : resolveUrl('http://localhost:8100'));
 
   class ApiError extends Error {
@@ -41,6 +44,9 @@
 
   function friendly(status, data) {
     if (status === 0) return 'No pudimos conectar con el servidor de la demo. Revisa la conexión y reintenta.';
+    if (status === 404 && data && data.detail === 'corrida_desconocida') {
+      return 'Esta corrida de la demo venció. Recarga la página para empezar una nueva.';
+    }
     if (status === 401) return 'La sesión de recepción venció. Vuelve a entrar a la bandeja.';
     if (status === 409) return (data && data.detail) || 'La solicitud cambió mientras tanto. Ya se actualizó.';
     if (status === 429) return 'Se alcanzó un límite temporal de la demo. Espera unos segundos y reintenta.';
@@ -54,10 +60,13 @@
     const options = {method, cache: 'no-store', signal: controller.signal,
       // El huésped nunca manda la cookie de recepción: cada rol viaja con su propia credencial.
       credentials: staff ? 'include' : 'omit'};
+    const headers = {};
     if (body !== undefined) {
-      options.headers = {'Content-Type': 'application/json'};
+      headers['Content-Type'] = 'application/json';
       options.body = JSON.stringify(body);
     }
+    if (staff && run) headers['X-Demo-Run'] = run;
+    if (Object.keys(headers).length) options.headers = headers;
     let response;
     try {
       response = await fetch(base + path, options);
@@ -93,6 +102,18 @@
     get(area, key) { try { return window[area].getItem(key); } catch (_) { return null; } },
     set(area, key, value) { try { window[area].setItem(key, value); } catch (_) { /* sigue en memoria */ } }
   };
+
+  // Llave del operador de recepción en ESTE navegador: el servidor deriva de ella (y de la corrida) un id estable.
+  // El nombre es solo una etiqueta: dos «Sofía» en navegadores distintos son dos operadores.
+  const OPERATOR_KEY = 'copiloto-demo-operador';
+  let memoryKey = null;
+  function operatorKey() {
+    const saved = store.get('localStorage', OPERATOR_KEY);
+    if (saved && /^[A-Za-z0-9-]{16,64}$/.test(saved)) return saved;
+    memoryKey = memoryKey || newId();
+    store.set('localStorage', OPERATOR_KEY, memoryKey);
+    return memoryKey;
+  }
 
   const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   const timeFormat = new Intl.DateTimeFormat('es-CL', {hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: TZ});
@@ -219,6 +240,8 @@
 
   window.DemoShared = {
     api, ApiError, backoff, newId, store, time, dateTime, stayRange, guests, summary, clock, tone, liveElapsed,
-    waitTone, splitParagraphs, el, messageNodes, base
+    waitTone, splitParagraphs, el, messageNodes, base, operatorKey,
+    setRun(value) { run = value || null; },
+    get run() { return run; }
   };
 })();

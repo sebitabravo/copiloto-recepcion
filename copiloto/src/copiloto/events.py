@@ -151,6 +151,14 @@ CREATE TABLE IF NOT EXISTS demo_conversations (
     created_at REAL NOT NULL
 );
 
+-- Corrida de la demo: la emite el servidor y une la vista del huésped con la de recepción. Cada corrida ve
+-- solo sus casos; dos presentaciones simultáneas (o dos «Sofía») no se cruzan.
+CREATE TABLE IF NOT EXISTS demo_runs (
+    run_id TEXT PRIMARY KEY,
+    created_at REAL NOT NULL,
+    last_seen REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS demo_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     conversation_id INTEGER NOT NULL,
@@ -204,6 +212,11 @@ MIGRATIONS = (
     ("requests", "intake_in_shift", "INTEGER"),
     # Origen del evento: 'demo' u operación ('chatwoot'). NULL = evento histórico, anterior a la columna.
     ("events", "source", "TEXT"),
+    # Corrida de la demo a la que pertenece la sesión del huésped y su solicitud, y el operador (id estable,
+    # el nombre es solo una etiqueta) que la tomó.
+    ("demo_conversations", "run_id", "TEXT"),
+    ("requests", "run_id", "TEXT"),
+    ("requests", "assignee_id", "TEXT"),
 )
 
 DEMO = "demo"

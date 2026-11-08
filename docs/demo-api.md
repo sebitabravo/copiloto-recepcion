@@ -10,6 +10,31 @@ incluye una lectura preliminar del PMS con su hora. El motor escribe por `DemoCh
 transcripción aislada de la demo: hay una sola fuente de verdad para el hilo y la solicitud.
 Con `DEMO_AI=1` y un modelo configurado, el turno lo responde el asistente con IA (sección final).
 
+## Corridas (aislamiento entre presentaciones)
+
+Cada presentación es una **corrida** que emite el servidor. La página `/demo` la pide al abrir y la guarda en la
+URL (`?corrida=`): una recarga y los enlaces «Abrir … en otra ventana» siguen en la misma corrida. El huésped y la
+recepción de una corrida comparten el caso; **otra corrida no lo ve** (lista, detalle, tomar, responder, cerrar,
+inventario, resumen del turno ni métricas: 404 o vacío).
+
+| Método y ruta | Qué hace |
+|---|---|
+| `POST /api/demo/run` | 201 `{"run": "<16 caracteres>", "ttl_s": 86400}`. Id aleatorio: el cliente no lo elige. Tope global por hora (429 con `Retry-After`). |
+| `GET /api/demo/run/{run}` | 200 si sigue viva (cada uso la renueva); 404 `corrida_desconocida` si venció o es inventada. |
+
+- El huésped manda `run` en `POST /api/demo/chat` y en `GET /api/demo/conversation?run=`. Una sesión de huésped
+  queda unida a su corrida: con otra corrida, el chat responde 409 y la lectura responde como sesión desconocida.
+  Sin `run` (clientes antiguos o pruebas) el caso no llega a ninguna bandeja.
+- Recepción entra con `POST /api/demo/session` `{"name", "run", "operator_key"}`. `operator_key` es una llave
+  aleatoria que guarda su navegador; el servidor deriva de ella y de la corrida un **id de operador estable** y lo
+  firma en la cookie. El nombre es solo una etiqueta: dos «Sofía» son dos operadores, y solo quien tomó el caso
+  responde o cierra. Sin `run`, la sesión no ve ningún caso.
+- Cada lectura de recepción manda la cabecera `X-Demo-Run`: si la cookie es de otra corrida (otra pestaña), 401 y
+  la bandeja vuelve a entrar con la suya.
+- Inventario de prueba: la demo lee `DEMO_PMS_URL` o, si el PMS operativo es el simulado de este repositorio, otra
+  instancia apuntando a él. Con cualquier otra configuración (p. ej. un PMS real) la demo **no** lee cupos: dice
+  «Disponibilidad por verificar» y la solicitud entra igual. El token de personal solo viaja al PMS simulado.
+
 ## Huésped
 
 ### `POST /api/demo/chat`
@@ -64,9 +89,9 @@ Agrega `engine` (`guided` | `ai`), `hotel` (`name`, `channel_label`), `menu` (at
 
 ## Recepción (sesión firmada)
 
-`POST /api/demo/session` con `{"name": "Sofía"}` (opcional; letras, hasta 30) abre la sesión de demostración en
-una cookie HttpOnly. Esa sesión **solo** ve y escribe solicitudes de la demo; el token del personal real
-(`X-Panel-Token`) solo ve la operación y no puede responder desde aquí (se responde en Chatwoot).
+`POST /api/demo/session` con `{"name": "Sofía", "run": "<corrida>", "operator_key": "<llave>"}` abre la sesión de
+demostración en una cookie HttpOnly. Esa sesión **solo** ve y escribe solicitudes de **su corrida**; el token del
+personal real (`X-Panel-Token`) solo ve la operación y no puede responder desde aquí (se responde en Chatwoot).
 
 | Método y ruta | Qué hace |
 |---|---|
@@ -183,8 +208,8 @@ No elimina reservas del PMS ni conversaciones de Chatwoot. El navegador inicia d
 
 ## `POST /api/demo/session`
 
-Crea la sesión firmada del panel sin credenciales en el navegador: es lo que usa la pestaña Recepción de la
-consola con el **Modo demo** encendido. El cuerpo se ignora (tope de 4 KB).
+Crea la sesión firmada del panel sin credenciales en el navegador: es lo que usa la bandeja de `/demo`. Cuerpo
+opcional (tope de 4 KB): `name`, `run` (corrida viva; 404 si no) y `operator_key` (`[A-Za-z0-9-]{16,64}`).
 
 Respuesta 204, sin cuerpo: la sesión viaja solo en una cookie `HttpOnly` (`SameSite=Lax`, `Secure` con
 HTTPS). Nunca devuelve el token ni ningún secreto.
@@ -193,12 +218,14 @@ HTTPS). Nunca devuelve el token ni ningún secreto.
 |---|---|
 | 204 | Sesión demo creada (`DEMO_ENABLED=1`, el valor por defecto) |
 | 403 | Demo apagada (`DEMO_ENABLED=0`); no deja cookie |
+| 404 | `run` vencida o inventada |
 | 413 | Cuerpo de más de 4 KB |
+| 422 | Nombre, `run` u `operator_key` con formato inválido |
 
 ## `GET /api/demo/session`
 
 ```json
-{"demo": true, "name": "Recepción (demo)"}
+{"demo": true, "name": "Recepción (demo)", "run": "<corrida o null>"}
 ```
 
 La página pregunta si el modo demo está disponible y quién es la sesión, sin secretos: `demo` refleja
