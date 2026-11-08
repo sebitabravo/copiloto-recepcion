@@ -4,7 +4,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
 COMPOSE_FULL = $(COMPOSE) --profile full
 
 .DEFAULT_GOAL := help
-.PHONY: help up up-full down reset env ps logs test lint bridge seed health e2e creds smoke backup ai-smoke demo model ui-test piloto beds24-check wa-up wa-down wa-qr wa-e2e config static-demo demo-local
+.PHONY: help up up-full down reset env ps logs test lint bridge seed health e2e creds smoke backup ai-smoke demo model ui-test piloto beds24-check wa-up wa-down wa-qr wa-e2e config static-demo demo-local demo-local-check
 
 help: ## Muestra esta ayuda
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z0-9_-]+:.*## / {printf "  \033[1m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -36,9 +36,13 @@ up-full: env ## Levanta todo el stack, incluido Chatwoot (primer arranque: vario
 	$(COMPOSE_FULL) restart landing
 	@echo "Listo. Landing: http://localhost:8080 · Recepción: http://localhost:3000 · Métricas: http://localhost:8100/metricas"
 
-# Sin Docker: copiloto con uv y la portada con el servidor HTTP de Python. LIMPIO=1 parte de cero.
-demo-local: ## Demo sin Docker: copiloto (:8100) y portada (:8080); LIMPIO=1 limpia
-	./scripts/demo-local.sh $(if $(LIMPIO),--limpio,)
+# Arranque oficial de la evaluación: PMS simulado, copiloto y portada sin Docker, con uv y Python.
+# Conserva los datos por defecto; solo LIMPIO=1 (o si/true/yes) los borra. LIMPIO=0 los conserva.
+demo-local: ## Arranque oficial: http://localhost:8080/demo sin Docker; LIMPIO=1 borra los datos
+	./scripts/demo-local.sh $(if $(filter 1 si sí true yes,$(LIMPIO)),--limpio,)
+
+demo-local-check: ## Prueba el arranque oficial en una copia limpia (LIMPIO, puertos, caídas, Ctrl+C)
+	python3 scripts/check_demo_local.py
 
 static-demo: ## Construye dist/ estático para portfolio (sin backend; Vercel/Netlify)
 	./scripts/build-static-demo.sh

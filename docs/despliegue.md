@@ -2,12 +2,20 @@
 
 ## Local (demo)
 
+El arranque oficial de la evaluación no usa Docker:
+
 ```bash
-make up && make creds
+make demo-local          # = ./scripts/demo-local.sh · http://localhost:8080/demo
 ```
 
-Sin `make` (Windows con Git Bash), `./scripts/demo.sh` expone los mismos comandos:
-`./scripts/demo.sh up && ./scripts/demo.sh creds`.
+Con Docker, la misma demo (`make up`) o el stack completo con Chatwoot:
+
+```bash
+make up-full && make creds
+```
+
+Sin `make` (Windows con Git Bash), `./scripts/demo.sh` expone los mismos comandos con el mismo nombre:
+`./scripts/demo.sh local`, `./scripts/demo.sh up`, `./scripts/demo.sh up-full && ./scripts/demo.sh creds`.
 
 Requiere Docker con 4 GB o más. Si Chatwoot no arranca por falta de memoria con OrbStack, sube el límite:
 `orb config set memory_mib 8192` (reinicia la VM de Docker, así que detiene otros contenedores).
@@ -29,7 +37,12 @@ Chatwoot, Sidekiq, Postgres y Redis están detrás del perfil `full` (`docker co
 que un `docker compose up -d` normal arranca solo la demo. `seed-chatwoot.sh`, `smoke-docker.sh`,
 `backup.sh` y `wa-e2e.sh` declaran ese perfil porque operan sobre Chatwoot. `wait-healthy.sh` y
 `preflight.sh` esperan solo los servicios que están corriendo, así que funcionan en ambos modos.
-`scripts/demo.sh up` sigue levantando el stack completo.
+`./scripts/demo.sh up` es el perfil liviano y `./scripts/demo.sh up-full` el completo, igual que en el Makefile.
+
+En el perfil liviano el copiloto arranca con `CHATWOOT_ENABLED` deducido del token: sin `CHATWOOT_BOT_TOKEN`
+(solo existe tras sembrar Chatwoot) la integración queda apagada, el token no se exige y `/webhooks/chatwoot`
+responde 503 sin leer el cuerpo. Con la integración encendida, el token y `WEBHOOK_SECRET` son obligatorios y
+el webhook exige firma válida (401 sin ella).
 
 Sin Chatwoot, el botón «Escribir a recepción» de la landing muestra su aviso de canal no disponible en vez
 de abrir el widget: el canal real es opcional para la demo.

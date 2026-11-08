@@ -39,6 +39,9 @@ class Settings:
     chatwoot_public_url: str = "http://localhost:3000"
     chatwoot_account_id: int = 1
     chatwoot_bot_token: str = ""
+    # Integración con Chatwoot (bandeja real y webhook). from_env la deduce del token si CHATWOOT_ENABLED no
+    # está definido: el perfil liviano (sin Chatwoot sembrado) arranca sin token y con el webhook cerrado.
+    chatwoot_enabled: bool = True
     chatwoot_team_id: int | None = None
     env: str = "development"
     webhook_secret: str = ""
@@ -117,6 +120,11 @@ class Settings:
             chatwoot_public_url=env.get("CHATWOOT_PUBLIC_URL", cls.chatwoot_public_url),
             chatwoot_account_id=int(env.get("CHATWOOT_ACCOUNT_ID", "1")),
             chatwoot_bot_token=env.get("CHATWOOT_BOT_TOKEN", ""),
+            chatwoot_enabled=(
+                env["CHATWOOT_ENABLED"].strip().lower() in _TRUTHY
+                if (env.get("CHATWOOT_ENABLED") or "").strip()
+                else bool((env.get("CHATWOOT_BOT_TOKEN") or "").strip())
+            ),
             chatwoot_team_id=int(team) if team else None,
             env=env.get("COPILOTO_ENV", "development"),
             webhook_secret=env.get("WEBHOOK_SECRET", ""),
@@ -164,12 +172,13 @@ class Settings:
     def validate_runtime(self) -> None:
         """Falla al arrancar si falta un secreto: sin esto cada webhook respondería 401 sin explicación."""
         secrets = {
-            "WEBHOOK_SECRET": self.webhook_secret,
             "PMS_EVENTS_SECRET": self.pms_events_secret,
             "PANEL_TOKEN": self.panel_token,
             "PSEUDONYM_SALT": self.pseudonym_salt,
-            "CHATWOOT_BOT_TOKEN": self.chatwoot_bot_token,
         }
+        if self.chatwoot_enabled:
+            # Solo con la bandeja real: el token llega de .env.runtime al sembrar Chatwoot (make up-full).
+            secrets.update(WEBHOOK_SECRET=self.webhook_secret, CHATWOOT_BOT_TOKEN=self.chatwoot_bot_token)
         weak = sorted(name for name, value in secrets.items() if len(value) < 16)
         if self.shift_override not in ("", "open", "closed"):
             raise ValueError("SHIFT_OVERRIDE debe ser open, closed o vacío")

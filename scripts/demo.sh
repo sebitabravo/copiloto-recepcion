@@ -1,23 +1,29 @@
 #!/usr/bin/env bash
 # Atajo sin `make` (Windows/Git Bash). Mismos comandos que el Makefile, sin depender de make.
-# Uso: ./scripts/demo.sh {up|seed|status|creds|test|e2e|smoke|down|reset}
+# Uso: ./scripts/demo.sh {local|up|up-full|seed|status|creds|test|e2e|smoke|preflight|static-demo|ia|ia-off|down|reset}
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 COMPOSE=(docker compose -f infra/docker-compose.yml --project-directory .)
+# Chatwoot, Postgres, Redis y Sidekiq solo existen con este perfil (igual que COMPOSE_FULL en el Makefile).
+COMPOSE_FULL=("${COMPOSE[@]}" --profile full)
 cmd="${1:-help}"
 
 usage() {
   cat <<'TXT'
 Uso: ./scripts/demo.sh <comando>
 
-  up      Levanta el stack completo (primer arranque: varios minutos)
+  local [--limpio]  Arranque oficial sin Docker (= make demo-local; --limpio = LIMPIO=1)
+  up      Demo liviana en Docker: portada, copiloto y PMS (= make up)
+  up-full Stack completo con Chatwoot (= make up-full; primer arranque: varios minutos)
   seed    Vuelve a sembrar Chatwoot (idempotente)
   status  Estado de los contenedores
   creds   Usuarios demo y token del PMS
   test    Tests de copiloto, pms_mock, pms_bridge y wa_bridge
   e2e     4 casos reales contra el stack levantado
   smoke   Construye las imágenes y comprueba que arrancan
+  preflight    Chequeo previo con IA sobre el stack Docker (= make demo)
+  static-demo  dist/ estático para portfolio (= make static-demo)
   ia      Levanta el modelo local en Docker y reconecta el copiloto con IA
   ia-off  Apaga el modelo y deja el copiloto en modo guiado
   down    Detiene el stack (conserva los datos)
@@ -38,23 +44,32 @@ confirm() {
 }
 
 case "$cmd" in
+  local) shift; exec ./scripts/demo-local.sh "$@" ;;
   up)
     ./scripts/bootstrap.sh
-    "${COMPOSE[@]}" build
-    "${COMPOSE[@]}" up -d postgres redis
-    "${COMPOSE[@]}" run --rm -T chatwoot bundle exec rails db:chatwoot_prepare
-    "${COMPOSE[@]}" up -d chatwoot sidekiq pms-mock landing
+    "${COMPOSE[@]}" build copiloto pms-mock
+    "${COMPOSE[@]}" up -d pms-mock landing copiloto
+    ./scripts/wait-healthy.sh
+    "${COMPOSE[@]}" restart landing
+    echo "Demo: http://localhost:8080/demo · API: http://localhost:8100 · PMS: http://localhost:8200"
+    ;;
+  up-full)
+    ./scripts/bootstrap.sh
+    "${COMPOSE_FULL[@]}" build
+    "${COMPOSE_FULL[@]}" up -d postgres redis
+    "${COMPOSE_FULL[@]}" run --rm -T chatwoot bundle exec rails db:chatwoot_prepare
+    "${COMPOSE_FULL[@]}" up -d chatwoot sidekiq pms-mock landing
     ./scripts/wait-healthy.sh
     ./scripts/seed-chatwoot.sh
-    "${COMPOSE[@]}" up -d --force-recreate copiloto
+    "${COMPOSE_FULL[@]}" up -d --force-recreate copiloto
     ./scripts/wait-healthy.sh
     # nginx lee el bind-mount de infra/landing/nginx.conf al arrancar: un reinicio evita que /demo
     # dé 404 en un stack ya levantado tras un cambio de configuración.
-    "${COMPOSE[@]}" restart landing
+    "${COMPOSE_FULL[@]}" restart landing
     echo "Listo. Portada: http://localhost:8080 · Demo: http://localhost:8080/demo · Recepción: http://localhost:3000"
     ;;
   seed) ./scripts/seed-chatwoot.sh ;;
-  status) "${COMPOSE[@]}" ps ;;
+  status) "${COMPOSE_FULL[@]}" ps ;;
   creds) ./scripts/show-credentials.sh ;;
   test)
     for service in copiloto pms_mock pms_bridge wa_bridge; do
@@ -64,6 +79,8 @@ case "$cmd" in
     ;;
   e2e) uv run --with httpx --with tzdata python scripts/e2e.py ;;
   smoke) ./scripts/smoke-docker.sh ;;
+  preflight | demo) ./scripts/preflight.sh ;;
+  static-demo) ./scripts/build-static-demo.sh ;;
   ia)
     compose_ia=(docker compose -f infra/docker-compose.yml -f infra/docker-compose.ia.yml)
     # La detección no oculta sus errores: si Docker falla, el mensaje lo dice en vez de culpar a la GPU.
@@ -107,11 +124,11 @@ case "$cmd" in
     ;;
   down)
     confirm "Esto detiene el stack (los datos se conservan). ¿Seguir?"
-    "${COMPOSE[@]}" down
+    "${COMPOSE_FULL[@]}" down
     ;;
   reset)
     confirm "ATENCIÓN: borra TODOS los volúmenes y los archivos generados. ¿Seguir?"
-    "${COMPOSE[@]}" down -v
+    "${COMPOSE_FULL[@]}" down -v
     rm -f .env.runtime landing/config.js
     ;;
   help|--help|-h|*) usage ;;
