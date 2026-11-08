@@ -16,3 +16,6 @@ odd/tasks/demo-security-workflow.md
 
 # Build estático para portfolio (make static-demo)
 dist/
+
+# Demo local sin Docker (scripts/demo-local.sh)
+.demo-local/

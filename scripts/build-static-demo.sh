@@ -18,9 +18,10 @@ mkdir -p "$OUT"
 find "$OUT" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 
 # Solo lo que el sitio necesita: HTML, CSS, JS, tipografías e imágenes. Nada de pruebas ni configs.
+# config.js local (con hosts y tokens) nunca viaja: el build escribe uno propio más abajo.
 cp "$ROOT"/landing/*.html "$OUT"/
 cp "$ROOT"/landing/*.css "$OUT"/
-cp "$ROOT"/landing/*.js "$OUT"/
+find "$ROOT/landing" -maxdepth 1 -name '*.js' ! -name 'config.js' -exec cp {} "$OUT"/ \;
 mkdir -p "$OUT/fonts"
 cp "$ROOT"/landing/fonts/* "$OUT/fonts/" 2>/dev/null || true
 for asset in favicon.svg og-image.png robots.txt sitemap.xml; do
@@ -47,7 +48,7 @@ for page in out.glob('*'):
     '};\n', encoding='utf-8')
 PY
 
-# static-demo.js tiene que ejecutarse antes que demo.js para interceptar fetch.
+# static-demo.js tiene que ejecutarse antes que la interfaz (demo-shared.js) para interceptar fetch.
 python - "$OUT" <<'PY'
 import pathlib, sys
 out = pathlib.Path(sys.argv[1])
