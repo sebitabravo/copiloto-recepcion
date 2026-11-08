@@ -6,6 +6,7 @@ el reinicio borra solo lo de demo y la migración deja las bases existentes como
 """
 
 import sqlite3
+from dataclasses import replace
 
 from conftest import FakeChatwoot
 from copiloto.app import create_app
@@ -18,8 +19,9 @@ OPERATIONAL_ID = 7
 
 
 def client_for(settings, harness):
+    # El aislamiento se prueba con el motor por defecto de la demo (flujo guiado, sin modelo).
     app = create_app(
-        settings,
+        replace(settings, demo_ai=False),
         chatwoot=FakeChatwoot(),
         pms=harness.pms,
         clock=harness.clock,
@@ -33,6 +35,16 @@ def demo_client(settings, harness):
     client = client_for(settings, harness)
     assert client.post("/api/demo/session").status_code == 204
     return client
+
+
+def demo_request(demo, session=SESSION):
+    """El huésped pide recepción: queda una solicitud en la bandeja de la demo. Devuelve (conversación, id)."""
+    conversation_id = demo.post(
+        "/api/demo/chat", json={"session_id": session, "message": "Hablar con recepción"}
+    ).json()["conversation_id"]
+    request_id = next(item["id"] for item in demo.get("/api/panel/requests").json()["requests"]
+                      if item["conversation_id"] == conversation_id)
+    return conversation_id, request_id
 
 
 def seed_operational(harness):
@@ -53,34 +65,37 @@ def operational_row(harness):
 
 def test_staff_identity_cannot_read_or_note_demo_conversations(ai_settings, harness):
     demo = demo_client(ai_settings, harness)
-    conversation_id = demo.post(
-        "/api/demo/chat", json={"session_id": SESSION, "message": "¿Tienen piscina?"}
-    ).json()["conversation_id"]
+    conversation_id, request_id = demo_request(demo)
 
     staff = client_for(ai_settings, harness)
     headers = {"X-Panel-Token": ai_settings.panel_token}
     assert staff.get(f"/api/panel/{conversation_id}", headers=headers).status_code == 404
     assert staff.post(f"/api/panel/{conversation_id}/note", json={"body": "nota"}, headers=headers).status_code == 404
-    assert staff.post(f"/api/panel/{conversation_id}/reply", json={"body": "hola"}, headers=headers).status_code == 403
+    assert staff.get("/api/panel/requests", headers=headers).json()["requests"] == []
+    for action in ("take", "reply", "close", "inventory"):
+        response = staff.post(f"/api/panel/requests/{request_id}/{action}", json={"body": "hola"}, headers=headers)
+        assert response.status_code == 404, action
 
 
 def test_reply_validates_body_and_requires_identity(ai_settings, harness):
     demo = demo_client(ai_settings, harness)
-    conversation_id = demo.post(
-        "/api/demo/chat", json={"session_id": SESSION, "message": "Hola"}
-    ).json()["conversation_id"]
+    _, request_id = demo_request(demo)
+    reply = f"/api/panel/requests/{request_id}/reply"
+    untaken = demo.post(reply, json={"body": "hola"})
+    assert untaken.status_code == 409 and untaken.json()["detail"] == "Toma la solicitud antes de responder"
+    assert demo.post(f"/api/panel/requests/{request_id}/take").status_code == 200
 
     detail = "La respuesta debe tener entre 1 y 1000 caracteres"
     for body in ("", "   ", "x" * 1001):
-        response = demo.post(f"/api/panel/{conversation_id}/reply", json={"body": body})
+        response = demo.post(reply, json={"body": body})
         assert response.status_code == 400 and response.json()["detail"] == detail, repr(body[:10])
-    assert demo.post(f"/api/panel/{conversation_id}/reply", json={"body": "x" * 1000}).status_code == 200
+    assert demo.post(reply, json={"body": "x", "kind": "otro"}).status_code == 422
+    assert demo.post(reply, json={"body": "x", "client_id": "corto"}).status_code == 422
+    assert demo.post(reply, json={"body": "x" * 1000}).status_code == 200
 
     anonymous = client_for(ai_settings, harness)
-    assert anonymous.post(f"/api/panel/{conversation_id}/reply", json={"body": "hola"}).status_code == 401
-    bad = demo.post(
-        f"/api/panel/{conversation_id}/reply", content="no-json", headers={"content-type": "application/json"}
-    )
+    assert anonymous.post(reply, json={"body": "hola"}).status_code == 401
+    bad = demo.post(reply, content="no-json", headers={"content-type": "application/json"})
     assert bad.status_code == 400 and bad.json()["detail"] == "JSON inválido"
 
 
@@ -89,12 +104,14 @@ def test_unknown_session_polls_nothing_and_never_another_conversation(ai_setting
     first = demo.post("/api/demo/chat", json={"session_id": SESSION, "message": "Hola"}).json()["conversation_id"]
 
     unseen = demo.get("/api/demo/conversation", params={"session_id": "sesion-inexistente-01"})
-    assert unseen.json() == {"conversation_id": None, "step": None, "messages": []}
+    assert unseen.json() == {"conversation_id": None, "step": None, "messages": [], "request": None,
+                             "handled_by": "asistente", "quick_replies": []}
 
     demo.post("/api/demo/chat", json={"session_id": "demo-guardas-9876543210", "message": "Otra"})
     seen = demo.get("/api/demo/conversation", params={"session_id": SESSION}).json()
     assert seen["conversation_id"] == first
     assert all(message["role"] in {"guest", "assistant", "staff"} for message in seen["messages"])
+    assert seen["messages"][0]["body"] == "Hola", "nunca aparece el mensaje de otra sesión"
 
 
 def test_reset_clears_only_the_demo_space(ai_settings, harness):
@@ -124,10 +141,18 @@ def test_reset_clears_only_the_demo_space(ai_settings, harness):
 
 def test_rejected_write_leaves_the_operational_row_untouched(ai_settings, harness):
     seed_operational(harness)
+    with store.transaction(harness.db):
+        real = store.create_request(
+            harness.db, OPERATIONAL_ID, prefix="SOL", source=store.OPERATIONAL_SOURCE, channel="Channel::WebWidget",
+            reason="commercial", in_shift=True, commercial_at=harness.clock(), now=harness.clock(), data={},
+        )
     before = operational_row(harness)
     demo = demo_client(ai_settings, harness)
-    assert demo.post(f"/api/panel/{OPERATIONAL_ID}/reply", json={"body": "intento"}).status_code == 404
+    for action in ("take", "reply", "close"):
+        assert demo.post(f"/api/panel/requests/{real['id']}/{action}", json={"body": "x"}).status_code == 404
+    assert demo.get(f"/api/panel/requests/{real['id']}").status_code == 404
     assert operational_row(harness) == before
+    assert dict(store.get_request_row(harness.db, real["id"])) == dict(real)
     assert demo.get(f"/api/panel/{OPERATIONAL_ID}").status_code == 404
 
 
@@ -182,7 +207,7 @@ def test_migration_marks_existing_rows_as_operational(tmp_path):
 def test_demo_reply_never_reaches_chatwoot_or_the_pms(ai_settings, harness):
     chatwoot, pms = FakeChatwoot(), harness.pms
     app = create_app(
-        ai_settings,
+        replace(ai_settings, demo_ai=False),
         chatwoot=chatwoot,
         pms=pms,
         clock=harness.clock,
@@ -191,10 +216,10 @@ def test_demo_reply_never_reaches_chatwoot_or_the_pms(ai_settings, harness):
     )
     client = TestClient(app)
     assert client.post("/api/demo/session").status_code == 204
-    conversation_id = client.post(
-        "/api/demo/chat", json={"session_id": SESSION, "message": "Hola"}
-    ).json()["conversation_id"]
-
-    assert client.post(f"/api/panel/{conversation_id}/reply", json={"body": "Te espero"}).status_code == 200
-    assert chatwoot.messages == [] and chatwoot.labels == {} and chatwoot.assigned == []
-    assert pms.bookings == []
+    _, request_id = demo_request(client)
+    assert client.post(f"/api/panel/requests/{request_id}/take").status_code == 200
+    assert client.post(f"/api/panel/requests/{request_id}/reply", json={"body": "Te espero"}).status_code == 200
+    assert client.post(f"/api/panel/requests/{request_id}/inventory", json={}).status_code == 409, "sin fechas"
+    # Todo el recorrido (bot guiado, traspaso, respuesta) quedó en el espacio de la demo.
+    assert chatwoot.messages == [] and chatwoot.labels == {} and chatwoot.assigned == [] and chatwoot.statuses == {}
+    assert pms.bookings == [] and pms.calls == 0

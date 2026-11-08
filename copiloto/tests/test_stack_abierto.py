@@ -19,7 +19,12 @@ def test_the_default_model_is_local():
 
 
 def test_the_landing_does_not_load_anything_from_a_cdn():
-    for name in ("index.html", "demo.css", "demo.js"):
-        text = (LANDING / name).read_text(encoding="utf-8")
+    # Todas las páginas, hojas y scripts de la portada y de /demo (config.js es local y no se versiona).
+    files = [path for pattern in ("*.html", "*.css", "*.js") for path in LANDING.glob(pattern)]
+    assert {"index.html", "demo.html", "demo-shared.js"} <= {path.name for path in files}
+    for path in files:
+        if path.name == "config.js":
+            continue
+        text = path.read_text(encoding="utf-8")
         for forbidden in ("fonts.googleapis.com", "fonts.gstatic.com", "cdn.", "unpkg.com", "jsdelivr"):
-            assert forbidden not in text, f"{name} carga {forbidden}"
+            assert forbidden not in text, f"{path.name} carga {forbidden}"

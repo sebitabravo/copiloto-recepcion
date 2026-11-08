@@ -32,6 +32,27 @@ MONTHS = {
     "noviembre": 11,
     "diciembre": 12,
 }
+# Abreviaturas que el huésped escribe en el chat («20–22 nov»). Van aparte de MONTHS para no ofrecerlas
+# como nombre canónico; los patrones prueban primero el nombre largo («mayo» antes que «may»).
+MONTH_ABBREVIATIONS = {
+    "ene": 1,
+    "feb": 2,
+    "mar": 3,
+    "abr": 4,
+    "may": 5,
+    "jun": 6,
+    "jul": 7,
+    "ago": 8,
+    "sep": 9,
+    "sept": 9,
+    "set": 9,
+    "oct": 10,
+    "nov": 11,
+    "dic": 12,
+}
+_ALL_MONTHS = {**MONTHS, **MONTH_ABBREVIATIONS}
+# Alternativa de regex con el nombre más largo primero: «mayo» gana a «may», «septiembre» a «sept».
+_MONTH_PATTERN = "|".join(sorted(_ALL_MONTHS, key=len, reverse=True))
 WORD_NUMBERS = {
     "un": 1,
     "uno": 1,
@@ -141,9 +162,56 @@ def _explicit_date(day: int, month: int, year: int | None, today: date) -> date 
         return None
 
 
+def _date_text(text: str) -> str:
+    """Texto normalizado para fechas: guiones largos como guion simple y «nov.» sin el punto."""
+    plain = normalize(text).replace("\u2013", "-").replace("\u2014", "-")
+    return re.sub(rf"\b({_MONTH_PATTERN})\.", r"\1", plain)
+
+
+def _month(name: str) -> int:
+    return _ALL_MONTHS[name]
+
+
+def _ranged_match(plain: str):
+    """'20 al 22 de noviembre', '20-22 nov', '20 nov al 22 nov' → (día1, mes1|None, día2, mes2)."""
+    return re.search(
+        rf"(\d{{1,2}})(?:\s*(?:de\s+)?({_MONTH_PATTERN})\b)?\s*(?:al|a|hasta|-)\s*(\d{{1,2}})\s*(?:de\s+)?({_MONTH_PATTERN})\b",
+        plain,
+    )
+
+
+def inverted_stay(text: str, today: date) -> tuple[date, date] | None:
+    """Rango escrito al revés ('22 al 20 de noviembre', '22/11 al 20/11'): (llegada, salida) tal cual.
+
+    Sirve para explicarle al huésped el error en vez de responder «no entendí las fechas».
+    """
+    plain = _date_text(text)
+    numeric = re.findall(r"(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?", plain)
+    if len(numeric) >= 2:
+        found = [_explicit_date(int(d), int(m), int(y) if y else None, today) for d, m, y in numeric[:2]]
+        if all(found) and found[1] <= found[0]:
+            return found[0], found[1]
+        return None
+    ranged = _ranged_match(plain)
+    if not ranged:
+        return None
+    first_day, first_month, last_day, last_month = ranged.groups()
+    month = _month(first_month) if first_month else _month(last_month)
+    if month != _month(last_month):
+        return None
+    start = _next_date(int(first_day), month, today)
+    if start is None:
+        return None
+    try:
+        end = date(start.year, month, int(last_day))
+    except ValueError:
+        return None
+    return (start, end) if end <= start else None
+
+
 def parse_stay(text: str, today: date) -> tuple[date, date] | None:
-    """Interpreta un rango de fechas: dd/mm al dd/mm, '15 al 18 de enero' o 'este finde'."""
-    plain = normalize(text)
+    """Interpreta un rango de fechas: dd/mm al dd/mm, '15 al 18 de enero', '20-22 nov' o 'este finde'."""
+    plain = _date_text(text)
     if re.search(r"\b(este )?(finde|fin de semana)\b", plain):
         days_to_friday = (4 - today.weekday()) % 7
         friday = today + timedelta(days=days_to_friday)
@@ -156,14 +224,14 @@ def parse_stay(text: str, today: date) -> tuple[date, date] | None:
             return found[0], found[1]
         return None
 
-    month_names = "|".join(MONTHS)
-    ranged = re.search(
-        rf"(\d{{1,2}})(?: de ({month_names}))?\s*(?:al|a|hasta|-)\s*(\d{{1,2}}) de ({month_names})", plain
-    )
+    ranged = _ranged_match(plain)
     if ranged:
         first_day, first_month, last_day, last_month = ranged.groups()
-        end_month = MONTHS[last_month]
-        start_month = MONTHS[first_month] if first_month else end_month
+        end_month = _month(last_month)
+        start_month = _month(first_month) if first_month else end_month
+        if start_month == end_month and int(last_day) <= int(first_day):
+            # Mismo mes y salida antes de la llegada: es un error del huésped, no un salto de año.
+            return None
         start = _next_date(int(first_day), start_month, today)
         if start is None:
             return None
@@ -238,7 +306,7 @@ def nights_over_limit(text: str) -> bool:
 
 def parse_one_date(text: str, today: date) -> date | None:
     """Una sola fecha en lenguaje natural: 'mañana', 'el viernes', '15/03', '15 de marzo'."""
-    plain = normalize(text)
+    plain = _date_text(text)
     if re.search(r"\bpasado manana\b", plain):
         return today + timedelta(days=2)
     if re.search(r"\bmanana\b", plain):
@@ -249,10 +317,9 @@ def parse_one_date(text: str, today: date) -> date | None:
     if numeric:
         day, month, year = numeric.groups()
         return _explicit_date(int(day), int(month), int(year) if year else None, today)
-    month_names = "|".join(MONTHS)
-    named = re.search(rf"(\d{{1,2}}) de ({month_names})", plain)
+    named = re.search(rf"(\d{{1,2}})\s*(?:de\s+)?({_MONTH_PATTERN})\b", plain)
     if named:
-        return _next_date(int(named.group(1)), MONTHS[named.group(2)], today)
+        return _next_date(int(named.group(1)), _month(named.group(2)), today)
     weekday = re.search(r"\b(" + "|".join(WEEKDAYS) + r")\b", plain)
     if weekday:
         return _next_weekday(weekday.group(1), today)

@@ -120,15 +120,24 @@ async def test_sla_worker_does_not_overwrite_a_recorded_human_stop(harness, sett
     assert "sla-vencido" not in harness.chatwoot.labels[1]
 
 
-async def test_sla_starts_at_handoff_time_not_at_inbound_time(harness):
+async def test_sla_starts_when_the_commercial_query_entered_not_at_handoff(harness):
+    """EVA 3: la meta de 180 s se mide desde que ENTRÓ la consulta comercial, antes de capturar datos.
+
+    Capturar fechas, leer el PMS o asignar no reinicia el reloj; el evento conserva ese instante.
+    """
+    entered = harness.clock.now
     await harness.say("quiero reservar")
+    harness.clock.advance(20)
     await harness.say("15/11 al 18/11")
+    harness.clock.advance(10)
     await harness.say("2")
     await harness.say("0")
     harness.chatwoot.during["set_status"] = lambda: None
     harness.clock.advance(30)
     await harness.say("1")
-    assert store.get_state(harness.db, 1).sla_started_at == harness.clock.now
+    assert store.get_state(harness.db, 1).sla_started_at == entered
+    started = json.loads(harness.events("commercial_started")[-1]["payload"])
+    assert started["inbound_ts"] == entered
 
 
 async def test_returning_guest_greeting_gets_the_menu_not_a_fallback(harness):

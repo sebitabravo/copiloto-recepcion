@@ -27,7 +27,8 @@ def compute_metrics(conn: sqlite3.Connection, start: float, end: float, config) 
         payload = json.loads(row["payload"])
         counts[kind] = counts.get(kind, 0) + 1
         if kind == "commercial_started":
-            starts.setdefault(conversation_id, (row["ts"], payload.get("in_shift")))
+            # El reloj parte cuando entró la consulta comercial; eventos antiguos sin ese dato usan el traspaso.
+            starts.setdefault(conversation_id, (payload.get("inbound_ts", row["ts"]), payload.get("in_shift")))
         elif kind == "human_first_reply":
             replies.setdefault(conversation_id, []).append(row["ts"])
         elif kind == "booking_confirmed":

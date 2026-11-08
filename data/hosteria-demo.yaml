@@ -1,0 +1,143 @@
+# Hostería Demo Villarrica: alojamiento FICTICIO para la demo de /demo (EVA 3, INNOVA3).
+# Ningún dato corresponde a un negocio real: nombre, dirección, contacto, habitaciones, precios y
+# cupos son inventados para probar el recorrido huésped → recepción. No uses estos datos fuera de la demo.
+# El copiloto lo carga con DEMO_HOTEL_DATA_PATH (por defecto ../data/hosteria-demo.yaml).
+hotel:
+  name: Hostería Demo Villarrica
+  # Prefijo del número de solicitud que ve recepción (VLL-001, VLL-002…).
+  request_prefix: VLL
+  address: "Costanera de Villarrica (dirección ficticia de prueba)"
+  maps_url: ""
+  whatsapp: "canal de prueba (sin número real)"
+  email: "recepcion@hosteria-demo.example"
+  total_rooms: 6
+  capacity_guests: 16
+  source: "Dato ficticio de la demo"
+  status: ficticio
+  revisar_antes_de: 2027-06-30
+
+location:
+  headline: "Cerca de la costanera de Villarrica."
+  detail: "A dos cuadras del lago y a 10 minutos caminando del centro (dato ficticio)."
+  distances:
+    - {place: "Lago Villarrica", distance: "2 cuadras"}
+    - {place: "Centro de Villarrica", distance: "10 min a pie"}
+  source: "Dato ficticio de la demo"
+  status: ficticio
+  revisar_antes_de: 2027-06-30
+
+shift:
+  timezone: America/Santiago
+  start: "08:00"
+  end: "22:00"
+  source: "Configuración de la demo (SHIFT_START / SHIFT_END)"
+  status: ficticio
+
+privacy:
+  retention_days: 90
+  retention_status: ficticio
+  responsible_contact: "recepcion@hosteria-demo.example"
+
+photos:
+  gallery_url: ""
+  rooms_url: ""
+  source: "Sin fotos: alojamiento ficticio"
+  status: ficticio
+  revisar_antes_de: 2027-06-30
+
+policies:
+  checkin: "15:00"
+  checkout: "11:00"
+  deposit: "Recepción informa el abono al confirmar (dato ficticio)."
+  children: "Niños de hasta 2 años sin costo en cuna (dato ficticio)."
+  source: "Dato ficticio de la demo"
+  status: ficticio
+  revisar_antes_de: 2027-06-30
+
+# FAQ aprobadas para la demo. Las palabras clave alimentan el reconocimiento sin IA.
+faqs:
+  - id: ubicacion
+    label: Ubicación
+    keywords: [donde queda, donde quedan, donde estan, ubicacion, direccion, como llego, como llegar]
+    answer: "Cerca de la costanera de Villarrica. Estamos a dos cuadras del lago y a 10 minutos caminando del centro."
+    source: "Dato ficticio de la demo"
+    status: ficticio
+    revisar_antes_de: 2027-06-30
+  - id: checkin
+    label: Horario de check-in
+    keywords: [check-in, check in, checkin, hora de llegada, horario de llegada, check-out, check out, checkout]
+    answer: "El check-in es desde las 15:00 y el check-out hasta las 11:00."
+    source: "Dato ficticio de la demo"
+    status: ficticio
+    revisar_antes_de: 2027-06-30
+  - id: desayuno
+    label: Desayuno
+    keywords: [desayuno, desayunar]
+    answer: "El desayuno está incluido y se sirve de 8:00 a 10:30."
+    source: "Dato ficticio de la demo"
+    status: ficticio
+    revisar_antes_de: 2027-06-30
+  - id: estacionamiento
+    label: Estacionamiento
+    keywords: [estacionamiento, estacionar, parking, auto, vehiculo]
+    answer: "Hay estacionamiento sin costo dentro de la hostería, sujeto a espacio."
+    source: "Dato ficticio de la demo"
+    status: ficticio
+    revisar_antes_de: 2027-06-30
+  - id: mascotas
+    label: Mascotas
+    keywords: [mascota, mascotas, perro, perros, gato, gatos]
+    answer: "No recibimos mascotas por ahora. Si viajas con un perro de asistencia, recepción te orienta."
+    source: "Dato ficticio de la demo"
+    status: ficticio
+    revisar_antes_de: 2027-06-30
+  - id: wifi
+    label: WiFi
+    keywords: [wifi, wi-fi, internet]
+    answer: "Todas las habitaciones tienen WiFi sin costo."
+    source: "Dato ficticio de la demo"
+    status: ficticio
+    revisar_antes_de: 2027-06-30
+  - id: recepcion_horario
+    label: Horario de recepción
+    keywords: [horario de recepcion, horario de atencion, atienden de noche, a que hora atienden]
+    answer: "Recepción responde por este chat de 08:00 a 22:00 (hora de Villarrica). Fuera de ese horario dejamos tu consulta registrada."
+    source: "Configuración de la demo"
+    status: ficticio
+    revisar_antes_de: 2027-06-30
+
+services:
+  - {name: "Desayuno incluido", note: "", revisar_antes_de: 2027-06-30}
+  - {name: "Estacionamiento", note: "sujeto a espacio", revisar_antes_de: 2027-06-30}
+
+rooms:
+  - code: doble
+    name: Habitación Doble
+    max_adults: 2
+    max_children: 1
+    m2: 18
+    revisar_antes_de: 2027-06-30
+  - code: twin
+    name: Habitación Twin
+    max_adults: 2
+    max_children: 0
+    m2: 18
+    revisar_antes_de: 2027-06-30
+  - code: familiar
+    name: Habitación Familiar
+    max_adults: 4
+    max_children: 2
+    m2: 28
+    revisar_antes_de: 2027-06-30
+
+# Inventario de PRUEBA que recepción consulta desde la bandeja (no es un PMS real ni una reserva).
+# Fuera de la ventana el cupo es desconocido: la bandeja lo dice y recepción responde con un seguimiento
+# honesto. `occupied` resta unidades por noche; así 20-22 nov deja 1 doble libre para el caso canónico.
+test_inventory:
+  label: "Inventario de prueba (ficticio)"
+  window: {from: 2026-11-01, to: 2027-03-31}
+  units: {doble: 3, twin: 2, familiar: 1}
+  nightly_price_clp: {doble: 58000, twin: 54000, familiar: 89000}
+  occupied:
+    - {date: 2026-11-20, doble: 2, twin: 2, familiar: 1}
+    - {date: 2026-11-21, doble: 2, twin: 2, familiar: 1}

@@ -5,12 +5,19 @@ Todas las métricas (`metrics.py`) salen de la tabla `events`. Convenciones de `
 - inbound:            {"greeting": bool}
 - faq_answered:       {"faq_id": str, "inbound_ts": float}   # ts - inbound_ts = latencia de la FAQ
 - location_shown:     {}
-- commercial_started: {"in_shift": bool}                     # in_shift=False es una consulta nocturna
+- commercial_started: {"in_shift": bool, "inbound_ts": float}
+                       # in_shift=False es una consulta nocturna. inbound_ts es cuando ENTRÓ la consulta
+                       # comercial (antes de capturar datos y de asignar): ahí parte el reloj de 180 s.
 - night_capture:      {"complete": bool}                     # complete=True si hay fechas y huéspedes
 - pms_read:           {"ok": bool, "latency_ms": int}
 - handoff:            {"reason": "commercial" | "pms_down" | "human_requested"
                        | "no_entendi_tres_veces" | "error" | "ai_handoff"}
-- human_first_reply:  {"user_id": int}
+- human_first_reply:  {"user_id": int}                      # primera respuesta pertinente: detiene el reloj
+- human_ack:          {"author": str}                         # acuse («ya te reviso»): NO detiene el reloj
+- request_created:    {"request_id": int, "code": str, "in_shift": bool}
+- request_taken:      {"request_id": int, "assignee": str}    # asignar no reinicia el reloj
+- request_closed:     {"request_id": int}
+- sla_breached:       {"elapsed_s": int}                      # venció el plazo sin respuesta pertinente
 - prebooking_created: {"prebooking_id": int}
 - prebooking_expired: {"prebooking_id": int}
 - booking_confirmed:  {"booking_id": int, "source": "personal" | "ia"}
@@ -39,6 +46,11 @@ EVENT_KINDS = frozenset(
         "pms_read",
         "handoff",
         "human_first_reply",
+        "human_ack",
+        "request_created",
+        "request_taken",
+        "request_closed",
+        "sla_breached",
         "night_capture",
         "prebooking_created",
         "prebooking_expired",
@@ -128,7 +140,48 @@ CREATE TABLE IF NOT EXISTS demo_messages (
     created_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS demo_messages_conv ON demo_messages(conversation_id, id);
+
+-- Solicitud a recepción: una por traspaso, vinculada al hilo. Es la fuente de verdad de la bandeja:
+-- estado de ATENCIÓN (pendiente → en_atencion → respondida → cerrada) y estado de RESERVA por separado.
+CREATE TABLE IF NOT EXISTS requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL,
+    conversation_id INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    in_shift INTEGER NOT NULL,
+    commercial_at REAL NOT NULL,
+    created_at REAL NOT NULL,
+    checkin TEXT,
+    checkout TEXT,
+    adults INTEGER,
+    children INTEGER,
+    room_code TEXT,
+    status TEXT NOT NULL DEFAULT 'pendiente',
+    reservation_status TEXT NOT NULL DEFAULT 'pendiente_confirmacion',
+    assignee TEXT,
+    taken_at REAL,
+    first_answer_at REAL,
+    last_guest_at REAL,
+    breached_at REAL,
+    closed_at REAL,
+    updated_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS requests_conv ON requests(conversation_id, id);
+CREATE INDEX IF NOT EXISTS requests_source ON requests(source, status);
 """
+
+# Columnas agregadas después de la primera versión del esquema: (tabla, columna, definición).
+MIGRATIONS = (
+    ("conversation_state", "source", "TEXT NOT NULL DEFAULT 'chatwoot'"),
+    # Botones de una pregunta guiada, autor y tipo (respuesta o acuse) de un mensaje del personal, y la
+    # solicitud a la que pertenece. La idempotencia de cada acción vive en processed_messages.
+    ("demo_messages", "options", "TEXT"),
+    ("demo_messages", "author", "TEXT"),
+    ("demo_messages", "kind", "TEXT"),
+    ("demo_messages", "request_id", "INTEGER"),
+)
 
 
 def connect(path: str) -> sqlite3.Connection:
@@ -140,12 +193,11 @@ def connect(path: str) -> sqlite3.Connection:
 
 def init_db(connection: sqlite3.Connection) -> None:
     connection.executescript(SCHEMA)
-    # Migración de bases ya creadas: el origen separa la operación real del espacio de demostración.
-    columns = {row["name"] for row in connection.execute("PRAGMA table_info(conversation_state)")}
-    if "source" not in columns:
-        connection.execute(
-            "ALTER TABLE conversation_state ADD COLUMN source TEXT NOT NULL DEFAULT 'chatwoot'"
-        )
+    # Migración de bases ya creadas: columnas nuevas sin perder datos.
+    for table, column, definition in MIGRATIONS:
+        columns = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def record_event(

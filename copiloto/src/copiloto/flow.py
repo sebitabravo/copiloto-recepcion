@@ -31,6 +31,7 @@ from copiloto.textutil import (
     MAX_ADULTS,
     MAX_CHILDREN,
     MAX_NIGHTS,
+    inverted_stay,
     is_local_host,
     is_local_url,
     money,
@@ -49,6 +50,9 @@ from copiloto.textutil import (
 logger = logging.getLogger(__name__)
 
 WEB_WIDGET = "Channel::WebWidget"
+DEMO_CHANNEL = "demo"
+# Canales que muestran botones (input_select); el resto recibe una lista numerada.
+SELECT_CHANNELS = frozenset({WEB_WIDGET, DEMO_CHANNEL})
 MENU_OPTIONS = [
     ("Ubicación", "ubicacion"),
     ("Habitaciones y fotos", "habitaciones"),
@@ -97,6 +101,50 @@ FALLBACK_LIMIT = 3
 # Sin jerga de sistema: el huésped lee una disculpa humana y sigue con el menú de botones.
 AI_FALLBACK_NOTICE = "Perdona, se me cortó la conexión justo ahora. Te dejo las opciones para que sigas al tiro."
 AI_CONVERSATION_CAP = 60
+DEMO_MENU = (
+    ("Ubicación", "ubicacion"),
+    ("Consultar fechas", "disponibilidad"),
+    ("Preguntas frecuentes", "faq"),
+    ("Hablar con recepción", "recepcion"),
+)
+SUBMIT_OPTIONS = [("Enviar a recepción", "enviar"), ("Corregir fechas", "fechas"), ("Corregir huéspedes", "huespedes")]
+SUBMIT_WORDS = ("enviar", "enviar a recepcion", "si", "sí", "ok", "confirmo", "listo", "envialo", "dale")
+WEEKDAYS_SHORT = ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")
+MONTHS_SHORT = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
+WEEKDAYS_LONG = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+MONTHS_LONG = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
+               "octubre", "noviembre", "diciembre")
+
+
+@dataclass(frozen=True)
+class FlowStyle:
+    """Cómo se presenta el mismo motor en un canal. Las reglas (fechas, cupos, traspaso, reloj) no cambian.
+
+    - compact: chat con botones fijos (la demo). Saludo corto sin ubicación, sin re-ofrecer el menú tras
+      cada respuesta y con el número de solicitud en el cierre.
+    - confirm_request: antes de derivar muestra un resumen con «Enviar a recepción» y «Corregir».
+    - bot_reads_pms: fase 2, el bot muestra una lectura fechada del PMS. En fase 1 dice «Disponibilidad
+      por verificar» y recepción revisa los cupos por su procedimiento.
+    """
+
+    menu_options: tuple = tuple(MENU_OPTIONS)
+    compact: bool = False
+    confirm_request: bool = False
+    bot_reads_pms: bool = True
+
+
+PRODUCTION_STYLE = FlowStyle()
+DEMO_STYLE = FlowStyle(menu_options=DEMO_MENU, compact=True, confirm_request=True, bot_reads_pms=False)
+
+
+def short_date(value: date) -> str:
+    """date(2026, 11, 20) → 'vie 20 nov'."""
+    return f"{WEEKDAYS_SHORT[value.weekday()]} {value.day} {MONTHS_SHORT[value.month - 1]}"
+
+
+def long_date(value: date) -> str:
+    """date(2026, 11, 9) → 'lunes 9 de noviembre'."""
+    return f"{WEEKDAYS_LONG[value.weekday()]} {value.day} de {MONTHS_LONG[value.month - 1]}"
 
 
 @dataclass
@@ -119,8 +167,12 @@ class Copiloto:
         pms: PmsAdapter,
         clock: Callable[[], float] = time.time,
         agent: Agent | None = None,
+        style: FlowStyle = PRODUCTION_STYLE,
+        source: str = store.OPERATIONAL_SOURCE,
     ):
         self.agent = agent
+        self.style = style
+        self.source = source
         self.settings = settings
         self.hotel = hotel
         self.db = db
@@ -258,15 +310,27 @@ class Copiloto:
             elif self._wants_human(ctx.plain):
                 await self._handoff(ctx, "human_requested")
             else:
-                await self._menu_level(ctx, after_welcome=True)
+                # Con la ubicación ya en el saludo, el primer mensaje no la repite; en el chat compacto el
+                # saludo es breve y la primera pregunta se responde completa.
+                await self._menu_level(ctx, after_welcome=not self.style.compact)
             return
         faq = self.hotel.match_faq(ctx.text)
-        if self._wants_human(ctx.plain) and not (faq and faq.id == "recepcion_horario"):
+        # En el resumen, «Enviar a recepción» es enviar la solicitud, no pedir una persona sin datos.
+        if (
+            state.step != "confirm_request"
+            and self._wants_human(ctx.plain)
+            and not (faq and faq.id == "recepcion_horario")
+        ):
             await self._handoff(ctx, "human_requested")
             return
         if ctx.plain in ("menu", "inicio", "volver", "volver al menu"):
             state.step = "menu"
             await self._send_menu(ctx)
+            return
+        if state.step != "menu" and self._menu_title_choice(ctx.plain):
+            # Botón fijo del chat (p. ej. «Ubicación» a mitad de la consulta): se atiende sin perder lo
+            # que el huésped ya dio; «Consultar fechas» retoma donde quedó.
+            await self._menu_level(ctx)
             return
         handler = {
             "menu": self._menu_level,
@@ -275,6 +339,7 @@ class Copiloto:
             "ask_adults": self._adults_step,
             "ask_children": self._children_step,
             "pick_room": self._pick_room_step,
+            "confirm_request": self._confirm_step,
         }.get(state.step, self._menu_level)
         await handler(ctx)
 
@@ -291,7 +356,7 @@ class Copiloto:
 
     async def _ask(self, ctx: Context, content: str, options: list[tuple[str, str]]) -> None:
         """Botones en el widget; en otros canales, lista numerada ('Responde 1, 2 o 3')."""
-        if ctx.channel == WEB_WIDGET:
+        if ctx.channel in SELECT_CHANNELS:
             await self.chatwoot.send_select(ctx.conversation_id, content, options)
             return
         lines = [f"{index}. {title}" for index, (title, _) in enumerate(options, start=1)]
@@ -300,6 +365,9 @@ class Copiloto:
 
     def _privacy_line(self, ctx: Context) -> str:
         """Frase de privacidad del saludo. Fuera del widget el huésped lee desde su teléfono: una URL local no abre."""
+        if ctx.channel == DEMO_CHANNEL:
+            # El chat de prueba muestra el aviso fijo arriba de la conversación, con su enlace.
+            return "Es un chat de prueba con datos ficticios: no escribas datos personales reales."
         base = "Al escribirme aceptas el tratamiento de tus datos según el aviso de privacidad"
         host = urlparse(self.settings.public_url).hostname or ""
         if ctx.channel != WEB_WIDGET and is_local_host(host):
@@ -319,23 +387,29 @@ class Copiloto:
                 f"¡Hola! Soy la recepción del {name} por chat, un asistente virtual con inteligencia artificial. "
                 f"{provider}Esto es una demostración, así que no escribas datos personales reales. "
             )
+        elif self.style.compact:
+            intro = (
+                f"Hola, soy el asistente virtual de {name}. Te oriento con la ubicación, preguntas frecuentes y "
+                "fechas; una persona de recepción revisa los cupos y confirma cada reserva. "
+            )
         else:
             intro = (
                 f"¡Hola! Qué bueno que escribes al {name}. Te ayudo con la ubicación, las habitaciones, la "
                 "disponibilidad y los servicios; recepción valida y cierra cada reserva. "
             )
         await self._say(ctx, intro + self._privacy_line(ctx))
-        await self._show_location(ctx)
+        if not self.style.compact:
+            await self._show_location(ctx)
 
     async def _show_location(self, ctx: Context) -> None:
         loc = self.hotel.location
-        await self._say(
-            ctx,
-            (
-                f"Ubicación: {loc['headline']} {loc['detail']}\n"
-                f"Dirección: {self.hotel.hotel['address']}\nMapa: {self.hotel.hotel['maps_url']}"
-            ),
-        )
+        lines = [f"Ubicación: {loc['headline']} {loc['detail']}"]
+        if self.hotel.hotel.get("address"):
+            lines.append(f"Dirección: {self.hotel.hotel['address']}")
+        if self.hotel.hotel.get("maps_url"):
+            lines.append(f"Mapa: {self.hotel.hotel['maps_url']}")
+        await self._say(ctx, "\n".join(lines))
+        ctx.state.data["seen_location"] = True
         record_event(self.db, ctx.conversation_id, "location_shown", ctx.now)
 
     async def _show_distances(self, ctx: Context) -> None:
@@ -344,7 +418,14 @@ class Copiloto:
 
     async def _send_menu(self, ctx: Context) -> None:
         ctx.state.step = "menu"
-        await self._ask(ctx, "¿En qué te ayudo?", MENU_OPTIONS)
+        await self._ask(ctx, "¿En qué te ayudo?", list(self.style.menu_options))
+
+    async def _offer_menu(self, ctx: Context) -> None:
+        """Tras una respuesta: el chat compacto tiene botones fijos y no repite el menú."""
+        if self.style.compact:
+            ctx.state.step = "menu"
+            return
+        await self._send_menu(ctx)
 
     async def _show_rooms(self, ctx: Context) -> None:
         lines = []
@@ -364,6 +445,8 @@ class Copiloto:
 
     async def _answer_faq(self, ctx: Context, faq: Faq) -> None:
         await self._say(ctx, faq.answer)
+        if faq.id == "ubicacion":
+            ctx.state.data["seen_location"] = True
         record_event(
             self.db,
             ctx.conversation_id,
@@ -376,14 +459,20 @@ class Copiloto:
 
     def _menu_choice(self, ctx: Context) -> str | None:
         plain = ctx.plain
-        for index, (title, value) in enumerate(MENU_OPTIONS, start=1):
+        for index, (title, value) in enumerate(self.style.menu_options, start=1):
             if plain in (normalize(title), value) or plain == str(index):
                 return value
         return None
 
+    def _menu_title_choice(self, plain: str) -> str | None:
+        """Solo el título exacto de un botón del menú: un número suelto es respuesta a la pregunta en curso."""
+        return next((value for title, value in self.style.menu_options if plain == normalize(title)), None)
+
     async def _menu_level(self, ctx: Context, after_welcome: bool = False) -> None:
         state = ctx.state
-        choice = None if after_welcome else self._menu_choice(ctx)
+        choice = None if after_welcome else (
+            self._menu_choice(ctx) if state.step in ("menu", "start") else self._menu_title_choice(ctx.plain)
+        )
         plain = ctx.plain
         faq = self.hotel.match_faq(ctx.text)
 
@@ -392,29 +481,39 @@ class Copiloto:
                 await self._show_distances(ctx)
             else:
                 await self._show_location(ctx)
-                await self._show_distances(ctx)
-            await self._send_menu(ctx)
+                if not self.style.compact:
+                    await self._show_distances(ctx)
+            await self._offer_menu(ctx)
         elif choice == "habitaciones" or (
             choice is None and not self._commercial_intent(plain) and any(t in plain for t in PHOTO_TERMS)
         ):
             await self._show_rooms(ctx)
-            await self._send_menu(ctx)
+            await self._offer_menu(ctx)
         elif choice == "recepcion":
             await self._handoff(ctx, "human_requested")
         elif choice == "faq":
             state.step = "faq_menu"
             await self._ask(ctx, "Elige un tema o escríbeme tu pregunta:", self._faq_options())
-        elif choice == "disponibilidad" or (choice is None and not faq and self._commercial_intent(plain)):
+        elif choice == "disponibilidad" or (
+            choice is None and not faq and (self._commercial_intent(plain) or self._mentions_stay(ctx))
+        ):
             await self._start_booking(ctx)
         elif faq:
             await self._answer_faq(ctx, faq)
-            await self._send_menu(ctx)
+            await self._offer_menu(ctx)
         else:
             await self._fallback(ctx)
 
     @staticmethod
     def _commercial_intent(plain: str) -> bool:
         return any(term in plain for term in COMMERCIAL_TERMS)
+
+    def _mentions_stay(self, ctx: Context) -> bool:
+        """Un rango de fechas («del 20 al 22 de noviembre») es una consulta comercial aunque no diga «reservar»."""
+        today = self._today(ctx)
+        return bool(
+            parse_stay(ctx.text, today) or parse_weekday_range(ctx.text, today) or inverted_stay(ctx.text, today)
+        )
 
     async def _fallback(self, ctx: Context) -> None:
         count = ctx.state.data.get("fallbacks", 0) + 1
@@ -454,14 +553,58 @@ class Copiloto:
     # ---------- disponibilidad ----------
 
     async def _start_booking(self, ctx: Context) -> None:
-        # La ubicación ya se mostró en el saludo (R2): recién ahora se piden datos.
+        data = ctx.state.data
         ctx.state.step = "ask_dates"
-        ctx.state.data.pop("fallbacks", None)
+        data.pop("fallbacks", None)
+        # Aquí ENTRA la consulta comercial: el reloj de primera respuesta humana parte en este mensaje,
+        # antes de capturar datos y de asignar (se fija una vez por consulta).
+        data.setdefault("commercial_at", ctx.now)
+        if not data.get("seen_location"):
+            # Ubicación primero (R2): nunca se piden datos de estadía sin haber dicho dónde está el alojamiento.
+            loc = self.hotel.location
+            await self._say(ctx, f"Antes de tus fechas, te cuento dónde estamos: {loc['headline']} {loc['detail']}")
+            data["seen_location"] = True
+            record_event(self.db, ctx.conversation_id, "location_shown", ctx.now)
+        today = self._today(ctx)
+        if data.get("checkin") and data.get("checkout"):
+            # Retoma una consulta a medias (p. ej. tras tocar «Ubicación»): solo pide lo que falta.
+            await self._after_dates(ctx)
+            return
+        if (
+            parse_stay(ctx.text, today)
+            or parse_weekday_range(ctx.text, today)
+            or inverted_stay(ctx.text, today)
+            or parse_one_date(ctx.text, today)
+        ):
+            # Reutiliza lo que el huésped ya dijo («quiero reservar del 20 al 22 de noviembre…»).
+            await self._dates_step(ctx)
+            return
+        noted = self._absorb_guests(ctx)
+        if self.style.compact:
+            prefix = f"Anoté {noted}. " if noted else ""
+            await self._say(
+                ctx,
+                f"{prefix}¿Para qué fechas? Escríbeme llegada y salida, por ejemplo «20 al 22 de noviembre» "
+                "o «20/11 al 22/11».",
+            )
+            return
         await self._say(
             ctx,
             "Para revisar disponibilidad necesito tus fechas: ¿desde cuándo y hasta cuándo te "
             "gustaría quedarte? También me sirve si me dices la fecha de llegada y cuántas noches.",
         )
+
+    def _absorb_guests(self, ctx: Context) -> str:
+        """Guarda adultos y niños válidos que vengan en el mensaje; devuelve qué anotó (o '')."""
+        adults, children = parse_guests(ctx.text)
+        data, noted = ctx.state.data, []
+        if adults is not None and 1 <= adults <= MAX_ADULTS:
+            data["adults"] = adults
+            noted.append(plural(adults, "adulto", "adultos"))
+        if children is not None and 0 <= children <= MAX_CHILDREN:
+            data["children"] = children
+            noted.append(plural(children, "niño", "niños"))
+        return " y ".join(noted)
 
     def _today(self, ctx: Context) -> date:
         return self.settings.local(ctx.now).date()
@@ -469,7 +612,20 @@ class Copiloto:
     async def _dates_step(self, ctx: Context) -> None:
         today = self._today(ctx)
         data = ctx.state.data
+        # Lo correcto del mensaje se conserva aunque las fechas fallen: el huésped no lo repite.
+        self._absorb_guests(ctx)
         stay = parse_stay(ctx.text, today) or parse_weekday_range(ctx.text, today)
+        if stay is None:
+            inverted = inverted_stay(ctx.text, today)
+            if inverted:
+                arrival, departure = inverted
+                await self._say(
+                    ctx,
+                    f"La salida ({short_date(departure)}) tiene que ser después de la llegada "
+                    f"({short_date(arrival)}). ¿Me escribes de nuevo llegada y salida? Por ejemplo "
+                    f"«{departure.day} al {arrival.day} de {MONTHS_LONG[arrival.month - 1]}».",
+                )
+                return
         pending = date.fromisoformat(data["pending_checkin"]) if data.get("pending_checkin") else None
         nights = parse_nights(ctx.text)
         one = parse_one_date(ctx.text, today)
@@ -521,23 +677,93 @@ class Copiloto:
             return
         data.pop("pending_checkin", None)
         data["checkin"], data["checkout"] = stay[0].isoformat(), stay[1].isoformat()
-        adults, children = parse_guests(ctx.text)
-        if adults:
-            data["adults"] = adults
-        if children is not None:
-            data["children"] = children
         await self._after_dates(ctx)
 
     async def _after_dates(self, ctx: Context) -> None:
         data = ctx.state.data
-        if not data.get("adults"):
+        if not data.get("checkin"):
+            ctx.state.step = "ask_dates"
+            await self._say(ctx, "¿Cuáles son tus fechas de llegada y salida? Por ejemplo «20 al 22 de noviembre».")
+        elif not data.get("adults"):
             ctx.state.step = "ask_adults"
-            await self._say(ctx, "¿Cuántos adultos viajan? (1 a 4)")
+            if self.style.compact:
+                options = [(plural(n, "adulto", "adultos"), str(n)) for n in range(1, MAX_ADULTS + 1)]
+                await self._ask(ctx, f"¿Cuántos adultos viajan? (1 a {MAX_ADULTS})", options)
+            else:
+                await self._say(ctx, "¿Cuántos adultos viajan? (1 a 4)")
         elif data.get("children") is None:
             ctx.state.step = "ask_children"
-            await self._say(ctx, "¿Viajan niños? Si no, dime «sin niños».")
+            if self.style.compact:
+                await self._ask(ctx, "¿Viajan niños?", [("Sin niños", "0"), ("1 niño", "1"), ("2 niños", "2")])
+            else:
+                await self._say(ctx, "¿Viajan niños? Si no, dime «sin niños».")
+        elif self.style.confirm_request:
+            await self._show_summary(ctx)
         else:
             await self._check_availability(ctx)
+
+    # ---------- resumen y envío de la solicitud ----------
+
+    def _stay_lines(self, data: dict) -> list[str]:
+        checkin, checkout = date.fromisoformat(data["checkin"]), date.fromisoformat(data["checkout"])
+        nights = (checkout - checkin).days
+        return [
+            f"• Llegada: {short_date(checkin)}",
+            f"• Salida: {short_date(checkout)} ({plural(nights, 'noche', 'noches')})",
+            f"• Huéspedes: {plural(data['adults'], 'adulto', 'adultos')}, {plural(data['children'], 'niño', 'niños')}",
+        ]
+
+    async def _show_summary(self, ctx: Context) -> None:
+        ctx.state.step = "confirm_request"
+        text = "\n".join(
+            ["Revisa tu solicitud antes de enviarla:", *self._stay_lines(ctx.state.data), "",
+             "Si algo no está bien, corrígelo antes de enviar."]
+        )
+        await self._ask(ctx, text, SUBMIT_OPTIONS)
+
+    async def _confirm_step(self, ctx: Context) -> None:
+        data, plain = ctx.state.data, ctx.plain
+        choice = next((value for title, value in SUBMIT_OPTIONS if plain in (normalize(title), value)), None)
+        if choice == "enviar" or plain.strip("!¡.,¿? ") in SUBMIT_WORDS or self._wants_human(plain):
+            await self._submit_request(ctx)
+            return
+        if choice == "fechas":
+            for key in ("checkin", "checkout", "pending_checkin"):
+                data.pop(key, None)
+            ctx.state.step = "ask_dates"
+            await self._say(ctx, "Dale. ¿Cuáles son las fechas correctas de llegada y salida?")
+            return
+        if choice == "huespedes":
+            data.pop("adults", None)
+            data.pop("children", None)
+            await self._after_dates(ctx)
+            return
+        # Corrección escrita («mejor 3 adultos», «del 21 al 23»): se actualiza solo lo que cambió.
+        today = self._today(ctx)
+        stay = parse_stay(ctx.text, today) or parse_weekday_range(ctx.text, today)
+        inverted = inverted_stay(ctx.text, today) if stay is None else None
+        noted = self._absorb_guests(ctx)
+        if inverted:
+            await self._dates_step(ctx)
+            return
+        if stay and stay[0] >= today and (stay[1] - stay[0]).days <= MAX_NIGHTS:
+            data["checkin"], data["checkout"] = stay[0].isoformat(), stay[1].isoformat()
+        elif not noted:
+            faq = self.hotel.match_faq(ctx.text)
+            if faq:
+                await self._answer_faq(ctx, faq)
+            else:
+                await self._say(ctx, "Para seguir, toca «Enviar a recepción» o corrige un dato.")
+            await self._show_summary(ctx)
+            return
+        await self._after_dates(ctx)
+
+    async def _submit_request(self, ctx: Context) -> None:
+        if self.style.bot_reads_pms:
+            await self._check_availability(ctx)
+        else:
+            # Fase 1: el asistente no informa cupos. Recepción los verifica por su procedimiento.
+            await self._handoff(ctx, "commercial")
 
     async def _adults_step(self, ctx: Context) -> None:
         adults, children = parse_guests(ctx.text)
@@ -559,7 +785,7 @@ class Copiloto:
             await self._say(ctx, f"¿Cuántos niños viajan? Puedes decirme un número de 0 a {MAX_CHILDREN}.")
             return
         ctx.state.data["children"] = children
-        await self._check_availability(ctx)
+        await self._after_dates(ctx)
 
     async def _check_availability(self, ctx: Context) -> None:
         data = ctx.state.data
@@ -694,11 +920,14 @@ class Copiloto:
         }
         lines = [
             "Pre-información del copiloto",
-            f"Huésped: {ctx.state.contact_name or 'sin nombre'} (conversación #{ctx.conversation_id})",
+            f"Solicitud: {data.get('request_code') or 'sin número'}",
+            # La demo usa ids sintéticos (negativos): no aportan a recepción y se omiten.
+            f"Huésped: {ctx.state.contact_name or 'sin nombre'}"
+            + (f" (conversación #{ctx.conversation_id})" if ctx.conversation_id > 0 else ""),
             f"Fechas: {stay}",
             f"Huéspedes: {guests}",
             f"Habitación de interés: {rooms['name'] if rooms else 'a definir por recepción'}",
-            f"Origen: {ctx.channel.removeprefix('Channel::')}",
+            f"Origen: {store.CHANNEL_LABELS.get(ctx.channel, ctx.channel.removeprefix('Channel::'))}",
         ]
         if data.get("read_at"):
             sim = " (simulada)" if data.get("simulated") else ""
@@ -713,7 +942,8 @@ class Copiloto:
         if detail:
             lines.append(f"Detalle del asistente: {detail}")
         if in_shift:
-            deadline = self._local_text(now + self.settings.sla_red_s)
+            # Misma referencia que el reloj: desde que entró la consulta, no desde el traspaso.
+            deadline = self._local_text((data.get("commercial_at") or ctx.now) + self.settings.sla_red_s)
             lines.append(f"Meta: responder antes de las {deadline} ({self.settings.sla_red_s // 60}:00).")
         else:
             lines.append(f"Captura fuera de turno: atender desde las {self.settings.shift_start}.")
@@ -725,8 +955,11 @@ class Copiloto:
         now = self.clock()
         in_shift = self.settings.in_shift(now)
         complete = bool(data.get("checkin") and data.get("adults") and data.get("children") is not None)
+        self._persist_handoff(ctx, reason, now, in_shift, complete)
         note = self._note(ctx, reason, in_shift, now, detail)
-        if in_shift:
+        if self.style.compact:
+            closing = self._compact_closing(ctx, reason, in_shift, now)
+        elif in_shift:
             closing = (
                 "Ya pasé tu consulta a recepción con estos datos. Una persona te responde en breve; "
                 "ella valida disponibilidad y cierra la reserva contigo."
@@ -737,33 +970,90 @@ class Copiloto:
                 f"{self.settings.shift_end}). Dejé tu consulta registrada y recepción te responde desde las "
                 f"{self.settings.shift_start}."
             )
-
-        self._persist_handoff(ctx, reason, now, in_shift, complete)
         await self._say(ctx, intro + closing)
         await self.chatwoot.send_message(ctx.conversation_id, note, private=True)
         await self._open_for_humans(ctx, in_shift)
 
+    def _compact_closing(self, ctx: Context, reason: str, in_shift: bool, now: float) -> str:
+        data = ctx.state.data
+        code = data.get("request_code", "")
+        pending = (
+            " · Disponibilidad por verificar: recepción revisa los cupos y te confirma."
+            if data.get("checkin") and not data.get("read_at")
+            else ""
+        )
+        if in_shift:
+            return f"Solicitud enviada a recepción. Te responderán por aquí.\n\nN.º {code}{pending}"
+        opening = self.settings.next_shift_start(now)
+        return (
+            f"Solicitud guardada: N.º {code}. Recepción atiende de {self.settings.shift_start} a "
+            f"{self.settings.shift_end} (hora de Chile) y te responderá por aquí desde las "
+            f"{opening.strftime('%H:%M')} del {long_date(opening.date())}."
+        )
+
     def _persist_handoff(self, ctx: Context, reason: str, now: float, in_shift: bool, complete: bool = False) -> None:
-        """La frontera del traspaso (estado, eventos y reloj) se persiste antes de abrir la conversación a
-        recepción: así una respuesta humana inmediata nunca llega antes que el inicio del cronómetro."""
+        """La frontera del traspaso (estado, solicitud, eventos y reloj) se persiste antes de abrir la
+        conversación a recepción: así una respuesta humana inmediata nunca llega antes que el cronómetro.
+
+        El reloj de la meta parte cuando ENTRÓ la consulta comercial (`commercial_at`), no al derivar ni al
+        asignar; sin flujo comercial previo, en el mensaje que pidió recepción.
+        """
         state = ctx.state
         previous_step = state.step
+        commercial_at = state.data.get("commercial_at") or ctx.now
         state.step = "handed_off"
         state.data["handoff_at"] = now
         try:
             with store.transaction(self.db):
+                request = store.create_request(
+                    self.db,
+                    ctx.conversation_id,
+                    prefix=str(self.hotel.hotel.get("request_prefix") or "SOL"),
+                    source=self.source,
+                    channel=ctx.channel,
+                    reason=reason,
+                    in_shift=in_shift,
+                    commercial_at=commercial_at,
+                    now=now,
+                    data=state.data,
+                )
+                state.data["request_id"], state.data["request_code"] = request["id"], request["code"]
                 store.save_state(self.db, state, now)
                 record_event(self.db, ctx.conversation_id, "handoff", now, {"reason": reason})
-                record_event(self.db, ctx.conversation_id, "commercial_started", now, {"in_shift": in_shift})
+                record_event(
+                    self.db,
+                    ctx.conversation_id,
+                    "commercial_started",
+                    now,
+                    {"in_shift": in_shift, "inbound_ts": commercial_at},
+                )
+                record_event(
+                    self.db,
+                    ctx.conversation_id,
+                    "request_created",
+                    now,
+                    {"request_id": request["id"], "code": request["code"], "in_shift": in_shift},
+                )
                 if in_shift:
-                    store.start_sla(self.db, ctx.conversation_id, now)
+                    store.start_sla(self.db, ctx.conversation_id, commercial_at)
                 else:
                     record_event(self.db, ctx.conversation_id, "night_capture", now, {"complete": complete})
         except BaseException:
             # Hubo rollback: el estado en memoria no puede quedar como si el traspaso ya existiera
             state.step = previous_step
-            state.data.pop("handoff_at", None)
+            for key in ("handoff_at", "request_id", "request_code"):
+                state.data.pop(key, None)
             raise
+
+    def persist_external_handoff(self, conversation_id: int, channel: str, reason: str, now: float) -> dict:
+        """Traspaso decidido fuera del motor guiado (p. ej. el asistente con IA de la demo): misma frontera,
+        misma solicitud y mismo reloj que un traspaso del flujo."""
+        state = store.get_state(self.db, conversation_id)
+        ctx = Context(conversation_id, "", "", channel, now, state)
+        data = state.data
+        complete = bool(data.get("checkin") and data.get("adults") and data.get("children") is not None)
+        self._persist_handoff(ctx, reason, now, self.settings.in_shift(now), complete)
+        return state.data
 
     # ---------- eventos externos ----------
 
@@ -771,6 +1061,7 @@ class Copiloto:
         """Primer mensaje saliente de una persona: detiene el cronómetro del SLA."""
         if store.stop_sla(self.db, conversation_id, now):
             record_event(self.db, conversation_id, "human_first_reply", now, {"user_id": user_id})
+        store.human_answered(self.db, conversation_id, now)
 
     async def on_booking_confirmed(
         self, conversation_id: int | None, booking_id: int, source: str = "personal"
@@ -785,6 +1076,7 @@ class Copiloto:
         )
         if conversation_id is not None:
             store.convert_prebooking(self.db, conversation_id)
+            store.confirm_reservation(self.db, conversation_id, now)
         mark_processed(self.db, key, now)
         if conversation_id is None or source == "ia":
             return  # la nota de una reserva hecha por la IA la escribe el propio asistente
