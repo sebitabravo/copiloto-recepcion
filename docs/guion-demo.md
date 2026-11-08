@@ -1,108 +1,99 @@
-# Guion de la demo en vivo
+# Guion de la demo en vivo (EVA 3)
 
-Para la presentación del miércoles. Cinco minutos de recorrido, con los respaldos ya previstos.
+Cinco a siete minutos. Un solo caso de principio a fin, visto desde los dos roles: el huésped consulta,
+el copiloto prepara la solicitud, recepción la toma con el contexto y responde en el mismo hilo.
+
+Todo es de prueba: **Hostería Demo Villarrica** es un alojamiento ficticio; ubicación, cupos y
+conversaciones son simulados. El asistente nunca confirma una reserva.
 
 ## Un día antes
 
+Elige un arranque y pruébalo completo una vez:
+
 ```bash
-./scripts/demo.sh up      # stack completo y healthchecks (o `make up` si tienes make)
-./scripts/demo.sh seed    # idempotente: usuarios, bandeja, etiquetas, equipo
-./scripts/demo.sh test    # 447 pruebas
-./scripts/demo.sh e2e     # 4 casos reales contra el stack
-./scripts/demo.sh creds   # usuarios demo y token del PMS
+make demo-local LIMPIO=1      # sin Docker: copiloto con uv (:8100) y portada (:8080)
 ```
 
-Si `e2e` falla, no se presenta: primero se arregla. El e2e cubre los cuatro casos que se van a mostrar
-(FAQ, disponibilidad, fuera de turno, PMS caído).
+o, con Docker:
 
-Si quieres empezar con la cola vacía (las pruebas dejan conversaciones con esperas de horas), corre
-`./scripts/demo.sh reset` **antes** de `./scripts/demo.sh up`; borra volúmenes y vuelve a sembrar. Es
-destructivo para los datos de la demo, no para el código.
+```bash
+make up                       # landing, copiloto y PMS simulado (sin Chatwoot)
+```
 
-Dos notas de operación:
+Después:
 
-- Si cambias `infra/landing/nginx.conf`, vuelve a levantar el stack (`./scripts/demo.sh up` o `make up`):
-  ambos reinician el contenedor `landing` al final, y nginx lee su configuración al arrancar. Sin ese
-  reinicio, un stack ya levantado sigue con la configuración vieja y `/demo` responde 404.
-- `landing/config.js` solo existe después del seed (`./scripts/demo.sh seed`): lo genera `scripts/seed-chatwoot.sh`.
-  Sin ese archivo el widget de Chatwoot no carga y el enlace de privacidad cae a su valor por defecto.
+```bash
+make test        # pytest de copiloto y PMS
+make ui-test     # pruebas de la interfaz de /demo (node --test)
+```
+
+Si algo falla, no se presenta: primero se arregla. El recorrido completo está automatizado en
+`copiloto/tests/test_demo_requests.py` (caso canónico, fechas invertidas, reintentos, fuera de turno, meta
+vencida, inventario desconocido).
 
 ## Treinta minutos antes
 
-1. `./scripts/preflight.sh` — verifica los servicios del stack.
-2. Deja abiertas estas pestañas, en este orden:
-   - `http://localhost:8080` — portada.
-   - `http://localhost:8080/demo` — consola de demo (pestaña Huésped).
-   - `http://localhost:8100/panel` — panel de recepción.
-   - `http://localhost:3000` — bandeja de Chatwoot.
-   - `http://localhost:8200/admin` — PMS simulado.
-   - `http://localhost:8100/metricas` — métricas del piloto.
-3. Comprueba que el **Modo demo** de la consola esté encendido: debe entrar sola a Recepción y a Admin,
-   sin pedir credenciales. Si aparece "Sin sesión", el backend tiene la demo apagada (`DEMO_ENABLED`).
-4. Baja el zoom del navegador a 90 % para que entren las tres columnas en el proyector.
+1. Arranca con escenario limpio: `make demo-local LIMPIO=1` (o `make reset` + `make up` en Docker).
+2. Abre **dos ventanas** del navegador, una al lado de la otra:
+   - Huésped: `http://localhost:8080/demo.html?vista=huesped` (o `/demo?vista=huesped` con Docker).
+     Si puedes, en el modo teléfono de las herramientas de desarrollo.
+   - Recepción: `http://localhost:8080/demo.html?vista=recepcion`. Entra como **Sofía**.
+3. En la ventana del huésped, en **Turno de recepción**, elige **Simular en turno** (la demo usa la hora de
+   Chile; fuera de 08:00–22:00 el caso sería «fuera de turno»).
+4. Si una sola pantalla es más cómoda, usa `/demo` en **Vista partida**: chat a la izquierda y bandeja a la
+   derecha, mismos datos.
 
-## IA por API (opcional)
+## Recorrido (orden sugerido)
 
-Con `LLM_API_KEY` en `.env` el copiloto usa un modelo por API (DeepSeek por defecto) y responde en
-lenguaje libre en uno o dos segundos. Sin la clave funciona el **flujo guiado**, que es el recorrido
-probado de punta a punta.
+| # | Qué haces | Qué señalas |
+|---|---|---|
+| 1 | Huésped escribe **«¿Dónde queda la hostería?»** | Respuesta aprobada: «Cerca de la costanera de Villarrica». La ubicación y las FAQ se responden **antes** de pedir datos de estadía. El saludo es un mensaje propio; la FAQ se mide aparte (meta < 10 s). |
+| 2 | Toca **Consultar fechas** y escribe **«22 al 20 de noviembre · 2 adultos»** | Error entendible: la salida debe ser posterior a la llegada. Los 2 adultos quedan guardados. |
+| 3 | Escribe **«20–22 nov»** y toca **Sin niños** | El bot solo pidió lo que faltaba. Aparece el **resumen** con «Enviar a recepción» y «Corregir». |
+| 4 | Toca **Enviar a recepción** | «Solicitud enviada a recepción. Te responderán por aquí.» con su número (VLL-…) y «Disponibilidad por verificar». Desde ahora el bot deja de contestar este hilo. |
+| 5 | Ventana de recepción: aparece la solicitud **Pendiente de recepción** | ID, fechas, huéspedes, canal, motivo, ingreso, tiempo de espera en vivo y la nota interna de pre-información. Datos faltantes se ven como «Pendiente». |
+| 6 | **Tomar solicitud** | Responsable: Sofía. Estado: **En atención**. El reloj **no** se reinicia: corre desde que entró la consulta. |
+| 7 | **Consultar inventario** (Verificar cupo) | Inventario **de prueba**, con origen y hora de lectura, «preliminar»: Habitación Doble, 1 libre. No bloquea cupos. |
+| 8 | **Usar respuesta sugerida** → **Enviar respuesta** | El huésped ve el mensaje firmado «Sofía · Recepción» en el mismo hilo. Recepción ve **Respondida**; la **Reserva** sigue **Pendiente de confirmación**: responder no reserva. |
+| 9 | Recarga ambas ventanas (F5) | El mismo caso, con el mismo responsable y los mismos estados: todo viene del servidor. |
 
-El copiloto se conecta al modelo al arrancar: después de cambiar la clave, recrea el servicio con
-`docker compose -f infra/docker-compose.yml --project-directory . up -d --force-recreate copiloto`.
+## Medición (cómo mostrarla)
 
-## La consola, en tres perspectivas
+En la ficha, **Medición de esta solicitud**:
 
-`/demo` abre en **Huésped**; las pestañas de arriba cambian de perspectiva sin salir de la página:
+- **Primera respuesta**: tiempo desde el **ingreso de la consulta comercial** (hora del servidor) hasta la
+  primera respuesta marcada como «Respuesta (cuenta para la meta)». Meta: < 180 s en turno.
+- Un **acuse** («Ya te reviso») se envía al huésped pero **no** detiene el reloj: la pertinencia la declara
+  quien responde y queda visible en el hilo.
+- La lista de eventos (ingreso, solicitud creada, asignación, primera respuesta) permite recalcular el tiempo a
+  mano. Si vence la meta sin respuesta pertinente, aparece «Meta vencida» y queda registrado.
+- FAQ: latencia de cada respuesta aprobada desde el ingreso del mensaje (meta < 10 s).
 
-- **Huésped**: el chat tipo WhatsApp y, debajo, la traza de lo que hizo el asistente. Las respuestas
-  llegan en una o dos burbujas seguidas (una idea por burbuja), con el indicador de escritura entre ellas.
-- **Recepción**: la cola real con espera y riesgo de SLA (solo lectura), con un resumen por riesgo arriba.
-  Los visitantes anónimos de Chatwoot se muestran como «Visitante web · 123» y las esperas largas en horas.
-- **Admin**: el PMS simulado y el enlace a métricas, con el modo demo resolviendo el acceso.
+## Ruta fuera de turno
 
-El **icono de llamada** de la cabecera del teléfono abre una llamada dentro del teléfono: estado,
-cronómetro, transcripción y colgar. Si el navegador no reconoce voz, la misma pantalla ofrece escribir.
+1. En la ventana del huésped elige **Simular fuera de turno** y toca **Empezar como otro huésped** (el caso
+   anterior sigue en la bandeja).
+2. Toca **Hablar con recepción** (o haz una consulta de fechas completa y envíala).
+3. El huésped lee: «Solicitud guardada: N.º VLL-…. Recepción atiende de 08:00 a 22:00 (hora de Chile) y te
+   responderá por aquí desde las 08:00 del …».
+4. En recepción la solicitud aparece con la marca **Fuera de turno**; su medición dice «no cuenta para la meta».
 
-## Guion (5 minutos)
+## Separación entre consulta y reserva
 
-| Momento | Qué haces | Qué se ve |
-| --- | --- | --- |
-| 1. Portada | Recorres la página hasta el CTA | Hero compuesto, cifras con contexto, recorrido de cinco pasos, pantallas de recepción y límites declarados |
-| 2. Huésped | "Probar la demo" → pestaña Huésped → escribes **hola** | Aviso de privacidad primero y **ubicación** antes de cualquier pregunta |
-| 3. Consulta | Guion **02 · Disponibilidad sin reservar** (o **¿tienen piscina?** y luego **quiero reservar** con fechas y 2 adultos) | Respuesta en segundos y «Disponible según lectura del PMS a las HH:MM · pendiente de confirmación» |
-| 4. Canal real | En la consola, **Escribir a recepción** → **Abrir el chat de recepción** → envías **quiero reservar** | Widget real de Chatwoot: misma respuesta del copiloto, pero esta conversación sí entra al sistema |
-| 5. Recepción | Pestaña Recepción (y bandeja en http://localhost:3000) | La conversación del canal real llega con nota privada, etiqueta comercial y cronómetro de SLA (verde → ámbar 120 s → rojo 180 s) |
-| 6. Confirmación | Panel → **Confirmar en el PMS** → token de personal | Reserva creada; vuelves a la pestaña Admin y está en el PMS y en las métricas |
-| 7. Cierre | Métricas | Conversión, cumplimiento < 180 s y costo por consulta |
+Repite al cerrar: el **estado de atención** (Pendiente de recepción → En atención → Respondida) y el **estado
+de reserva** (Pendiente de confirmación) son cosas distintas. El asistente orienta y captura; recepción verifica
+cupos por su procedimiento y confirma explícitamente. La escritura en un PMS real es fase 3.
 
-Los turnos del simulador (momentos 2 y 3) **no aparecen** en la pestaña Recepción ni en la bandeja de
-Chatwoot: el simulador no crea conversaciones. Lo que ve recepción —cola, nota, etiqueta y cronómetro—
-es solo la conversación del canal real del widget.
+## Respaldos
 
-Frase de cierre sugerida: «El copiloto propone y recepción confirma; el bot no cierra reservas solo».
-
-## Si algo falla
-
-| Síntoma | Qué hacer | Qué decir |
-| --- | --- | --- |
-| El copiloto responde con el menú guiado | Es el comportamiento sin `LLM_API_KEY`, no un error | «Sin clave de modelo, el flujo guiado cubre lo mismo y no depende de internet» |
-| «Recepción verificará cupos» | El PMS está caído o simulado caído (`SIMULATE_DOWN=1`) | «Cuando el PMS no responde, el bot no promete cupos: deriva» |
-| Fuera de horario | `SHIFT_START`/`SHIFT_END` en `.env` | «El bot informa el horario real de recepción» |
-| El widget no abre | Chatwoot no está arriba | «El canal de recepción está separado del simulador; ahora no está disponible» |
-| No carga la consola | Revisa `/health` y `docker compose ps` | No improvises: `./scripts/demo.sh up` y espera healthchecks |
-
-## Qué responder si preguntan por el stack
-
-- Front **estático** (HTML/CSS/JS) servido por nginx, con sistema de diseño y auditoría de calidad: decisión
-  documentada en `docs/adr/0001-front-estatico.md`, con la migración a componentes planificada.
-- API **FastAPI** con 447 pruebas, e2e de cuatro casos, contenedores sin root, solo lectura y `cap_drop`.
-- **Modo demo por sesión de servidor**: el navegador nunca recibe credenciales; el token del PMS no se
-  expone.
-- Límites declarados: PMS real por contrato (sin API pública de Pxsol), WhatsApp no oficial y un solo
-  proceso para esta demo.
+| Si pasa esto | Haz esto |
+|---|---|
+| El servidor no responde | La página lo dice y ofrece reintentar. Revisa la terminal de `make demo-local`. |
+| Se corta la red al enviar | La burbuja queda «no enviado»; **Reintentar** reenvía con la misma llave: no se duplica. |
+| No hay servidor disponible | Versión estática: `make static-demo` y abre `dist/demo.html` en un servidor local. Mismo recorrido con datos preparados, rotulado «versión estática». |
+| La bandeja pide nombre otra vez | Es una sesión nueva de recepción: escribe «Sofía». |
 
 ## Después
 
-```bash
-./scripts/backup.sh    # respaldo en caliente de Chatwoot y las bases SQLite (o `make backup`)
-```
+`make demo-local LIMPIO=1` deja el escenario limpio otra vez. En Docker, `make reset` borra los volúmenes
+(pide confirmación).

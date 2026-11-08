@@ -14,7 +14,7 @@ la confirma una persona en el PMS (en la demo, el modo `full` reserva en un PMS 
 | Pieza | Qué hace | URL local |
 |---|---|---|
 | Portada | Página de producto: qué hace, recorrido y pantallas reales | http://localhost:8080 |
-| Consola de demo | Huésped, recepción y admin en una vista, con **modo demo** sin credenciales | http://localhost:8080/demo |
+| Demo huésped + recepción | Chat «WhatsApp simulado» y bandeja de recepción sobre el mismo hilo, datos de prueba | http://localhost:8080/demo |
 | Chatwoot Community `v4.18.0-ce` | Bandeja de recepción (MIT, $0) | http://localhost:3000 |
 | `copiloto` (FastAPI) | Flujo del bot, SLA, panel, métricas, privacidad | http://localhost:8100 |
 | `pms_mock` (FastAPI) | PMS simulado con los 12 tipos de habitación reales | http://localhost:8200/admin |
@@ -61,48 +61,51 @@ En Windows con Git Bash no hace falta `make`: `./scripts/demo.sh` expone los mis
 El primer arranque puede tardar varios minutos. Para detener: `make down` o `./scripts/demo.sh down`.
 Para borrar todo: `make reset` o `./scripts/demo.sh reset` (ambos piden confirmación).
 
-## Recorrido de 5 minutos (profesora y hotel)
+## Demo en dos ventanas: huésped y recepción (EVA 3)
 
-La demo tiene **dos canales separados**. El simulador de la consola (pestaña Huésped) responde con la misma
-lógica del bot, pero no crea conversaciones: no llega a la bandeja ni al panel. El canal real es el widget
-**Escribir a recepción**, y esa conversación es la que ve recepción. El recorrido usa primero el simulador
-y después el canal real.
+`/demo` muestra **una misma consulta desde dos roles**, con un alojamiento ficticio (**Hostería Demo
+Villarrica**, `data/hosteria-demo.yaml`) y el flujo guiado real, sin IA ni credenciales externas:
 
-**Simulador (2 min):**
+```bash
+make demo-local LIMPIO=1   # sin Docker: copiloto (:8100) + portada (:8080), escenario limpio
+```
 
-1. Abre http://localhost:8080 y pulsa **Probar la demo**. En la pestaña **Huésped**, escribe **hola**:
-   aparece el aviso de privacidad y la **ubicación** antes de cualquier pregunta.
-2. Pregunta **¿tienen piscina?** → respuesta aprobada en segundos; la conversación sigue con el bot.
-3. Elige **Disponibilidad**, escribe `15/03/2027 al 18/03/2027`, `2` adultos, `0` niños y una habitación.
-   Verás «Disponible según lectura del PMS a las HH:MM … Pendiente de confirmación por recepción».
+1. Huésped (`/demo?vista=huesped`, «WhatsApp simulado»): pregunta **¿Dónde queda la hostería?**, toca
+   **Consultar fechas**, escribe **20–22 nov · 2 adultos**, **Sin niños** y **Enviar a recepción**.
+2. Recepción (`/demo?vista=recepcion`, entra como Sofía): la solicitud llega **Pendiente de recepción** con
+   ID, fechas, huéspedes, canal y espera. **Tomar solicitud** → **En atención**; **Consultar inventario**
+   (inventario de prueba) y **Enviar respuesta**.
+3. El huésped ve «Sofía · Recepción» en el mismo hilo; recepción ve **Respondida** y la reserva sigue
+   **Pendiente de confirmación**. Recargar ambas vistas muestra el mismo caso.
 
-**Canal real (3 min):**
+El guion completo (fuera de turno, medición, respaldos) está en [guion de demo](docs/guion-demo.md) y la
+verificación D01–D10 en [verificación de la demo](docs/eva3/verificacion-demo.md).
 
-4. En la misma consola, pulsa **Escribir a recepción**: se abre el widget real de Chatwoot. Envía
+## Recorrido con Chatwoot (stack completo, opcional)
+
+Con `make up-full` la bandeja real de Chatwoot recibe las conversaciones del widget web. No se probó en el
+entorno de esta entrega (ver la verificación).
+
+1. En la portada abre el widget **Escribir a recepción** (Chatwoot). Envía
    **quiero reservar**. El copiloto responde igual, pero esta conversación sí entra al sistema.
-5. En otra ventana entra a http://localhost:3000 como `recepcion1@bordeluz-demo.test` (contraseña con
+2. En otra ventana entra a http://localhost:3000 como `recepcion1@bordeluz-demo.test` (contraseña con
    `make creds` o `./scripts/demo.sh creds`). La conversación del widget aparece **abierta**, con etiqueta
    `comercial`, la nota privada de pre-información y, en la barra lateral derecha, la app **Copiloto** con
-   el cronómetro (verde → ámbar a los 120 s → rojo a los 180 s). En la consola, la pestaña **Recepción**
-   muestra la misma conversación en la cola con su riesgo de SLA. Deja la bandeja abierta: mientras nadie
+   el cronómetro (verde → ámbar a los 120 s → rojo a los 180 s). Deja la bandeja abierta: mientras nadie
    de recepción está en línea el widget muestra «Estamos ausentes».
-6. Responde al huésped desde la bandeja: el cronómetro se detiene. Pulsa **Confirmar en el PMS** (en la
-   pestaña **Recepción** de la consola): se abre el PMS simulado con los datos prellenados; ingresa el
-   token de personal, confirma, y revisa http://localhost:8100/metricas (conversión, cumplimiento <180 s y
-   costo por consulta).
-7. Vuelve al simulador y prueba fuera de turno (`SHIFT_START`/`SHIFT_END` en `.env`) y con el PMS caído
-   (`SIMULATE_DOWN=1`): el bot informa el horario real o dice que recepción verificará cupos, sin afirmar
-   disponibilidad, y la escritura en el PMS simulado responde 503.
+3. Responde al huésped desde la bandeja: el cronómetro se detiene. Confirma en el PMS simulado
+   (http://localhost:8200/admin) con el token de personal y revisa http://localhost:8100/metricas
+   (conversión, cumplimiento <180 s y costo por consulta).
 
 ## Capturas
 
-| Landing pública | Simulador tipo WhatsApp |
+| Landing pública | Demo: huésped y recepción en el mismo hilo |
 |---|---|
 | ![Landing](docs/img/01-landing.webp) | ![Demo](docs/img/02-demo.webp) |
 
-| Traza de herramientas | Vista de recepción en la consola |
+| Chat del huésped en el teléfono | Bandeja: tomar, verificar cupo y responder |
 |---|---|
-| ![Traza](docs/img/03-traza.webp) | ![Recepción](docs/img/04-recepcion.webp) |
+| ![Chat móvil](docs/img/03-movil.webp) | ![Recepción](docs/img/04-recepcion.webp) |
 
 | Panel de recepción | Métricas del piloto |
 |---|---|
@@ -121,6 +124,7 @@ El recorrido completo, las decisiones y lo que falló en el camino están en el
 make help   # lista todos los comandos
 make test   # pytest de copiloto y pms_mock
 make ui-test # tests de la UI de la demo (node --test)
+make demo-local # demo sin Docker (copiloto con uv + portada); LIMPIO=1 parte de cero
 make e2e    # 4 casos reales contra el stack levantado (FAQ, disponibilidad, fuera de turno, PMS caído)
 make smoke  # construye las imágenes y comprueba que arrancan (también corre en CI)
 make backup # respaldo en caliente de Chatwoot y las bases SQLite en backups/
