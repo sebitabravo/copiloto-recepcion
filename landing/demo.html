@@ -3,44 +3,47 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Demo: huésped y recepción en el mismo hilo · Copiloto de recepción</title>
-<meta name="description" content="Prueba el copiloto de recepción como huésped y como recepción: el asistente orienta y prepara la solicitud, recepción la toma y responde en el mismo hilo. Alojamiento ficticio y datos de prueba.">
+<title>Demo en vivo: huésped y recepción · Copiloto de Recepción · Hotel Bordeluz</title>
+<meta name="description" content="Prueba el copiloto de recepción del Hotel Bordeluz como huésped y como recepción: ubicación primero, lectura del PMS simulado con hora y derivación con contexto al mismo hilo. Datos de prueba.">
 <link rel="canonical" href="__PUBLIC_SITE_URL__/demo">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#f3ebdf" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#14100b" media="(prefers-color-scheme: dark)">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="es_CL">
-<meta property="og:site_name" content="Copiloto de recepción">
-<meta property="og:title" content="Demo: huésped y recepción en el mismo hilo">
-<meta property="og:description" content="El asistente orienta y prepara la solicitud; recepción la toma con todo el contexto y responde en el mismo hilo. Datos de prueba.">
+<meta property="og:site_name" content="Copiloto de Recepción · Hotel Bordeluz">
+<meta property="og:title" content="Demo en vivo: huésped y recepción en el mismo hilo">
+<meta property="og:description" content="El copiloto del Hotel Bordeluz orienta, lee el PMS simulado con hora de lectura y deriva con contexto; recepción toma la solicitud y responde en el mismo hilo.">
 <meta property="og:url" content="__PUBLIC_SITE_URL__/demo">
 <meta property="og:image" content="__PUBLIC_SITE_URL__/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Copiloto de recepción: chat del huésped y bandeja de recepción">
+<meta property="og:image:alt" content="Copiloto de Recepción de Hotel Bordeluz: conversación del huésped y bandeja de recepción">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Demo: huésped y recepción en el mismo hilo">
-<meta name="twitter:description" content="Chat de prueba tipo WhatsApp y bandeja de recepción con estados, responsable y tiempo de espera. Datos de prueba.">
+<meta name="twitter:title" content="Demo en vivo: huésped y recepción en el mismo hilo">
+<meta name="twitter:description" content="Copiloto de recepción del Hotel Bordeluz: chat tipo WhatsApp y bandeja de recepción con estados, responsable y tiempo de espera. Datos de prueba.">
 <meta name="twitter:image" content="__PUBLIC_SITE_URL__/og-image.png">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebPage","name":"Demo del Copiloto de recepción","url":"__PUBLIC_SITE_URL__/demo","inLanguage":"es-CL","description":"Chat de prueba tipo WhatsApp y bandeja de recepción del copiloto, con un alojamiento ficticio y datos de prueba.","isPartOf":{"@type":"WebSite","name":"Copiloto de recepción","url":"__PUBLIC_SITE_URL__/"}}
+{"@context":"https://schema.org","@type":"WebPage","name":"Demo en vivo del Copiloto de Recepción","url":"__PUBLIC_SITE_URL__/demo","inLanguage":"es-CL","description":"Chat tipo WhatsApp y bandeja de recepción del copiloto del Hotel Bordeluz, con PMS simulado y datos de prueba.","isPartOf":{"@type":"WebSite","name":"Copiloto de Recepción · Hotel Bordeluz","url":"__PUBLIC_SITE_URL__/"}}
 </script>
 <link rel="preload" href="fonts/instrument-serif-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/inter-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="demo.css?v=20261107a">
-<link rel="stylesheet" href="demo-split.css?v=20261108a">
+<link rel="stylesheet" href="demo-split.css?v=20261108c">
 </head>
 <body class="demo-page" data-view="ambas">
 <a class="skip" href="#main">Saltar al contenido</a>
 
 <div class="topbar-shell" id="topbar">
   <div class="wrap topbar">
-    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">C</span>Copiloto de recepción<span class="brand-tag">Demo</span></a>
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">B</span>Bordeluz<span class="brand-tag">Copiloto de recepción</span></a>
     <nav aria-label="Navegación principal">
-      <a href="/">Volver al inicio</a>
-      <span class="test-badge">Datos de prueba</span>
+      <a href="/#recorrido">Recorrido</a>
+      <a href="/#recepcion">Recepción</a>
+      <a href="/#limites">Límites</a>
+      <a class="nav-cta" href="/">Volver al inicio</a>
     </nav>
   </div>
 </div>
@@ -48,9 +51,9 @@
 <main id="main" class="wrap demo-main" tabindex="-1">
   <header class="demo-head">
     <div>
-      <p class="eyebrow">Huésped y recepción · mismo hilo</p>
-      <h1>Copiloto de <em>recepción</em></h1>
-      <p class="demo-lede">El asistente orienta y prepara la solicitud. Recepción la toma con el contexto, verifica cupos y responde al huésped en la misma conversación.</p>
+      <p class="eyebrow">Demo en vivo · datos de prueba</p>
+      <h1>Pruébalo como huésped <em>y como recepción.</em></h1>
+      <p class="demo-lede">La misma conversación en dos lados: el copiloto muestra la ubicación primero, lee el PMS simulado con hora de lectura y deriva con contexto. Recepción toma la solicitud y responde en el mismo hilo; la reserva la confirma una persona.</p>
     </div>
   </header>
 
@@ -75,6 +78,11 @@
     <p id="shift-status" class="shift-status" role="status" aria-live="polite">Consultando el horario…</p>
   </section>
 
+  <div class="app-frame">
+    <div class="app-bar" aria-hidden="true">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="addr" id="app-addr">copiloto.bordeluz.demo · datos de prueba</span>
+    </div>
   <div class="split-stage">
     <!-- ======================= Huésped ======================= -->
     <section id="guest-view" class="guest-view" aria-labelledby="guest-title" data-role="huesped">
@@ -84,16 +92,16 @@
           <span class="wa-back" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 5l-7 7 7 7"/></svg>
           </span>
-          <span class="wa-avatar" aria-hidden="true">H</span>
+          <span class="wa-avatar" aria-hidden="true">B</span>
           <div class="wa-who">
-            <strong id="guest-hotel">Hostería Demo Villarrica</strong>
-            <span id="guest-channel">WhatsApp simulado</span>
+            <strong id="guest-hotel">Hotel Boutique Bordeluz</strong>
+            <span class="wa-status"><i class="online" aria-hidden="true"></i><span id="guest-channel">WhatsApp simulado</span> · copiloto en línea</span>
           </div>
           <span class="wa-menu" aria-hidden="true">⋮</span>
         </header>
         <p id="guest-request" class="guest-request" role="status" aria-live="polite" hidden></p>
-        <div id="guest-thread" class="thread wa-thread" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversación con la hostería" tabindex="0">
-          <p class="system-notice">Chat de prueba con datos ficticios. No escribas datos personales reales. Al escribir aceptas el <a id="privacy-link" href="/privacidad?alojamiento=demo" target="_blank" rel="noopener">aviso de privacidad</a>.</p>
+        <div id="guest-thread" class="thread wa-thread" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversación con el hotel" tabindex="0">
+          <p class="system-notice">Chat de prueba: no escribas datos personales reales. Al escribir aceptas el <a id="privacy-link" href="/privacidad" target="_blank" rel="noopener">aviso de privacidad</a>.</p>
         </div>
         <div id="guest-typing" class="typing-dots" hidden><i></i><i></i><i></i><span class="sr-only">El asistente está escribiendo</span></div>
         <div id="guest-error" class="inline-error" role="alert" hidden><span></span><button type="button">Reintentar</button></div>
@@ -104,7 +112,7 @@
           <button type="button" data-say="Hablar con recepción">Hablar con recepción</button>
         </div>
         <form id="guest-form" class="chat-composer">
-          <label class="sr-only" for="guest-input">Mensaje para la hostería</label>
+          <label class="sr-only" for="guest-input">Mensaje para el hotel</label>
           <span class="composer-icon" aria-hidden="true">☺</span>
           <input id="guest-input" type="text" maxlength="400" autocomplete="off" placeholder="Escribe un mensaje">
           <button id="guest-send" class="send" type="submit" aria-label="Enviar mensaje" disabled>
@@ -113,7 +121,7 @@
         </form>
       </div>
       <div class="guest-foot">
-        <p>Simula el WhatsApp del huésped. Corre contra el servidor de la demo; no pasa por WhatsApp ni por un hotel real.</p>
+        <p>Simulador tipo WhatsApp: corre contra el servidor de la demo y no usa el número real del hotel.</p>
         <button id="guest-reset" class="link-button" type="button">Empezar como otro huésped</button>
       </div>
     </section>
@@ -123,7 +131,7 @@
       <header class="inbox-bar">
         <h2 id="inbox-title">Bandeja de recepción</h2>
         <div class="inbox-who">
-          <span id="inbox-live" class="live" role="status" aria-live="polite">Conectando…</span>
+          <span id="inbox-live" class="live-chip" role="status" aria-live="polite">Conectando…</span>
           <button id="inbox-identity" class="identity" type="button" aria-haspopup="dialog">Atiendes como <b id="inbox-name">—</b></button>
         </div>
       </header>
@@ -165,9 +173,9 @@
           <dl id="card-facts" class="facts"></dl>
           <section class="card-block" aria-labelledby="inventory-title">
             <h4 id="inventory-title">Verificar cupo</h4>
-            <p class="hint">Inventario de prueba (ficticio). La lectura es preliminar: no bloquea cupos ni reserva.</p>
+            <p class="hint">PMS simulado: lectura preliminar con hora. No bloquea cupos ni crea la reserva.</p>
             <div class="inventory-controls">
-              <button id="inventory-check" class="button-sm" type="button">Consultar inventario</button>
+              <button id="inventory-check" class="button-sm" type="button">Consultar el PMS</button>
               <label class="check"><input id="inventory-down" type="checkbox"> Simular caída</label>
             </div>
             <div id="inventory-result" class="inventory-result" role="status" aria-live="polite"></div>
@@ -180,6 +188,7 @@
         </aside>
       </div>
     </section>
+  </div>
   </div>
 
   <dialog id="identity-dialog" class="identity-dialog" aria-labelledby="identity-title">
@@ -200,21 +209,24 @@
 <footer>
   <div class="wrap footer-grid">
     <div class="footer-brand">
-      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">C</span>Copiloto de recepción</a>
-      <p>Prototipo académico · INNOVA3, INACAP Temuco</p>
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">B</span>Bordeluz</a>
+      <p>Copiloto de recepción con IA · demo de portafolio</p>
     </div>
     <nav class="footer-nav" aria-label="Enlaces del prototipo">
-      <a href="/">Volver al inicio</a>
-      <a href="/privacidad?alojamiento=demo" target="_blank" rel="noopener">Aviso de privacidad</a>
+      <a href="/">Inicio</a>
+      <a href="/#recorrido">Recorrido</a>
+      <a href="/#recepcion">Recepción</a>
+      <a href="/#limites">Límites</a>
+      <a href="/privacidad" target="_blank" rel="noopener">Aviso de privacidad</a>
     </nav>
-    <div class="footer-legal"><p><strong>Datos de prueba.</strong> Hostería Demo Villarrica es un alojamiento ficticio: nombre, ubicación, cupos y conversaciones son simulados. El asistente no confirma reservas; recepción verifica y confirma.</p></div>
+    <div class="footer-legal"><p><strong>Proyecto de portafolio · INNOVA3, INACAP.</strong> Todos los datos de huéspedes son ficticios. Precios y disponibilidad del PMS son simulados. No es el sitio oficial del hotel ni un canal de reserva real.</p></div>
   </div>
 </footer>
 
-<script src="config.js?v=20261108a" defer></script>
-<script src="demo-shared.js?v=20261108a" defer></script>
-<script src="demo-guest.js?v=20261108a" defer></script>
-<script src="demo-inbox.js?v=20261108a" defer></script>
-<script src="demo-page.js?v=20261108a" defer></script>
+<script src="config.js?v=20261108c" defer></script>
+<script src="demo-shared.js?v=20261108c" defer></script>
+<script src="demo-guest.js?v=20261108c" defer></script>
+<script src="demo-inbox.js?v=20261108c" defer></script>
+<script src="demo-page.js?v=20261108c" defer></script>
 </body>
 </html>

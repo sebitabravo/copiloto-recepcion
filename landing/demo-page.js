@@ -32,6 +32,8 @@
       ? ` · ${hours}. La meta de primera respuesta es de 3 minutos.`
       : ` · ${hours}. Las solicitudes quedan guardadas; responde desde las ${shift.next_opening}.`));
     if (scenario) box.append(document.createTextNode(' (simulado para esta sesión)'));
+    // La barra del marco, como en el hero de la portada: dirección y estado del turno.
+    $('app-addr').textContent = `copiloto.bordeluz.demo · ${open ? 'recepción en turno' : 'fuera de turno'} · datos de prueba`;
   }
 
   function start(view) {

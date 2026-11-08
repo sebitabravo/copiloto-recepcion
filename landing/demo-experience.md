@@ -1,7 +1,8 @@
 # /demo: huésped y recepción en el mismo hilo
 
-La demo muestra una sola consulta desde dos roles. La portada (`index.html`) y su hoja (`demo.css`) no
-cambian: `/demo` reutiliza sus tipografías, tokens, barra y pie, y agrega `demo-split.css`.
+La demo muestra una sola consulta desde dos roles y es la versión en vivo del marco que muestra el hero de la
+portada: misma marca («B» Bordeluz), mismo hotel, mismos tokens de color y tipografías. `demo-split.css` solo usa
+los tokens de `demo.css`, así el modo oscuro y cualquier cambio de paleta de la portada llegan solos a la demo.
 
 ## Piezas
 
