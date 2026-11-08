@@ -14,6 +14,10 @@
   let handledBy = 'asistente';
   let busy = false;
   let pollTimer = 0;
+  // `epoch` cambia con cada huésped nuevo: una lectura que empezó con otro epoch se descarta al llegar.
+  let epoch = 0;
+  let reading = false;
+  let failures = 0;
   let shift = () => '';
   let pendingRetry = null;
   const rendered = new Set();
@@ -127,44 +131,65 @@
     clearError();
     clearQuick();
     const node = bubble || pendingBubble(text);
+    const sentEpoch = epoch;
     setBusy(true);
     try {
       const body = {session_id: sessionId, message: text, client_message_id: clientId};
       if (shift()) body.shift = shift();
       const data = await S.api('/api/demo/chat', {method: 'POST', body});
       node.remove();
-      apply(data);
+      if (sentEpoch === epoch) apply(data);
     } catch (error) {
-      markFailed(node, text, clientId, error);
+      if (sentEpoch === epoch) markFailed(node, text, clientId, error);
     } finally {
       // Sin reenfocar el campo: en un teléfono abriría el teclado tras tocar un atajo.
       setBusy(false);
     }
   }
 
+  // Una sola lectura a la vez; su resultado solo se aplica si sigue siendo el mismo huésped.
   async function refresh() {
-    if (!sessionId) return;
+    if (!sessionId || reading) return;
+    reading = true;
+    const readEpoch = epoch;
     try {
       const path = `/api/demo/conversation?session_id=${encodeURIComponent(sessionId)}&after=${lastId}`;
-      apply(await S.api(path));
+      const data = await S.api(path);
+      if (readEpoch !== epoch) return;
+      failures = 0;
+      clearError();
+      apply(data);
     } catch (error) {
-      if (error.status !== 429) showError(error.message, refresh);
+      if (readEpoch !== epoch) return;
+      failures += 1;
+      // 429 o red caída: se reintenta solo, con espera acotada (Retry-After si el servidor la pide).
+      if (error.status !== 429) showError(`${error.message} Reintentamos solos en unos segundos.`, refresh);
+      if (handledBy === 'recepcion') schedulePoll(S.backoff(failures, error.retryAfter, POLL_MS));
+    } finally {
+      if (readEpoch === epoch) reading = false;
     }
   }
 
-  function schedulePoll() {
+  // Un solo ciclo: cada programación reemplaza a la anterior y el temporizador no corre si cambió el huésped.
+  function schedulePoll(delay = POLL_MS) {
     clearTimeout(pollTimer);
     if (handledBy !== 'recepcion') return;
+    const pollEpoch = epoch;
     pollTimer = setTimeout(async () => {
-      if (!document.hidden && !busy) await refresh();
-      else schedulePoll();
-    }, POLL_MS);
+      if (pollEpoch !== epoch) return;
+      if (document.hidden || busy || reading) schedulePoll(delay);
+      else await refresh();
+    }, delay);
   }
 
   // Otro huésped: sesión nueva. El caso anterior sigue en la bandeja (recepción no pierde lo que atiende);
   // la demo lo purga sola al vencer su sesión. Para borrar todo: `make demo-local LIMPIO=1`.
   function newGuest() {
     if (busy) return;
+    // Todo lo que esté en vuelo pertenece al huésped anterior: se invalida antes de limpiar la vista.
+    epoch += 1;
+    reading = false;
+    failures = 0;
     sessionId = S.newId();
     S.store.set('sessionStorage', SESSION_KEY, sessionId);
     clearTimeout(pollTimer);
