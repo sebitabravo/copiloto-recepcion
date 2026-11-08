@@ -23,7 +23,20 @@
   const base = configured ? resolveUrl(config.copilotoUrl) : (config.staticDemo ? '' : resolveUrl('http://localhost:8100'));
 
   class ApiError extends Error {
-    constructor(status, message, data) { super(message); this.status = status; this.data = data || {}; }
+    constructor(status, message, data, retryAfter = null) {
+      super(message);
+      this.status = status;
+      this.data = data || {};
+      // Segundos que pide el servidor antes de reintentar (cabecera Retry-After o retry_after_s).
+      this.retryAfter = retryAfter;
+    }
+  }
+
+  function retryAfterSeconds(response, data) {
+    const header = Number.parseInt((response.headers && response.headers.get('Retry-After')) || '', 10);
+    if (Number.isFinite(header) && header >= 0) return header;
+    const body = Number(data && data.retry_after_s);
+    return Number.isFinite(body) && body >= 0 ? body : null;
   }
 
   function friendly(status, data) {
@@ -55,8 +68,16 @@
     if (response.status !== 204) {
       try { data = await response.json(); } catch (_) { data = {}; }
     }
-    if (!response.ok) throw new ApiError(response.status, friendly(response.status, data), data);
+    if (!response.ok) {
+      throw new ApiError(response.status, friendly(response.status, data), data, retryAfterSeconds(response, data));
+    }
     return data;
+  }
+
+  // Espera del siguiente intento: Retry-After si el servidor lo pide; si no, doble por cada fallo, con tope.
+  function backoff(failures, retryAfter, base = 4000, max = 30000) {
+    if (retryAfter != null) return Math.min(Math.max(retryAfter * 1000, 1000), 120000);
+    return Math.min(base * 2 ** Math.max(failures, 1), max);
   }
 
   // Llave de idempotencia por acción: [A-Za-z0-9-]{8,64}. Un reintento reutiliza la misma.
@@ -197,7 +218,7 @@
   }
 
   window.DemoShared = {
-    api, ApiError, newId, store, time, dateTime, stayRange, guests, summary, clock, tone, liveElapsed,
+    api, ApiError, backoff, newId, store, time, dateTime, stayRange, guests, summary, clock, tone, liveElapsed,
     waitTone, splitParagraphs, el, messageNodes, base
   };
 })();

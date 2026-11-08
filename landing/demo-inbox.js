@@ -17,11 +17,18 @@
     return `Hay disponibilidad en ${room} para esas fechas. ¿Quieres avanzar con la reserva?`;
   };
 
+  // `generation` sube con cada cambio de caso: una carga o acción que empezó con otra generación ya no manda
+  // en la pantalla. `queued` pide otra lectura cuando la selección cambió con una carga en curso.
   const state = {
-    me: null, items: [], selected: null, detail: null, fetchedAt: Date.now(), amber: 120, target: 180,
-    filter: 'todas', search: '', draft: {}, kind: 'answer', sending: false, retry: null, inventory: {},
-    pollTimer: 0, tickTimer: 0, loading: false, stickBottom: false
+    me: null, items: [], selected: null, generation: 0, detail: null, fetchedAt: Date.now(),
+    detailFetchedAt: Date.now(), amber: 120, target: 180, filter: 'todas', search: '', draft: {}, kind: 'answer',
+    sending: false, retry: null, inventory: {}, pollTimer: 0, tickTimer: 0, loading: false, queued: false,
+    stickBottom: false
   };
+
+  // El detalle solo vale si es el del caso seleccionado: nunca se actúa sobre un detalle de otro caso.
+  const currentDetail = () => (state.detail && state.detail.id === state.selected ? state.detail : null);
+  const stillSelected = (id, generation) => state.selected === id && state.generation === generation;
 
   // ---------- sesión de recepción ----------
 
@@ -51,6 +58,8 @@
       $('identity-dialog').close?.();
       $('identity-dialog').removeAttribute('open');
       state.detail = null;
+      state.selected = null;
+      state.generation += 1;
       await refresh();
       $('inbox-identity').focus();
     } catch (error) {
@@ -62,19 +71,32 @@
   // ---------- lectura ----------
 
   async function refresh() {
-    if (state.loading || !state.me) return;
+    if (!state.me) return;
+    if (state.loading) { state.queued = true; return; }
     state.loading = true;
+    // La carga recuerda qué caso y qué generación pidió: si la persona cambia de caso, no pisa la pantalla.
+    const ticket = {id: state.selected, generation: state.generation};
     try {
-      const path = '/api/panel/requests' + (state.selected ? `?selected=${state.selected}` : '');
+      const path = '/api/panel/requests' + (ticket.id ? `?selected=${ticket.id}` : '');
       const data = await S.api(path, {staff: true});
       state.fetchedAt = Date.now();
       state.items = data.requests;
       state.amber = data.amber_s;
       state.target = data.target_s;
-      state.detail = data.selected;
-      if (state.selected && !state.detail) state.selected = null;
       $('inbox-error').hidden = true;
       $('inbox-live').textContent = `En vivo · actualizado ${S.time(data.now)}`;
+      if (stillSelected(ticket.id, ticket.generation)) {
+        const detail = data.selected && data.selected.id === ticket.id ? data.selected : null;
+        if (ticket.id && !detail) {
+          // El caso ya no está en esta bandeja (p. ej. otra corrida): se suelta la selección.
+          state.selected = null;
+          state.generation += 1;
+        }
+        state.detail = detail;
+        state.detailFetchedAt = state.fetchedAt;
+      } else {
+        state.queued = true;
+      }
       renderList();
       renderDetail();
     } catch (error) {
@@ -85,7 +107,12 @@
       $('inbox-live').textContent = 'Sin conexión';
     } finally {
       state.loading = false;
-      schedule();
+      if (state.queued) {
+        state.queued = false;
+        refresh();
+      } else {
+        schedule();
+      }
     }
   }
 
@@ -155,9 +182,14 @@
   }
 
   async function select(id) {
-    if (state.detail && state.detail.id) state.draft[state.detail.id] = currentDraft();
+    const shown = currentDetail();
+    if (shown) state.draft[shown.id] = currentDraft();
     state.selected = id;
+    state.generation += 1;
+    // Hasta que llegue el detalle del caso nuevo no hay acciones: nada puede apuntar al caso anterior.
+    state.detail = null;
     renderList();
+    renderDetail();
     await refresh();
     $('case-messages').focus({preventScroll: true});
   }
@@ -297,7 +329,7 @@
     const measure = detail.measurement;
     const clock = S.el('span', 'clock');
     clock.dataset.live = measure.state === 'en_curso' || measure.state === 'vencida' ? '1' : '';
-    const seconds = S.liveElapsed(measure, state.fetchedAt);
+    const seconds = S.liveElapsed(measure, state.detailFetchedAt);
     clock.textContent = seconds == null ? '—' : S.clock(seconds);
     const reservation = S.el('span', 'badge', detail.reservation_label);
     reservation.dataset.tone = detail.reservation_status === 'confirmada' ? 'green' : 'amber';
@@ -385,11 +417,21 @@
   }
 
   function renderDetail() {
-    const detail = state.detail;
+    const detail = currentDetail();
     $('case-empty').hidden = Boolean(detail);
     $('case-thread').hidden = !detail;
     $('case-card').hidden = !detail;
-    if (!detail) return;
+    $('inventory-check').disabled = !detail || !detail.actions.inventory;
+    if (!detail) {
+      const loading = state.selected && state.items.find(entry => entry.id === state.selected);
+      const empty = $('case-empty');
+      empty.textContent = '';
+      empty.append(S.el('p', '', loading ? `Cargando ${loading.code}…`
+        : 'Elige una solicitud para ver la conversación, el contexto y la acción que corresponde.'));
+      $('case-action').dataset.case = '';
+      $('case-action').textContent = '';
+      return;
+    }
     $('case-code').textContent = detail.code;
     $('case-status').textContent = detail.status_label;
     $('case-status').dataset.tone = S.tone(detail.status);
@@ -401,48 +443,65 @@
 
   // ---------- acciones ----------
 
-  async function act(action) {
-    const id = state.detail && state.detail.id;
-    if (!id) return;
+  // Aplica la respuesta de una acción solo si su caso sigue seleccionado; si no, la lista se refresca sola.
+  function applyResult(id, generation, detail) {
+    if (!detail || detail.id !== id || !stillSelected(id, generation)) return false;
+    state.detail = detail;
+    state.detailFetchedAt = Date.now();
+    renderDetail();
+    return true;
+  }
+
+  async function act(action, target = null) {
+    const detail = target || currentDetail();
+    if (!detail) return;
+    const {id, code} = detail;
+    const generation = state.generation;
     const button = action === 'take' ? $('take-request') : $('case-close');
     if (button) button.disabled = true;
     try {
-      state.detail = await S.api(`/api/panel/requests/${id}/${action}`, {method: 'POST', staff: true});
+      const data = await S.api(`/api/panel/requests/${id}/${action}`, {method: 'POST', staff: true});
       $('case-action').dataset.mode = 'stale';
       state.stickBottom = true;
-      renderDetail();
-      if (action === 'take') $('reply-text')?.focus();
+      if (applyResult(id, generation, data) && action === 'take') $('reply-text')?.focus();
     } catch (error) {
-      if (error.data && error.data.request) state.detail = error.data.request;
-      showError(error.message, () => act(action));
-      renderDetail();
+      if (error.data && error.data.request) applyResult(id, generation, error.data.request);
+      showError(`${code}: ${error.message}`, () => act(action, {id, code}));
     } finally {
       if (button) button.disabled = false;
       refresh();
     }
   }
 
+  // Un envío lleva su caso, su llave y su texto desde el primer intento: reintentar repite exactamente eso,
+  // aunque la persona ya esté mirando otro caso.
   async function reply(retryWith = null) {
-    const id = state.detail && state.detail.id;
-    const field = $('reply-text');
-    if (!id || state.sending) return;
-    const pending = retryWith || {clientId: S.newId(), body: field.value.trim(), kind: state.kind};
+    if (state.sending) return;
+    let pending = retryWith;
+    if (!pending) {
+      const detail = currentDetail();
+      const field = $('reply-text');
+      if (!detail || !field || $('case-action').dataset.case !== String(detail.id)) return;
+      pending = {requestId: detail.id, code: detail.code, clientId: S.newId(), body: field.value.trim(), kind: state.kind};
+    }
     if (!pending.body) return;
+    const generation = state.generation;
     state.sending = true;
     updateSendButton();
-    $('reply-send').textContent = 'Enviando…';
+    if ($('reply-send')) $('reply-send').textContent = 'Enviando…';
     try {
-      const data = await S.api(`/api/panel/requests/${id}/reply`, {method: 'POST', staff: true,
+      const data = await S.api(`/api/panel/requests/${pending.requestId}/reply`, {method: 'POST', staff: true,
         body: {body: pending.body, kind: pending.kind, client_id: pending.clientId}});
-      state.detail = data.request;
-      state.draft[id] = '';
-      state.stickBottom = true;
-      if ($('reply-text')) $('reply-text').value = '';
+      state.draft[pending.requestId] = '';
       $('inbox-error').hidden = true;
-      renderDetail();
+      state.stickBottom = true;
+      const field = $('reply-text');
+      if (field && $('case-action').dataset.case === String(pending.requestId)) field.value = '';
+      applyResult(pending.requestId, generation, data.request);
     } catch (error) {
-      // La respuesta queda en el campo y el reintento usa la MISMA llave: no se duplica en el hilo.
-      showError(`No se envió la respuesta. ${error.message}`, () => reply(pending));
+      // El texto queda en su borrador y el reintento usa el MISMO caso, llave y texto: no se duplica.
+      state.draft[pending.requestId] = pending.body;
+      showError(`No se envió la respuesta a ${pending.code}. ${error.message}`, () => reply(pending));
     } finally {
       state.sending = false;
       if ($('reply-send')) $('reply-send').textContent = 'Enviar respuesta';
@@ -452,22 +511,25 @@
   }
 
   async function checkInventory() {
-    const id = state.detail && state.detail.id;
-    if (!id) return;
+    const detail = currentDetail();
+    if (!detail) return;
+    const {id} = detail;
+    const generation = state.generation;
     const button = $('inventory-check');
     button.disabled = true;
     button.textContent = 'Consultando…';
     try {
       const data = await S.api(`/api/panel/requests/${id}/inventory`, {method: 'POST', staff: true,
         body: {simulate_down: $('inventory-down').checked}});
+      // La lectura queda guardada con su caso: si la persona cambió de caso, se ve al volver a él.
       state.inventory[id] = data;
-      state.detail = data.request;
-      renderDetail();
+      applyResult(id, generation, data.request);
     } catch (error) {
-      showError(error.message, checkInventory);
+      showError(`${detail.code}: ${error.message}`, checkInventory);
     } finally {
       button.textContent = 'Consultar el PMS';
-      button.disabled = !(state.detail && state.detail.actions.inventory);
+      const shown = currentDetail();
+      button.disabled = !(shown && shown.actions.inventory);
     }
   }
 
@@ -481,7 +543,8 @@
       if (wait.tone) node.dataset.tone = wait.tone; else delete node.dataset.tone;
     });
     const clock = document.querySelector('#card-facts .clock[data-live="1"]');
-    if (clock && state.detail) clock.textContent = S.clock(S.liveElapsed(state.detail.measurement, state.fetchedAt));
+    const shown = currentDetail();
+    if (clock && shown) clock.textContent = S.clock(S.liveElapsed(shown.measurement, state.detailFetchedAt));
   }
 
   async function init() {
