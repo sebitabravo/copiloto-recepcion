@@ -4,7 +4,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE=(docker compose -f "$ROOT/infra/docker-compose.yml" --project-directory "$ROOT")
+COMPOSE=(docker compose -f "$ROOT/infra/docker-compose.yml" --project-directory "$ROOT" --profile full)
 COPILOTO="${COPILOTO_URL:-http://localhost:8100}"
 LANDING="${LANDING_URL:-http://localhost:8080}"
 PMS="${PMS_URL:-http://localhost:8200}"

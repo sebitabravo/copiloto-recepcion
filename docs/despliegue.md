@@ -15,6 +15,38 @@ Requiere Docker con 4 GB o más. Si Chatwoot no arranca por falta de memoria con
 El stack se define en `infra/docker-compose.yml` con imágenes fijadas: `chatwoot/chatwoot:v4.18.0-ce`,
 `pgvector/pgvector:pg16`, `redis:7-alpine`, `nginx:alpine`. `make up` es idempotente: puedes repetirlo.
 
+## Dos modos de arranque
+
+La demo no necesita Chatwoot. Hay dos formas de levantar el proyecto y conviene elegir la liviana para
+presentar:
+
+| Comando | Servicios | RAM en reposo | Cuándo usarlo |
+| --- | --- | --- | --- |
+| `make up` | landing, copiloto, pms-mock | ~110 MB | Presentar `/demo`: huésped → recepción → respuesta |
+| `make up-full` | los anteriores + Chatwoot, Sidekiq, Postgres, Redis | ~1,3 GB | Probar la bandeja real, el widget y WhatsApp |
+
+Chatwoot, Sidekiq, Postgres y Redis están detrás del perfil `full` (`docker compose --profile full`), así
+que un `docker compose up -d` normal arranca solo la demo. Los scripts que sí los necesitan
+(`seed-chatwoot.sh`, `smoke-docker.sh`, `preflight.sh`, `backup.sh`, `wa-e2e.sh`) ya declaran ese perfil.
+
+Sin Chatwoot, el botón «Escribir a recepción» de la landing muestra su aviso de canal no disponible en vez
+de abrir el widget: el canal real es opcional para la demo.
+
+### IA y voz por API
+
+El contenedor local de modelo (`llama.cpp`/Qwen, 4,4 GB de imagen) es opcional y ya no hace falta: el
+cliente del copiloto habla la API de DeepSeek. Basta con dejar en `.env`:
+
+```sh
+LLM_API_KEY=<clave de DeepSeek>      # sin esto la demo responde en modo guiado, sin IA
+# LLM_BASE_URL y LLM_MODEL ya apuntan a DeepSeek por defecto en el compose
+ELEVENLABS_API_KEY=<clave>           # sin esto la voz usa la síntesis del navegador
+ELEVENLABS_VOICE_ID=<id>
+ELEVENLABS_VOICE_ID_EN=<id en inglés>
+```
+
+El modelo local sigue disponible como respaldo con `infra/docker-compose.ia.yml` y `make model`.
+
 Este repo se desarrolla en Windows con Git Bash y los scripts lo tienen en cuenta: desactivan la conversión
 de rutas de MSYS (`MSYS_NO_PATHCONV`) y los comandos de Python usan `uv run python`, así que `make piloto` y
 `make e2e` (que añade `tzdata`) funcionan igual en Windows y Linux.

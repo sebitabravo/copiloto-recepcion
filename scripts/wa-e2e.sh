@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-dc() { docker compose -f infra/docker-compose.yml --project-directory . --profile whatsapp "$@"; }
+dc() { docker compose -f infra/docker-compose.yml --project-directory . --profile full --profile whatsapp "$@"; }
 
 # En Git Bash/MSYS, -v "...:/e2e:ro" se reescribe como ruta de Windows y Docker la rechaza.
 export MSYS_NO_PATHCONV=1

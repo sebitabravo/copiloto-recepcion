@@ -9,7 +9,7 @@ dest="backups/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$dest"
 # NTFS no soporta el modelo de permisos de Unix: si chmod falla (Windows) se continúa.
 chmod 700 backups "$dest" 2>/dev/null || true
-compose=(docker compose -f infra/docker-compose.yml --project-directory . --profile whatsapp)
+compose=(docker compose -f infra/docker-compose.yml --project-directory . --profile full --profile whatsapp)
 
 "${compose[@]}" exec -T postgres pg_dump -U postgres --no-owner chatwoot | gzip >"$dest/chatwoot.sql.gz"
 

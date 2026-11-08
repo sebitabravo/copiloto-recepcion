@@ -14,7 +14,7 @@ if command -v cygpath >/dev/null 2>&1; then
   data_mount="$(cygpath -m "$PWD/data")"
 fi
 
-compose=(docker compose -f infra/docker-compose.yml --project-directory .)
+compose=(docker compose -f infra/docker-compose.yml --project-directory . --profile full)
 "${compose[@]}" config --quiet
 
 docker build -q -t smoke-copiloto ./copiloto >/dev/null

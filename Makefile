@@ -1,8 +1,10 @@
 # Copiloto de Recepción · demo Hotel Bordeluz
 COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
+# Chatwoot, Postgres, Redis y Sidekiq solo existen con este perfil: la demo no los necesita.
+COMPOSE_FULL = $(COMPOSE) --profile full
 
 .DEFAULT_GOAL := help
-.PHONY: help up down reset env ps logs test lint bridge seed health e2e creds smoke backup ai-smoke demo model ui-test piloto beds24-check wa-up wa-down wa-qr wa-e2e
+.PHONY: help up up-full down reset env ps logs test lint bridge seed health e2e creds smoke backup ai-smoke demo model ui-test piloto beds24-check wa-up wa-down wa-qr wa-e2e
 
 help: ## Muestra esta ayuda
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z0-9_-]+:.*## / {printf "  \033[1m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -10,26 +12,35 @@ help: ## Muestra esta ayuda
 env: ## Crea .env con secretos aleatorios si falta
 	./scripts/bootstrap.sh
 
-# Levanta todo el stack local; el primer arranque de Chatwoot puede tardar varios minutos.
-up: env ## Levanta todo el stack (primer arranque: varios minutos)
-	$(COMPOSE) build
-	$(COMPOSE) up -d postgres redis
-	$(COMPOSE) run --rm chatwoot bundle exec rails db:chatwoot_prepare
-	$(COMPOSE) up -d chatwoot sidekiq pms-mock landing
+# Demo liviana: landing + copiloto + PMS simulado. Sin Chatwoot no hay bandeja real ni widget,
+# y el aviso de «canal no disponible» aparece solo. La IA usa DeepSeek con LLM_API_KEY.
+up: env ## Levanta la demo liviana (landing, copiloto y PMS)
+	$(COMPOSE) build copiloto pms-mock
+	$(COMPOSE) up -d pms-mock landing copiloto
+	./scripts/wait-healthy.sh
+	$(COMPOSE) restart landing
+	@echo "Demo: http://localhost:8080/demo · API: http://localhost:8100 · PMS: http://localhost:8200"
+
+# Stack completo con Chatwoot (bandeja real, widget y WhatsApp). Primer arranque: varios minutos.
+up-full: env ## Levanta todo el stack, incluido Chatwoot (primer arranque: varios minutos)
+	$(COMPOSE_FULL) build
+	$(COMPOSE_FULL) up -d postgres redis
+	$(COMPOSE_FULL) run --rm chatwoot bundle exec rails db:chatwoot_prepare
+	$(COMPOSE_FULL) up -d chatwoot sidekiq pms-mock landing
 	./scripts/wait-healthy.sh
 	./scripts/seed-chatwoot.sh
-	$(COMPOSE) up -d --force-recreate copiloto
+	$(COMPOSE_FULL) up -d --force-recreate copiloto
 	./scripts/wait-healthy.sh
 	# nginx lee el bind-mount de infra/landing/nginx.conf al arrancar: un reinicio evita que /demo
 	# dé 404 en un stack ya levantado tras un cambio de configuración.
-	$(COMPOSE) restart landing
+	$(COMPOSE_FULL) restart landing
 	@echo "Listo. Landing: http://localhost:8080 · Recepción: http://localhost:3000 · Métricas: http://localhost:8100/metricas"
 
-seed: ## Vuelve a sembrar Chatwoot (idempotente)
+seed: ## Vuelve a sembrar Chatwoot (idempotente; requiere --profile full)
 	./scripts/seed-chatwoot.sh
 
 ps: ## Estado de los contenedores
-	$(COMPOSE) ps
+	$(COMPOSE_FULL) ps
 
 logs: ## Sigue los logs del copiloto y el PMS
 	$(COMPOSE) logs -f --tail=100 copiloto pms-mock
@@ -59,7 +70,7 @@ down: ## Detiene el stack (conserva los datos; pide confirmación)
 	  exit 1; \
 	fi; \
 	case "$$ok" in \
-	  s) $(COMPOSE) down ;; \
+	  s) $(COMPOSE_FULL) down ;; \
 	  *) echo "Cancelado: el stack sigue levantado." ;; \
 	esac
 
@@ -70,7 +81,7 @@ reset: ## BORRA volúmenes y datos (pide confirmación)
 	  exit 1; \
 	fi; \
 	case "$$ok" in \
-	  s) $(COMPOSE) down -v && rm -f .env.runtime landing/config.js ;; \
+	  s) $(COMPOSE_FULL) down -v && rm -f .env.runtime landing/config.js ;; \
 	  *) echo "Cancelado: los datos se conservan." ;; \
 	esac
 
