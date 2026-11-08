@@ -131,6 +131,7 @@
     }],
     [/\/api\/panel\/[^/]+\/note/, () => ({id: 1, author: 'Recepción (demo)', body: 'Nota de demostración.', created_at: Date.now() / 1000})],
     [/\/api\/panel\/[^/]+/, () => detalle()],
+    [/\/health/, () => ({status: 'ok', demo: 'static', checks: {process: true, sqlite: false}})],
     [/\/metricas\/data\.json/, () => ({
       window_days: 7, conversations: state.messages.length ? 1 : 0, ai_replies: window.__STATIC_DEMO__.replies,
       handoffs: state.handoff ? 1 : 0, bookings: 0, cost_per_conversation_clp: 0
@@ -155,7 +156,12 @@
     banner.style.cssText = 'position:sticky;top:0;z-index:60;padding:8px 16px;background:#8d5a2b;color:#fffaf2;font:600 12px/1.4 system-ui,sans-serif;text-align:center';
     banner.textContent = AVISO;
     document.body.prepend(banner);
-    // Sin backend no hay aviso de privacidad servido por el copiloto: se oculta el enlace roto.
-    document.querySelectorAll('#privacy-link').forEach(link => { link.removeAttribute('href'); link.hidden = true; });
+    // Sin backend no hay aviso de privacidad, métricas ni PMS servidos: se ocultan los enlaces rotos.
+    for (const id of ['privacy-link', 'footer-inbox', 'footer-pms', 'footer-metrics', 'admin-metrics']) {
+      document.querySelectorAll(`#${id}`).forEach(link => { link.removeAttribute('href'); link.hidden = true; });
+    }
+    // «Conexiones en vivo» no puede afirmarse en una página sin servidor: se retira la sección.
+    const live = document.getElementById('en-vivo');
+    if (live) live.hidden = true;
   });
 })();

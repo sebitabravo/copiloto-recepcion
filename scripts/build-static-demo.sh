@@ -8,7 +8,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT="$ROOT/dist"
+# STATIC_DEMO_OUT permite construir en un directorio temporal (pruebas) sin tocar dist/.
+OUT="${STATIC_DEMO_OUT:-$ROOT/dist}"
 PUBLIC_SITE_URL="${PUBLIC_SITE_URL:-https://demo.example.com}"
 
 rm -rf "$OUT"
@@ -28,9 +29,10 @@ done
 python - "$OUT" "$PUBLIC_SITE_URL" <<'PY'
 import pathlib, sys
 out, public = pathlib.Path(sys.argv[1]), sys.argv[2]
-for page in out.glob('*.html'):
-    text = page.read_text(encoding='utf-8')
-    page.write_text(text.replace('__PUBLIC_SITE_URL__', public), encoding='utf-8')
+for page in out.glob('*'):
+    if page.is_file() and page.suffix.lower() in {'.html', '.txt', '.xml', '.json'}:
+        text = page.read_text(encoding='utf-8')
+        page.write_text(text.replace('__PUBLIC_SITE_URL__', public), encoding='utf-8')
 # En estático la API es el propio sitio: mismo origen, sin CORS ni cookies.
 (out / 'config.js').write_text(
     'window.COPILOTO_CONFIG = {\n'
