@@ -61,6 +61,8 @@
 .scenario-buttons button span[aria-hidden] { font: 600 .64rem var(--font-mono); color: var(--accent); }
 .scenario-buttons button:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
 .scenario-buttons button:disabled { opacity: .55; cursor: not-allowed; }
+.scenario-buttons .scenario-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.scenario-buttons .scenario-primary span[aria-hidden] { color: inherit; }
 #scenario-status { margin: 8px 0 0; font-size: .78rem; color: var(--muted); }
 #scenario-status:empty { display: none; }
 .demo-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin-top: 10px; }

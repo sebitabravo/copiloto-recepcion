@@ -31,7 +31,7 @@
 <link rel="preload" href="fonts/instrument-serif-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="demo.css?v=20261107a">
-<link rel="stylesheet" href="demo-console.css?v=20261109b">
+<link rel="stylesheet" href="demo-console.css?v=20261109c">
 </head>
 <body>
 <a class="skip" href="#main">Saltar al contenido</a>
@@ -58,8 +58,8 @@
 <main id="main" class="wrap" tabindex="-1">
   <header class="demo-intro" aria-labelledby="demo-page-title">
     <p class="eyebrow">Bordeluz · espacio de prueba</p>
-    <h1 id="demo-page-title">Una recepción, tres perspectivas.</h1>
-    <p>Conversa con el copiloto, revisa la cola o explora el PMS. Datos ficticios, sin reservas reales.</p>
+    <h1 id="demo-page-title">Conoce al copiloto de recepción.</h1>
+    <p>Responde consultas del hotel. Empieza como huésped y después explora las vistas del equipo. Datos ficticios, sin reservas reales.</p>
   </header>
   <div id="console-tabs" class="console-tabs" role="tablist" aria-label="Perspectivas de la demo">
     <button id="tab-huesped" role="tab" aria-selected="true" aria-controls="panel-huesped" type="button">Huésped</button>
@@ -71,19 +71,20 @@
     <section id="demo" class="demo-hero" aria-labelledby="demo-title">
       <div class="demo-copy">
         <p class="eyebrow">01 · Conversación</p>
-        <h2 id="demo-title">Prueba el <em>copiloto</em>.</h2>
-        <p class="lede">Escribe, llama con el icono del teléfono o elige una consulta guiada.</p>
+        <h2 id="demo-title">Haz tu primera <em>consulta</em>.</h2>
+        <p id="demo-start-help" class="lede">Empieza con una pregunta del hotel. Verás la respuesta en el chat; después puedes revisar qué consultó el copiloto.</p>
         <div class="scenario-buttons">
-          <button type="button" data-scenario="info"><span aria-hidden="true">01</span>Ubicación y servicios</button>
+          <button type="button" class="scenario-primary" data-scenario="info" data-demo-start aria-describedby="demo-start-help"><span aria-hidden="true">→</span>Empezar: ubicación y servicios</button>
           <button type="button" data-scenario="booking" disabled><span aria-hidden="true">02</span><span class="scenario-label">Disponibilidad sin reservar</span></button>
-          <button type="button" data-scenario="human"><span aria-hidden="true">03</span>Simular derivación</button>
+          <button type="button" data-scenario="human"><span aria-hidden="true">03</span>Pedir ayuda humana (simulado)</button>
+          <button type="button" id="journey-voice">Probar por voz</button>
           <button type="button" id="cancel-scenario" hidden>Detener demo guiada</button>
         </div>
         <p id="scenario-status" role="status" aria-live="polite"></p>
 
         <div class="demo-meta">
           <span class="pill" id="model-label">Conectando con el asistente…</span>
-          <button id="toggle-actions" class="text-button" type="button" aria-expanded="false" aria-controls="actions-panel">Ver traza técnica</button>
+          <button id="toggle-actions" class="text-button" type="button" aria-expanded="false" aria-controls="actions-panel">Ver qué consultó</button>
         </div>
         <div id="status-error" class="notice error" role="alert" hidden><span></span><button type="button">Reintentar</button></div>
       </div>
@@ -179,7 +180,7 @@
         <p class="workspace-note">La derivación de este chat es simulada: no avisa a recepción. <a href="#canal">Usar el canal real</a>.</p>
         <div class="journey-actions" aria-label="Seguir explorando">
           <button type="button" class="text-button" data-demo-view="recepcion">Ver cola de recepción →</button>
-          <button type="button" class="text-button" data-demo-view="admin">Explorar PMS →</button>
+          <button type="button" class="text-button" data-demo-view="admin">Ver habitaciones y reservas →</button>
         </div>
         <p id="capability" class="small" hidden></p>
         <div id="guided-banner" class="notice" hidden>Modo sin IA: respuestas guiadas sobre información del hotel, sin consultas al PMS ni creación de reservas.</div>
@@ -187,12 +188,12 @@
     </section>
 
     <details id="demo-diagnostics" class="demo-disclosure">
-      <summary>Diagnóstico <span>Traza, conexión y métricas de la demo</span></summary>
+      <summary>Cómo funciona por dentro <span>Consultas, conexión y métricas de la demo</span></summary>
     <section id="acciones" class="trace-block" aria-labelledby="thinking-title">
       <div class="trace-head">
         <div>
           <p class="eyebrow">Vista técnica</p>
-          <h2 id="thinking-title">Lo que hizo el asistente</h2>
+          <h2 id="thinking-title">Lo que consultó el copiloto</h2>
         </div>
         <div class="usage"><span id="response-time" hidden>Respuesta en — s</span><span id="messages-left">Mensajes restantes: —</span></div>
       </div>
@@ -296,7 +297,7 @@
         <button id="admin-expand" class="button ghost" type="button" aria-expanded="false" aria-controls="admin-console">Ampliar PMS</button>
       </div>
       <div class="admin-text">
-        <p class="section-intro">PMS conectado de un hotel ficticio: habitaciones, reservas y estado. Se carga al entrar a esta pestaña; no es una imagen ni un resumen inventado.</p>
+        <p class="section-intro">Sistema de gestión del hotel (PMS) con datos de prueba: habitaciones, reservas y estado. Se carga al entrar a esta pestaña; no es una imagen ni un resumen inventado.</p>
         <p class="note" id="admin-note">Los cambios dentro del PMS afectan sus datos de prueba. No hay reservas reales. El permiso del copiloto para crear reservas simuladas depende de la configuración que muestra la vista Huésped.</p>
       </div>
       <iframe id="admin-frame" class="admin-frame" title="PMS simulado de Hotel Bordeluz" referrerpolicy="strict-origin-when-cross-origin"></iframe>
@@ -330,9 +331,9 @@
 </footer>
 
 <script src="config.js?v=20261107a" defer></script>
-<script src="demo.js?v=20261108a" defer></script>
+<script src="demo.js?v=20261109c" defer></script>
 <script src="voice.js?v=20261108a" defer></script>
 <script src="console.js?v=20261109a" defer></script>
-<script src="demo-journey.js?v=20261109a" defer></script>
+<script src="demo-journey.js?v=20261109c" defer></script>
 </body>
 </html>

@@ -478,8 +478,8 @@
     const toggle = get('toggle-actions');
     const open = !panel.hidden;
     toggle.setAttribute('aria-expanded', String(open));
-    toggle.textContent = open ? 'Ocultar traza técnica' :
-      (actionCount ? `Ver traza técnica (${actionCount})` : 'Ver traza técnica');
+    toggle.textContent = open ? 'Ocultar consultas' :
+      (actionCount ? `Ver qué consultó (${actionCount})` : 'Ver qué consultó');
   }
   // La traza empieza cerrada en todos los tamaños y se revela a petición.
   updateActionsToggle();

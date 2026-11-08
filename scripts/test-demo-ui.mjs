@@ -9,6 +9,20 @@ const css = readFileSync(new URL('../landing/demo.css', import.meta.url), 'utf8'
 const indexHtml = readFileSync(new URL('../landing/index.html', import.meta.url), 'utf8');
 const consoleSource = readFileSync(new URL('../landing/console.js', import.meta.url), 'utf8');
 
+test('plain-language consultation control keeps its state and event count accurate', async () => {
+  const ui = await app({}, [{reply: 'Información del hotel.', events: [
+    {type: 'tool_call', name: 'get_hotel_info', ok: true, summary: 'Consultó servicios', arguments: {topic: 'services'}}
+  ]}]);
+  assert.equal(ui.get('toggle-actions').textContent, 'Ver qué consultó');
+  await ui.send('¿Tienen piscina?');
+  assert.equal(ui.get('actions-panel').hidden, true);
+  assert.equal(ui.get('toggle-actions').textContent, 'Ver qué consultó (1)');
+  await ui.get('toggle-actions').emit('click');
+  assert.equal(ui.get('toggle-actions').textContent, 'Ocultar consultas');
+  assert.equal(ui.get('toggle-actions').getAttribute('aria-expanded'), 'true');
+  assert.match(ui.get('timeline').textContent, /Consultó servicios/);
+});
+
 test('proposal-only tool trace does not claim booking registration', async () => {
   const ui = await app({}, [{
     reply: 'Propuesta pendiente de confirmación.',
@@ -665,7 +679,7 @@ test('existing availability results, booking tickets and optional trace remain u
   await ui.get('toggle-actions').emit('click');
   assert.equal(ui.get('actions-panel').hidden, true);
   assert.equal(ui.get('toggle-actions').getAttribute('aria-expanded'), 'false');
-  assert.match(ui.get('toggle-actions').textContent, /Ver traza técnica/);
+  assert.match(ui.get('toggle-actions').textContent, /Ver qué consultó/);
   assert.equal(ui.scripts().length, 0, 'Chatwoot SDK stays unloaded during simulator use');
 });
 

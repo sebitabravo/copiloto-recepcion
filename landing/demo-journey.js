@@ -18,6 +18,12 @@
     button.addEventListener('click', () => showView(button.dataset.demoView));
   });
 
+  // Delegate to the existing voice owner; never start a second call from this shortcut.
+  get('journey-voice')?.addEventListener('click', () => {
+    const start = get('voice-start');
+    if (start && !start.hidden && !start.disabled) start.click();
+  });
+
   // demo.js owns hidden / aria-expanded / counts. Only reveal its closed ancestor;
   // never toggle the trace twice or open it automatically after a reply.
   get('toggle-actions')?.addEventListener('click', () => {

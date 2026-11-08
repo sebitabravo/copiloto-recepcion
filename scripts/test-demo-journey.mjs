@@ -113,7 +113,7 @@ test('trace starts closed, and its existing button reveals a visible trace throu
   assert.equal(ui.get('demo-diagnostics').tagName, 'details');
   assert.equal(ui.get('demo-diagnostics').open, false);
   assert.equal(ui.get('actions-panel').hidden, true);
-  assert.match(html, />Ver traza técnica<\/button>/);
+  assert.match(html, />Ver qué consultó<\/button>/);
   ui.get('toggle-actions').click();
   assert.equal(ui.get('actions-panel').hidden, false);
   assert.equal(ui.get('demo-diagnostics').open, true);
@@ -192,6 +192,36 @@ test('journey navigation leaves independently owned controls and content untouch
   for (const [index, id] of ids.entries()) assert.equal(ui.get(id).clicks, clicks[index], `${id} must not be invoked by navigation`);
   assert.deepEqual(ui.location, route);
   assert.equal(ui.get('reception-tools').children.length, 0, 'queue owner fills the optional seam');
+});
+
+test('a first-time visitor has one recommended first query and an explicit result to watch', () => {
+  const ui = app();
+  const starts = ui.queryAll('[data-demo-start]');
+  assert.equal(starts.length, 1, 'one recommendation rather than three equal starting points');
+  assert.equal(starts[0].getAttribute('data-scenario'), 'info');
+  assert.equal(starts[0].getAttribute('aria-describedby'), 'demo-start-help');
+  assert.match(starts[0].getAttribute('class'), /scenario-primary/);
+  assert.match(html, /id="demo-start-help"[^>]*>[^<]*Verás la respuesta en el chat/);
+  assert.match(html, /Sistema de gestión del hotel \(PMS\)/);
+});
+
+test('the visible voice action delegates once to the existing call owner without sending chat', () => {
+  const ui = app();
+  const action = ui.get('journey-voice');
+  assert.ok(action, 'voice is discoverable without knowing the phone icon');
+  assert.equal(action.tagName, 'button');
+  assert.equal(action.getAttribute('type'), 'button');
+  action.click();
+  assert.equal(ui.get('voice-start').clicks, 1);
+  for (const id of ['send', 'reset', 'open-chat', 'voice-hangup']) assert.equal(ui.get(id).clicks, 0, id);
+  assert.deepEqual(ui.location, {pathname: '/demo', search: '?tour=1', hash: ''});
+  ui.get('voice-start').disabled = true;
+  action.click();
+  assert.equal(ui.get('voice-start').clicks, 1, 'respect the owner disabled state');
+  ui.get('voice-start').disabled = false;
+  ui.get('voice-start').hidden = true;
+  action.click();
+  assert.equal(ui.get('voice-start').clicks, 1, 'do not restart an existing call');
 });
 
 test('HTML retains primary capabilities and only adds a deferred journey module', () => {
