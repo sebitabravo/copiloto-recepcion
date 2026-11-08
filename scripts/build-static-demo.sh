@@ -60,9 +60,10 @@ for page in out.glob('*.html'):
 PY
 
 # Rutas limpias: /demo sirve demo.html sin backend ni reescrituras propias.
-# Netlify y hosts sin cleanUrls: /demo resuelve al HTML sin extensión.
+# /demo tiene que resolver en cualquier host: copia en carpeta (sirve /demo/ sin cleanUrls),
+# redirección para Netlify y cleanUrls para Vercel.
+mkdir -p "$OUT/demo" && cp "$OUT/demo.html" "$OUT/demo/index.html"
 printf '/demo  /demo.html  200
-/privacidad  /demo.html  200
 ' >"$OUT/_redirects"
 
 cat >"$OUT/vercel.json" <<'JSON'
