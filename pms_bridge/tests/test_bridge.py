@@ -1,20 +1,27 @@
 """Contrato del puente Beds24: lo que el copiloto recibe debe ser siempre una lectura fechada."""
 
 import json
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-
 from pms_bridge.beds24 import Beds24Client, Beds24Error, parse_rooms, read_at, stay_offers
 from pms_bridge.main import create_app
 
-ROOMS_JSON = json.dumps([
-    {"code": "doble_con_jacuzzi", "roomId": 101, "name": "Doble con Jacuzzi", "max_adults": 2,
-     "max_children": 1, "m2": 32},
-    {"code": "single", "roomId": 102, "name": "Single", "max_adults": 1, "max_children": 0, "m2": 18},
-])
+ROOMS_JSON = json.dumps(
+    [
+        {
+            "code": "doble_con_jacuzzi",
+            "roomId": 101,
+            "name": "Doble con Jacuzzi",
+            "max_adults": 2,
+            "max_children": 1,
+            "m2": 32,
+        },
+        {"code": "single", "roomId": 102, "name": "Single", "max_adults": 1, "max_children": 0, "m2": 18},
+    ]
+)
 CHECKIN, CHECKOUT = date(2027, 3, 15), date(2027, 3, 18)
 
 
@@ -23,8 +30,11 @@ def day(room_id: int, night: str, units: int, price: float) -> dict:
 
 
 def nights(room_id: int, units: int = 2, price: float = 100000) -> list[dict]:
-    return [day(room_id, "2027-03-15", units, price), day(room_id, "2027-03-16", units, price),
-            day(room_id, "2027-03-17", units, price)]
+    return [
+        day(room_id, "2027-03-15", units, price),
+        day(room_id, "2027-03-16", units, price),
+        day(room_id, "2027-03-17", units, price),
+    ]
 
 
 def test_rooms_are_read_and_validated_at_startup():
@@ -74,9 +84,11 @@ async def test_the_client_refreshes_the_token_before_reading():
 
 
 async def test_a_beds24_error_is_raised_not_hidden():
-    client = Beds24Client(access_token="acc",
-                          http=httpx.AsyncClient(transport=httpx.MockTransport(
-                              lambda request: httpx.Response(401, json={"success": False, "error": "Token is missing"}))))
+
+    def reject(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"success": False, "error": "Token is missing"})
+
+    client = Beds24Client(access_token="acc", http=httpx.AsyncClient(transport=httpx.MockTransport(reject)))
     with pytest.raises(Beds24Error):
         await client.calendar([101], CHECKIN, CHECKOUT)
 
@@ -92,14 +104,15 @@ class FakeClient:
 
 
 def app_with(days=None, error=None):
-    return TestClient(create_app(client=FakeClient(days, error), rooms=parse_rooms(ROOMS_JSON),
-                                 timezone_name="America/Santiago"))
+    return TestClient(
+        create_app(client=FakeClient(days, error), rooms=parse_rooms(ROOMS_JSON), timezone_name="America/Santiago")
+    )
 
 
 def test_the_endpoint_returns_the_copilot_contract():
     response = app_with(nights(101) + nights(102)).get(
-        "/api/v1/availability", params={"checkin": "2027-03-15", "checkout": "2027-03-18",
-                                        "adults": 2, "children": 1})
+        "/api/v1/availability", params={"checkin": "2027-03-15", "checkout": "2027-03-18", "adults": 2, "children": 1}
+    )
     body = response.json()
 
     assert response.status_code == 200
@@ -109,23 +122,28 @@ def test_the_endpoint_returns_the_copilot_contract():
 
 
 def test_rooms_that_do_not_fit_the_party_are_not_offered():
-    body = app_with(nights(101) + nights(102)).get(
-        "/api/v1/availability", params={"checkin": "2027-03-15", "checkout": "2027-03-18",
-                                        "adults": 2, "children": 1}).json()
+    body = (
+        app_with(nights(101) + nights(102))
+        .get(
+            "/api/v1/availability",
+            params={"checkin": "2027-03-15", "checkout": "2027-03-18", "adults": 2, "children": 1},
+        )
+        .json()
+    )
     assert "single" not in [offer["code"] for offer in body["room_types"]]
 
 
 def test_a_bad_range_is_rejected_without_calling_beds24():
     response = app_with(nights(101)).get(
-        "/api/v1/availability", params={"checkin": "2027-03-18", "checkout": "2027-03-15",
-                                        "adults": 2, "children": 0})
+        "/api/v1/availability", params={"checkin": "2027-03-18", "checkout": "2027-03-15", "adults": 2, "children": 0}
+    )
     assert response.status_code == 422
 
 
 def test_a_beds24_failure_is_reported_as_unavailable():
     response = app_with(error=Beds24Error("Beds24 respondió 500")).get(
-        "/api/v1/availability", params={"checkin": "2027-03-15", "checkout": "2027-03-18",
-                                        "adults": 2, "children": 1})
+        "/api/v1/availability", params={"checkin": "2027-03-15", "checkout": "2027-03-18", "adults": 2, "children": 1}
+    )
     assert response.status_code == 502
 
 
@@ -134,6 +152,98 @@ def test_the_bridge_does_not_write_bookings():
     assert response.status_code == 501
 
 
+class FakeHttpClient:
+    """Doble de httpx.AsyncClient: cuenta instancias, sirve una cola de respuestas y registra el cierre."""
+
+    instances = 0
+    queued: list[httpx.Response] = []
+    last = None
+
+    def __init__(self, **kwargs):
+        FakeHttpClient.instances += 1
+        FakeHttpClient.last = self
+        self.closed = False
+
+    async def get(self, url, headers=None, **kwargs):
+        response = FakeHttpClient.queued.pop(0) if FakeHttpClient.queued else httpx.Response(200, json={})
+        response.request = httpx.Request("GET", url)
+        return response
+
+    async def aclose(self):
+        self.closed = True
+
+
+def test_one_http_client_per_app_reused_across_requests(monkeypatch):
+    """El puente no debe abrir un socket nuevo por petición de disponibilidad."""
+    FakeHttpClient.instances = 0
+    monkeypatch.setenv("BEDS24_ACCESS_TOKEN", "acc-1")
+    monkeypatch.setenv("BEDS24_ROOMS", ROOMS_JSON)
+    monkeypatch.setattr(httpx, "AsyncClient", FakeHttpClient)
+    responses = [
+        httpx.Response(200, json={"success": True, "data": nights(101)}),
+        httpx.Response(200, json={"success": True, "data": nights(101)}),
+    ]
+    monkeypatch.setattr(FakeHttpClient, "queued", responses, raising=False)
+    app = create_app()
+    params = {"checkin": "2027-03-15", "checkout": "2027-03-18", "adults": 2, "children": 1}
+    with TestClient(app) as test_client:
+        assert test_client.get("/api/v1/availability", params=params).status_code == 200
+        assert test_client.get("/api/v1/availability", params=params).status_code == 200
+    assert FakeHttpClient.instances == 1
+    assert FakeHttpClient.last is not None and FakeHttpClient.last.closed is True
+
+
+def test_the_injected_client_is_reused_across_requests():
+    """`create_app(client=...)` sigue siendo la inyección para pruebas: una sola instancia."""
+    calls = {"n": 0}
+
+    class CountingClient:
+        async def calendar(self, room_ids, start, end):
+            calls["n"] += 1
+            return nights(101)
+
+    app = create_app(client=CountingClient(), rooms=parse_rooms(ROOMS_JSON), timezone_name="America/Santiago")
+    params = {"checkin": "2027-03-15", "checkout": "2027-03-18", "adults": 2, "children": 1}
+    with TestClient(app) as test_client:
+        assert test_client.get("/api/v1/availability", params=params).status_code == 200
+        assert test_client.get("/api/v1/availability", params=params).status_code == 200
+    assert calls["n"] == 2
+
+
+async def test_a_static_token_that_expires_refreshes_once_and_retries():
+    """El token estático dura ~1 h: un 401 debe refrescar con el refresh token y reintentar, no morir."""
+    clock = {"now": 0.0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/authentication/token"):
+            return httpx.Response(200, json={"token": "acc-2", "expiresIn": 3600})
+        if request.headers.get("token") == "acc-2":
+            return httpx.Response(200, json={"success": True, "data": nights(101)})
+        return httpx.Response(401, json={"success": False, "error": "token expired"})
+
+    client = Beds24Client(
+        access_token="acc-1",
+        refresh_token="ref-1",
+        clock=lambda: clock["now"],
+        http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    days = await client.calendar([101], CHECKIN, CHECKOUT)
+    assert len(days) == 3
+
+
+async def test_a_static_token_that_expires_without_refresh_token_fails_clearly():
+    clock = {"now": 0.0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"success": False, "error": "token expired"})
+
+    client = Beds24Client(
+        access_token="acc-1", clock=lambda: clock["now"], http=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+    with pytest.raises(Beds24Error):
+        await client.calendar([101], CHECKIN, CHECKOUT)
+
+
 def test_the_timestamp_carries_the_hotel_zone():
-    stamp = read_at(datetime(2026, 10, 28, 18, 0, tzinfo=timezone.utc), "America/Santiago")
+    stamp = read_at(datetime(2026, 10, 28, 18, 0, tzinfo=UTC), "America/Santiago")
     assert stamp.startswith("2026-10-28T15:00:00-03:00")

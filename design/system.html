@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Copiloto Recepción — Design System</title>
+<style>
+  /* System-only fallback stacks from the sources; no webfonts are loaded.
+     Presentation aliases below are board-local, not new project tokens.
+     Landing: landing/demo.css; panel: copiloto/src/copiloto/static/theme.css. */
+  :root {
+    --font-display: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --section-space: clamp(60px, 8vw, 88px);
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+    /* Landing tokens (landing/demo.css :root, light) */
+    --bg: #f3ebdf;
+    --bg-2: #eae0cf;
+    --card: #fcf8f1;
+    --card-2: #f6efe3;
+    --ink: #211a12;
+    --ink-2: #423325;
+    --muted-landing: #6b5943;
+    --line: #ded0b9;
+    --line-soft: rgb(46 32 18 / 9%);
+    --accent: #8d5a2b;
+    --accent-2: #35513f;
+    --accent-ink: #fffaf2;
+    --accent-soft: #eaddc6;
+    --glow: #dfae7f;
+    --bezel: #241a12;
+    --wa-bg: #efeae2;
+    --wa-in: #ffffff;
+    --wa-out: #d9fdd3;
+    --wa-header: #f0f2f5;
+    --wa-ink: #111b21;
+    --wa-muted: #667781;
+    --wa-line: #e2ddd4;
+    --wa-link: #006b58;
+    --ok: #2c6340;
+    --ok-bg: #e6eee2;
+    --error: #9c2a22;
+    --error-bg: #fbeae4;
+    --shadow-sm: 0 1px 2px rgb(50 33 16 / 6%), 0 6px 18px rgb(50 33 16 / 5%);
+    --shadow-md: 0 2px 6px rgb(50 33 16 / 6%), 0 18px 42px rgb(50 33 16 / 9%);
+    --shadow-lg: 0 40px 90px -30px rgb(50 33 16 / 34%);
+    /* Landing hardcoded colors */
+    --wa-send: #00a884;
+    --wa-send-hover: #019475;
+    --wa-ready: #25d366;
+    --wa-ticks: #53bdeb;
+    --brand-mix: #40230d;
+    /* Panel tokens (copiloto/src/copiloto/static/theme.css, light) */
+    --p-muted: #7b6953;
+    --p-ok: #2e7d32;
+    --p-warn: #b26a00;
+    --p-bad: #c62828;
+    --p-shadow: 0 1px 2px rgb(46 32 18 / 6%), 0 10px 24px -18px rgb(46 32 18 / 45%);
+    /* Panel dark tokens (conflict column) */
+    --p-accent-dark: #d1a971;
+    --p-accent2-dark: #8fb59c;
+    --p-accentink-dark: #1d1812;
+    --p-glow-dark: #8d5a2b;
+    /* Landing dark tokens (conflict column) */
+    --l-accent-dark: #dcaa6d;
+    --l-accent2-dark: #9fd0ae;
+    --l-accentink-dark: #14100b;
+    --l-glow-dark: #6a4a2a;
+    --l-ok-dark: #9bd2a3;
+    --l-error-dark: #ffc0b8;
+    --p-ok-dark: #66bb6a;
+    --p-warn-dark: #ffb74d;
+    --p-bad-dark: #ef5350;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--accent); text-underline-offset: 4px; }
+
+  a:focus-visible,
+  button:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  .artboard {
+    width: 1440px;
+    margin: 0 auto;
+    padding: 56px 0 96px;
+  }
+
+  .wrap { width: 100%; max-width: 1180px; margin: auto; padding-inline: 24px; }
+
+  header.masthead { border-bottom: 1px solid var(--line); margin-bottom: 48px; }
+  header.masthead .wrap { padding-block: 56px; }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2.7rem, 5.6vw, 4.5rem);
+    line-height: .99;
+    letter-spacing: -.02em;
+    margin: 0 0 18px;
+  }
+  h1 em { font-style: italic; color: var(--accent); }
+
+  .lede { max-width: 72ch; margin: 0; color: var(--ink-2); font-size: 1.06rem; line-height: 1.62; }
+
+  .eyebrow {
+    margin: 0 0 12px;
+    color: var(--accent);
+    font-size: .71rem;
+    font-weight: 650;
+    letter-spacing: .19em;
+    text-transform: uppercase;
+  }
+
+  section { margin-bottom: 72px; }
+  section > .wrap > h2 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.85rem, 3.4vw, 2.8rem);
+    line-height: 1.05;
+    letter-spacing: -.015em;
+    margin: 0 0 8px;
+  }
+  section > .wrap > .section-intro {
+    max-width: 62ch;
+    margin: 0 0 28px;
+    color: var(--muted-landing);
+    font-size: .96rem;
+  }
+
+  .source-tag {
+    display: inline-block;
+    margin-left: 10px;
+    padding: 3px 9px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--muted-landing);
+    font-family: var(--font-mono);
+    font-size: .62rem;
+    letter-spacing: .06em;
+    vertical-align: middle;
+  }
+  .source-tag.panel { border-color: var(--line); color: var(--accent-2); }
+
+  .cols-2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 24px 40px; align-items: start; }
+  .cols-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
+
+  .panel-card {
+    padding: 26px;
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    background: var(--card);
+    box-shadow: var(--shadow-sm);
+  }
+  .panel-card > h3, .demo-box > h3 { margin: 0 0 14px; font-size: 1rem; line-height: 1.35; font-weight: 600; letter-spacing: -.005em; }
+  .panel-card > p, .demo-box > p { margin: 0 0 8px; color: var(--muted-landing); font-size: .85rem; }
+
+  /* ---- Swatches ---- */
+  .swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .swatch {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+    overflow: hidden;
+  }
+  .swatch .chip-color { height: 56px; border-bottom: 1px solid var(--line); }
+  .swatch dl { margin: 0; padding: 10px 12px 12px; }
+  .swatch dt { font-size: .76rem; font-weight: 600; color: var(--ink); }
+  .swatch dd { margin: 2px 0 0; font-family: var(--font-mono); font-size: .63rem; color: var(--muted-landing); overflow-wrap: anywhere; }
+  .swatch dd.role { font-family: var(--font-ui); font-size: .68rem; }
+
+  /* ---- Conflicts ---- */
+  .conflict-table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--card); font-size: .84rem; }
+  .conflict-table caption { text-align: left; padding: 0 0 10px; color: var(--muted-landing); font-size: .78rem; }
+  .conflict-table th {
+    text-align: left; padding: 10px 14px; background: var(--card-2);
+    border-bottom: 1px solid var(--line); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2);
+  }
+  .conflict-table td { padding: 10px 14px; border-top: 1px solid var(--line-soft); vertical-align: middle; }
+  .conflict-table td:first-child { font-weight: 600; color: var(--ink); }
+  .cv { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: .66rem; color: var(--ink-2); }
+  .cv .dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--line); flex-shrink: 0; }
+
+  /* ---- Type scale ---- */
+  .type-row { display: grid; grid-template-columns: 220px minmax(0,1fr); gap: 18px; align-items: baseline; padding: 16px 0; border-top: 1px solid var(--line); }
+  .type-row:last-child { border-bottom: 1px solid var(--line); }
+  .type-meta { font-family: var(--font-mono); font-size: .66rem; color: var(--muted-landing); line-height: 1.5; }
+  .type-meta b { color: var(--ink-2); }
+  .t-display { font-family: var(--font-display); font-weight: 400; letter-spacing: -.02em; }
+  .t-h1 { font-size: clamp(2.7rem, 5.6vw, 4.5rem); line-height: .99; }
+  .t-h2 { font-family: var(--font-display); font-weight: 400; font-size: clamp(1.85rem, 3.4vw, 2.8rem); line-height: 1.05; letter-spacing: -.015em; }
+  .t-h3 { font-size: 1rem; line-height: 1.35; font-weight: 600; letter-spacing: -.005em; }
+  .t-body { font-size: 16px; line-height: 1.65; }
+  .t-lede { font-size: 1.06rem; line-height: 1.62; color: var(--ink-2); }
+  .t-stat { font-family: var(--font-display); font-size: 1.9rem; line-height: 1.1; letter-spacing: -.01em; }
+  .t-eyebrow { color: var(--accent); font-size: .71rem; font-weight: 650; letter-spacing: .19em; text-transform: uppercase; }
+  .t-panel-body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.5; }
+  .type-row p { overflow-wrap: anywhere; }
+  button { font: inherit; cursor: pointer; }
+  button:disabled { cursor: not-allowed; opacity: .5; }
+
+  /* ---- Spacing ---- */
+  .space-row { display: grid; grid-template-columns: 90px minmax(0,1fr); gap: 16px; align-items: center; padding: 7px 0; }
+  .space-row .val { font-family: var(--font-mono); font-size: .66rem; color: var(--muted-landing); text-align: right; }
+  .space-bar { height: 14px; border-radius: 7px; background: var(--accent); }
+
+  /* ---- Radii / shadows ---- */
+  .radius-box, .shadow-box {
+    display: grid; place-items: center; height: 110px; padding: 16px;
+    background: var(--card-2); border: 1px solid var(--line);
+    font-family: var(--font-mono); font-size: .66rem; color: var(--ink-2); text-align: center;
+  }
+  .shadow-box { background: var(--card); border: 0; border-radius: 14px; }
+
+  /* ---- Components ---- */
+  .demo-box { padding: 26px; border: 1px solid var(--line); border-radius: 22px; background: var(--card); box-shadow: var(--shadow-sm); }
+
+  /* Button — landing/demo.css .button */
+  .button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    min-height: 50px; padding: 12px 24px;
+    border: 1px solid var(--line); border-radius: 999px;
+    background: var(--card); color: var(--ink);
+    font-size: .92rem; font-weight: 600; text-decoration: none;
+    transition: transform .25s cubic-bezier(.2, .8, .3, 1), box-shadow .25s, background .25s;
+  }
+  .button.primary {
+    border-color: transparent;
+    background: linear-gradient(160deg, color-mix(in oklab, var(--accent) 88%, #fff), var(--accent));
+    color: var(--accent-ink);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 28%), 0 10px 26px -12px var(--accent);
+  }
+  .button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .button.primary:hover:not(:disabled) { box-shadow: inset 0 1px 0 rgb(255 255 255 / 28%), 0 16px 34px -12px var(--accent); }
+
+  /* Message bubbles — landing/demo.css .message / .bubble */
+  .chat {
+    display: flex; flex-direction: column; gap: 8px; padding: 14px 10px;
+    border-radius: 18px; background: var(--wa-bg);
+    background-image: radial-gradient(circle at 1px 1px, rgb(0 0 0 / 4%) 1px, transparent 0);
+    background-size: 18px 18px;
+  }
+  .message { max-width: 92%; font-size: .85rem; line-height: 1.6; overflow-wrap: anywhere; }
+  .message.assistant { align-self: flex-start; }
+  .message.user { align-self: flex-end; }
+  .bubble {
+    padding: 7px 10px 6px; border-radius: 10px 10px 10px 2px;
+    background: var(--wa-in); color: var(--wa-ink);
+    box-shadow: 0 1px 1px rgb(11 20 26 / 13%);
+  }
+  .chat .bubble p { margin: 0; color: var(--wa-ink); font-size: inherit; }
+  .user .bubble { border-radius: 10px 10px 2px 10px; background: var(--wa-out); }
+  .message-time {
+    display: block; margin-top: 2px; color: var(--wa-muted);
+    font-size: .59rem; font-variant-numeric: tabular-nums; text-align: right;
+  }
+  .user .message-time { color: color-mix(in oklab, var(--wa-ink) 55%, transparent); }
+
+  /* Status dots — landing/demo.css .status-dot / .live-dot */
+  .dot-row { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; font-size: .82rem; color: var(--ink-2); }
+  .status-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--wa-muted); }
+  .status-dot.ready { background: var(--wa-ready); box-shadow: 0 0 0 3px rgb(37 211 102 / 18%); }
+  .status-dot.ok { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok) 20%, transparent); }
+  .status-dot.error { background: var(--error); box-shadow: 0 0 0 3px color-mix(in oklab, var(--error) 20%, transparent); }
+
+  /* Badges / labels — landing/demo.css .pill / .arguments span / .event-source */
+  .pill {
+    display: inline-flex; align-items: center; max-width: 100%;
+    padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--card); color: var(--accent);
+    font-size: .72rem; font-weight: 600; overflow-wrap: anywhere;
+  }
+  .arg-chip { display: inline-block; max-width: 100%; padding: 3px 7px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted-landing); font-family: var(--font-mono); font-size: .63rem; overflow-wrap: anywhere; }
+  .source-pill { display: inline-block; padding: 3px 9px; border: 1px dashed var(--line); border-radius: 999px; color: var(--muted-landing); font-size: .62rem; }
+
+  /* Panel rows — landing/demo.css .availability-list li */
+  .availability { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+  .availability-head { margin: 0 0 8px; color: var(--ink-2); font-size: .74rem; font-weight: 600; }
+  .availability-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .availability-list li {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px;
+    padding-top: 8px; border-top: 1px solid var(--line-soft); font-size: .76rem;
+  }
+  .availability-list li:first-child { padding-top: 0; border-top: 0; }
+  .availability-list strong { font-family: var(--font-ui); color: var(--ink); font-weight: 600; }
+  .availability-list li > span { color: var(--muted-landing); }
+  .availability-list .price { grid-column: 1; }
+  .availability-list .total { grid-column: 2; grid-row: 2; color: var(--ink); font-weight: 600; text-align: right; }
+  .availability-list .right { grid-column: 2; grid-row: 1; text-align: right; }
+
+  /* Console specimens — landing/demo.css; static, not working controls. */
+  .demo-switch {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px;
+    border: 1px solid var(--line); border-radius: 999px; background: var(--card);
+    color: var(--muted-landing); font-size: .84rem; font-weight: 600;
+  }
+  .demo-switch-track { position: relative; flex: none; width: 30px; height: 18px; border-radius: 999px; background: var(--accent-2); }
+  .demo-switch-knob { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--card); box-shadow: var(--shadow-sm); transform: translateX(12px); }
+  .console-tabs { display: flex; gap: 4px; width: 100%; max-width: 520px; margin-top: 26px; padding: 5px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); box-shadow: var(--shadow-sm); }
+  .console-tabs .tab { flex: 1; min-width: 0; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted-landing); font-weight: 600; font-size: .88rem; white-space: nowrap; text-align: center; }
+  .console-tabs .selected { background: var(--ink); color: var(--bg); }
+  .console-state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 18px 0 0; padding: 14px 16px; border: 1px dashed var(--line); border-radius: 12px; background: var(--card-2); color: var(--muted-landing); font-size: .86rem; }
+  .console-state.error { border-color: color-mix(in oklab, var(--error) 35%, var(--line)); background: var(--error-bg); color: var(--error); }
+  .console-state.rate { border: 1px solid var(--line); background: var(--accent-soft); color: var(--accent); }
+  .console-state.gate { border-color: color-mix(in oklab, var(--accent) 40%, var(--line)); background: var(--accent-soft); color: var(--accent); }
+  .console-row { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; padding: 10px 8px; border: 0; border-radius: 10px; background: none; color: inherit; text-align: left; }
+  .console-row b { display: block; font-size: .84rem; }
+  .console-row .sub { display: block; color: var(--muted-landing); font-size: .7rem; }
+
+  /* Skeleton — copiloto/src/copiloto/static/theme.css .skeleton */
+  .skeleton {
+    border-radius: 8px; height: 16px;
+    background: linear-gradient(90deg, var(--card-2) 25%, var(--card) 37%, var(--card-2) 63%);
+    background-size: 200% 100%;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .skeleton { animation: shimmer 1.4s linear infinite; }
+    @keyframes shimmer { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+  }
+
+  .not-defined {
+    padding: 10px 16px; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0;
+    background: color-mix(in oklab, var(--accent) 7%, transparent);
+    color: var(--ink-2); font-size: .86rem;
+  }
+
+  footer { border-top: 1px solid var(--line); }
+  footer .wrap { padding-block: 32px; color: var(--muted-landing); font-size: .78rem; }
+
+  .mini-label {
+    margin: 0 0 10px; color: var(--muted-landing); font-size: .66rem;
+    letter-spacing: .12em; text-transform: uppercase; font-weight: 600;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="artboard">
+
+  <header class="masthead">
+    <div class="wrap">
+      <p class="eyebrow">Design system · extracted from source</p>
+      <h1>Copiloto Recepción <em>tokens</em></h1>
+      <p class="lede">Two systems live here: the <strong>public landing</strong> (<code>landing/demo.css</code>) and the <strong>reception panel</strong> (<code>copiloto/src/copiloto/static/theme.css</code>). The panel replicates the landing tokens, but several values have drifted — conflicts are rendered side by side below. Product values below come only from those two files. Board layout, swatch geometry and local CSS aliases are presentation aids, not project tokens. No systems have been merged.</p>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ============ COLORS ============ -->
+    <section id="colors" aria-labelledby="colors-h">
+      <div class="wrap">
+        <h2 id="colors-h">Colors</h2>
+        <p class="section-intro">Light page chrome matches; dark accents differ. Landing declares 27 color tokens and panel 15. WhatsApp tokens belong only to landing. Sources: <code>landing/demo.css</code> and <code>copiloto/src/copiloto/static/theme.css</code>.</p>
+
+        <h3 class="mini-label">Shared page chrome — identical in both sources (light)</h3>
+        <div class="swatch-grid" style="margin-bottom: 28px;">
+          <div class="swatch"><div class="chip-color" style="background:#f3ebdf"></div><dl><dt>--bg</dt><dd>#f3ebdf</dd><dd class="role">Page background</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#eae0cf"></div><dl><dt>--bg-2</dt><dd>#eae0cf</dd><dd class="role">Secondary background</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#fcf8f1"></div><dl><dt>--card</dt><dd>#fcf8f1</dd><dd class="role">Card surface</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#f6efe3"></div><dl><dt>--card-2</dt><dd>#f6efe3</dd><dd class="role">Nested card surface</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#211a12"></div><dl><dt>--ink</dt><dd>#211a12</dd><dd class="role">Primary text</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#423325"></div><dl><dt>--ink-2</dt><dd>#423325</dd><dd class="role">Secondary text</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#ded0b9"></div><dl><dt>--line</dt><dd>#ded0b9</dd><dd class="role">Borders</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#8d5a2b"></div><dl><dt>--accent</dt><dd>#8d5a2b</dd><dd class="role">Primary accent</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#35513f"></div><dl><dt>--accent-2</dt><dd>#35513f</dd><dd class="role">Secondary accent</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#fffaf2"></div><dl><dt>--accent-ink</dt><dd>#fffaf2</dd><dd class="role">Text on accent</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#dfae7f"></div><dl><dt>--glow</dt><dd>#dfae7f</dd><dd class="role">Radial glow</dd></dl></div>
+        </div>
+
+        <h3 class="mini-label">Landing only <span class="source-tag">landing/demo.css</span></h3>
+        <div class="swatch-grid" style="margin-bottom: 28px;">
+          <div class="swatch"><div class="chip-color" style="background:#6b5943"></div><dl><dt>--muted</dt><dd>#6b5943</dd><dd class="role">Muted text (landing value)</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:rgb(46 32 18 / 9%); box-shadow: inset 0 0 0 1px #ded0b9;"></div><dl><dt>--line-soft</dt><dd>rgb(46 32 18 / 9%)</dd><dd class="role">Hairlines, hover fills</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#eaddc6"></div><dl><dt>--accent-soft</dt><dd>#eaddc6</dd><dd class="role">Rate-status strip</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#241a12"></div><dl><dt>--bezel</dt><dd>#241a12</dd><dd class="role">Phone bezel / device sides</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#2c6340"></div><dl><dt>--ok</dt><dd>#2c6340</dd><dd class="role">Success (landing value)</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#e6eee2"></div><dl><dt>--ok-bg</dt><dd>#e6eee2</dd><dd class="role">Success surface</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#9c2a22"></div><dl><dt>--error</dt><dd>#9c2a22</dd><dd class="role">Error text</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#fbeae4"></div><dl><dt>--error-bg</dt><dd>#fbeae4</dd><dd class="role">Error surface</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#00a884"></div><dl><dt>hardcoded</dt><dd>#00a884</dd><dd class="role">WA send button</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#019475"></div><dl><dt>hardcoded</dt><dd>#019475</dd><dd class="role">Send button hover</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#25d366"></div><dl><dt>hardcoded</dt><dd>#25d366</dd><dd class="role">Status dot "ready"</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#53bdeb"></div><dl><dt>hardcoded</dt><dd>#53bdeb</dd><dd class="role">Message ticks</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#40230d"></div><dl><dt>hardcoded</dt><dd>#40230d</dd><dd class="role">Gradient mix endpoint</dd></dl></div>
+        </div>
+
+        <h3 class="mini-label">Landing — WhatsApp demo tokens</h3>
+        <div class="swatch-grid" style="margin-bottom: 28px;">
+          <div class="swatch"><div class="chip-color" style="background:#efeae2"></div><dl><dt>--wa-bg</dt><dd>#efeae2</dd><dd class="role">Chat wallpaper</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#ffffff; box-shadow: inset 0 0 0 1px #ded0b9;"></div><dl><dt>--wa-in</dt><dd>#ffffff</dd><dd class="role">Bot bubble</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#d9fdd3"></div><dl><dt>--wa-out</dt><dd>#d9fdd3</dd><dd class="role">Guest bubble</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#f0f2f5"></div><dl><dt>--wa-header</dt><dd>#f0f2f5</dd><dd class="role">Phone header / composer</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#111b21"></div><dl><dt>--wa-ink</dt><dd>#111b21</dd><dd class="role">Bubble text</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#667781"></div><dl><dt>--wa-muted</dt><dd>#667781</dd><dd class="role">Timestamps, dots</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#e2ddd4"></div><dl><dt>--wa-line</dt><dd>#e2ddd4</dd><dd class="role">WA borders</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#006b58"></div><dl><dt>--wa-link</dt><dd>#006b58</dd><dd class="role">Quick-reply text</dd></dl></div>
+        </div>
+
+        <h3 class="mini-label">Panel only <span class="source-tag panel">copiloto/.../theme.css</span></h3>
+        <div class="swatch-grid" style="margin-bottom: 28px;">
+          <div class="swatch"><div class="chip-color" style="background:#7b6953"></div><dl><dt>--muted</dt><dd>#7b6953</dd><dd class="role">Muted text (panel value)</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#2e7d32"></div><dl><dt>--ok</dt><dd>#2e7d32</dd><dd class="role">Success (panel value)</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#b26a00"></div><dl><dt>--warn</dt><dd>#b26a00</dd><dd class="role">Warning (panel only)</dd></dl></div>
+          <div class="swatch"><div class="chip-color" style="background:#c62828"></div><dl><dt>--bad</dt><dd>#c62828</dd><dd class="role">Failure (panel only)</dd></dl></div>
+        </div>
+
+        <h3 class="mini-label">Dark color overrides — exact source values</h3>
+        <table class="conflict-table" style="margin-bottom:28px;">
+          <caption>Both sources use @media (prefers-color-scheme: dark). “Both” names the two source paths above; identical values do not make these one system.</caption>
+          <thead><tr><th scope="col">Source</th><th scope="col">Token</th><th scope="col">Dark value</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Both</th><td>--bg</td><td><span class="cv"><span class="dot" style="background:#14100b"></span>#14100b</span></td></tr>
+            <tr><th scope="row">Both</th><td>--bg-2</td><td><span class="cv"><span class="dot" style="background:#1a1410"></span>#1a1410</span></td></tr>
+            <tr><th scope="row">Both</th><td>--card</td><td><span class="cv"><span class="dot" style="background:#201a13"></span>#201a13</span></td></tr>
+            <tr><th scope="row">Both</th><td>--card-2</td><td><span class="cv"><span class="dot" style="background:#261e16"></span>#261e16</span></td></tr>
+            <tr><th scope="row">Both</th><td>--ink</td><td><span class="cv"><span class="dot" style="background:#f0e6d5"></span>#f0e6d5</span></td></tr>
+            <tr><th scope="row">Both</th><td>--ink-2</td><td><span class="cv"><span class="dot" style="background:#d6c7b1"></span>#d6c7b1</span></td></tr>
+            <tr><th scope="row">Both</th><td>--line</td><td><span class="cv"><span class="dot" style="background:#3f3427"></span>#3f3427</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--muted</td><td><span class="cv"><span class="dot" style="background:#a4947d"></span>#a4947d</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--line-soft</td><td><span class="cv"><span class="dot" style="background:rgb(255 240 220 / 8%)"></span>rgb(255 240 220 / 8%)</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--accent</td><td><span class="cv"><span class="dot" style="background:#dcaa6d"></span>#dcaa6d</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--accent-2</td><td><span class="cv"><span class="dot" style="background:#9fd0ae"></span>#9fd0ae</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--accent-ink</td><td><span class="cv"><span class="dot" style="background:#14100b"></span>#14100b</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--accent-soft</td><td><span class="cv"><span class="dot" style="background:#33281c"></span>#33281c</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--glow</td><td><span class="cv"><span class="dot" style="background:#6a4a2a"></span>#6a4a2a</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--bezel</td><td><span class="cv"><span class="dot" style="background:#2e2418"></span>#2e2418</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-bg</td><td><span class="cv"><span class="dot" style="background:#0b141a"></span>#0b141a</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-in</td><td><span class="cv"><span class="dot" style="background:#202c33"></span>#202c33</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-out</td><td><span class="cv"><span class="dot" style="background:#005c4b"></span>#005c4b</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-header</td><td><span class="cv"><span class="dot" style="background:#202c33"></span>#202c33</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-ink</td><td><span class="cv"><span class="dot" style="background:#e9edef"></span>#e9edef</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-muted</td><td><span class="cv"><span class="dot" style="background:#8696a0"></span>#8696a0</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-line</td><td><span class="cv"><span class="dot" style="background:#2a3942"></span>#2a3942</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--wa-link</td><td><span class="cv"><span class="dot" style="background:#7ee0c6"></span>#7ee0c6</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--ok</td><td><span class="cv"><span class="dot" style="background:#9bd2a3"></span>#9bd2a3</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--ok-bg</td><td><span class="cv"><span class="dot" style="background:#1e3125"></span>#1e3125</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--error</td><td><span class="cv"><span class="dot" style="background:#ffc0b8"></span>#ffc0b8</span></td></tr>
+            <tr><th scope="row">Landing</th><td>--error-bg</td><td><span class="cv"><span class="dot" style="background:#432723"></span>#432723</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--muted</td><td><span class="cv"><span class="dot" style="background:#a4947d"></span>#a4947d</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--accent</td><td><span class="cv"><span class="dot" style="background:#d1a971"></span>#d1a971</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--accent-2</td><td><span class="cv"><span class="dot" style="background:#8fb59c"></span>#8fb59c</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--accent-ink</td><td><span class="cv"><span class="dot" style="background:#1d1812"></span>#1d1812</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--glow</td><td><span class="cv"><span class="dot" style="background:#8d5a2b"></span>#8d5a2b</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--ok</td><td><span class="cv"><span class="dot" style="background:#66bb6a"></span>#66bb6a</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--warn</td><td><span class="cv"><span class="dot" style="background:#ffb74d"></span>#ffb74d</span></td></tr>
+            <tr><th scope="row">Panel</th><td>--bad</td><td><span class="cv"><span class="dot" style="background:#ef5350"></span>#ef5350</span></td></tr>
+          </tbody>
+        </table>
+
+        <h3 class="mini-label">Conflicts — same role, different value</h3>
+        <table class="conflict-table">
+          <caption>Values rendered side by side with their origin. Dark-mode row pairs where the sources disagree.</caption>
+          <thead>
+            <tr><th scope="col">Role</th><th scope="col">Landing · demo.css</th><th scope="col">Panel · theme.css</th><th scope="col">Mode</th></tr>
+          </thead>
+          <tbody>
+            <tr><td scope="row">Muted text (--muted)</td><td><span class="cv"><span class="dot" style="background:#6b5943"></span>#6b5943</span></td><td><span class="cv"><span class="dot" style="background:#7b6953"></span>#7b6953</span></td><td>light</td></tr>
+            <tr><td scope="row">Success (--ok)</td><td><span class="cv"><span class="dot" style="background:#2c6340"></span>#2c6340</span></td><td><span class="cv"><span class="dot" style="background:#2e7d32"></span>#2e7d32</span></td><td>light</td></tr>
+            <tr><td scope="row">Error (--error vs --bad)</td><td><span class="cv"><span class="dot" style="background:#9c2a22"></span>#9c2a22</span></td><td><span class="cv"><span class="dot" style="background:#c62828"></span>#c62828</span></td><td>light</td></tr>
+            <tr><td scope="row">Accent (--accent)</td><td><span class="cv"><span class="dot" style="background:#dcaa6d"></span>#dcaa6d</span></td><td><span class="cv"><span class="dot" style="background:#d1a971"></span>#d1a971</span></td><td>dark</td></tr>
+            <tr><td scope="row">Accent 2 (--accent-2)</td><td><span class="cv"><span class="dot" style="background:#9fd0ae"></span>#9fd0ae</span></td><td><span class="cv"><span class="dot" style="background:#8fb59c"></span>#8fb59c</span></td><td>dark</td></tr>
+            <tr><td scope="row">Accent ink (--accent-ink)</td><td><span class="cv"><span class="dot" style="background:#14100b"></span>#14100b</span></td><td><span class="cv"><span class="dot" style="background:#1d1812"></span>#1d1812</span></td><td>dark</td></tr>
+            <tr><td scope="row">Glow (--glow)</td><td><span class="cv"><span class="dot" style="background:#6a4a2a"></span>#6a4a2a</span></td><td><span class="cv"><span class="dot" style="background:#8d5a2b"></span>#8d5a2b</span></td><td>dark</td></tr>
+            <tr><td scope="row">Base type</td><td>16px / 1.65</td><td>14px / 1.5</td><td>both</td></tr>
+            <tr><td scope="row">Easing</td><td>cubic-bezier(.2, .8, .3, 1)</td><td>cubic-bezier(.22, 1, .36, 1)</td><td>both</td></tr>
+            <tr><td scope="row">Shadows</td><td>scale of 3 (sm/md/lg)</td><td>single --shadow</td><td>both</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ TYPOGRAPHY ============ -->
+    <section id="typography" aria-labelledby="typography-h">
+      <div class="wrap">
+        <h2 id="typography-h">Typography</h2>
+        <p class="section-intro">Sources declare Instrument Serif (display), Inter (UI), and mono (landing only): 3 landing stacks, 2 panel stacks. This board applies only their system-font fallbacks; actual fallback selection depends on the OS. No fonts or other assets are fetched.</p>
+
+        <div class="panel-card" style="margin-bottom: 24px;">
+          <h3>Families</h3>
+          <p style="font-family: var(--font-display); font-size: 1.2rem; color: var(--ink);">Display — "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif <span class="source-tag">both</span></p>
+          <p style="font-size: 1.2rem; color: var(--ink);">UI — Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif <span class="source-tag">landing --font-ui</span> <span class="source-tag panel">panel --font-body (no ui-sans-serif)</span></p>
+          <p style="font-family: var(--font-mono); font-size: 1rem; color: var(--ink);">Mono — ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace <span class="source-tag">landing only</span></p>
+          <p>Weights used: 400 (headings, body, display numerals) · 500 · 600 · 650 (brand, eyebrow) · 700. Inter @font-face: 400–700 (landing) vs 100–900 (panel). All source faces now use <em>font-display: swap</em>.</p>
+        </div>
+
+        <div class="cols-2">
+          <div class="panel-card">
+            <h3>Landing scale <span class="source-tag">landing/demo.css</span></h3>
+            <div class="type-row"><div class="type-meta"><b>h1</b><br>clamp(2.7rem, 5.6vw, 4.5rem)<br>lh .99 · ls -.02em · w400</div><p class="t-display t-h1" style="margin:0;">Reserva confirmada</p></div>
+            <div class="type-row"><div class="type-meta"><b>h2</b><br>clamp(1.85rem, 3.4vw, 2.8rem)<br>lh 1.05 · ls -.015em · w400</div><p class="t-h2" style="margin:0;">Cómo funciona</p></div>
+            <div class="type-row"><div class="type-meta"><b>.stat dt</b><br>1.9rem · lh 1.1<br>1.6rem ≤620px</div><p class="t-stat" style="margin:0;">24/7</p></div>
+            <div class="type-row"><div class="type-meta"><b>.lede</b><br>1.06rem · lh 1.62</div><p class="t-lede" style="margin:0;">El asistente responde al huésped en segundos.</p></div>
+            <div class="type-row"><div class="type-meta"><b>h3</b><br>1rem · lh 1.35 · w600</div><p class="t-h3" style="margin:0;">Herramientas en vivo</p></div>
+            <div class="type-row"><div class="type-meta"><b>body</b><br>16px · lh 1.65</div><p class="t-body" style="margin:0;">Texto base del sitio público.</p></div>
+            <div class="type-row"><div class="type-meta"><b>eyebrow</b><br>.71rem · w650 · ls .19em</div><p class="t-eyebrow" style="margin:0;">Demo en vivo</p></div>
+          </div>
+          <div class="panel-card">
+            <h3>Panel scale <span class="source-tag panel">copiloto/.../theme.css</span></h3>
+            <div class="type-row"><div class="type-meta"><b>body</b><br>14px · lh 1.5</div><p class="t-panel-body" style="margin:0;">Texto base del panel de recepción. El sistema de panel declara solo el cuerpo: 14px / 1.5.</p></div>
+            <div class="type-row"><div class="type-meta"><b>h1 / h2</b><br>sin tamaño declarado<br>w400 · ls -.01em</div><p style="margin:0; font-family:var(--font-display); font-weight:400; letter-spacing:-.01em;">Ocupación del hotel</p></div>
+            <div class="type-row"><div class="type-meta"><b>headings</b></div><p style="margin:0; font-size: .82rem;">No sizes, no mono stack, and no component text sizes are declared in <code>theme.css</code>.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SPACING ============ -->
+    <section id="spacing" aria-labelledby="spacing-h">
+      <div class="wrap">
+        <h2 id="spacing-h">Spacing</h2>
+        <p class="section-intro">Landing now declares one spacing token: <code>--section-space: clamp(60px, 8vw, 88px)</code>. No general spacing scale exists; bars below show raw landing measurements, not tokens. Panel declares no spacing tokens. Landing touch targets are at least 44px.</p>
+        <div class="panel-card">
+          <div class="space-row"><span class="val">8px</span><span class="space-bar" style="width:8px"></span></div>
+          <div class="space-row"><span class="val">12px</span><span class="space-bar" style="width:12px"></span></div>
+          <div class="space-row"><span class="val">16px</span><span class="space-bar" style="width:16px"></span></div>
+          <div class="space-row"><span class="val">24px</span><span class="space-bar" style="width:24px"></span></div>
+          <div class="space-row"><span class="val">26px</span><span class="space-bar" style="width:26px"></span></div>
+          <div class="space-row"><span class="val">34px</span><span class="space-bar" style="width:34px"></span></div>
+          <div class="space-row"><span class="val">56px</span><span class="space-bar" style="width:56px"></span></div>
+          <div class="space-row"><span class="val">section-space</span><span class="space-bar" style="width:var(--section-space)"></span></div>
+          <p style="margin-top:16px;">Source: <code>landing/demo.css</code>. <code>.wrap</code> max-width 1180px · card padding 26px · <code>main &gt; section</code> padding-block var(--section-space) · <code>main &gt; #probar</code> padding-top 0 · button 12×24 padding, min-height 50px · hero gap 56px. The ≤620px generic section padding (52px 0) does not override the direct-child rule.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ RADII ============ -->
+    <section id="radii" aria-labelledby="radii-h">
+      <div class="wrap">
+        <h2 id="radii-h">Radii</h2>
+        <p class="section-intro">No radius tokens. Raw values from <code>landing/demo.css</code>; the panel declares exactly one radius (skeleton, 8px).</p>
+        <div class="cols-3">
+          <div class="radius-box" style="border-radius:999px;">999px — buttons, pills, voice input</div>
+          <div class="radius-box" style="border-radius:22px;">22px — card (18px mobile)</div>
+          <div class="radius-box" style="border-radius:18px;">18px — shot / live-card / admin-frame</div>
+          <div class="radius-box" style="border-radius:14px;">14px — event-card</div>
+          <div class="radius-box" style="border-radius:12px;">12px — notice / voice-line</div>
+          <div class="radius-box" style="border-radius:10px;">10px — skip / availability</div>
+          <div class="radius-box" style="border-radius:26px;">26px — frame / cta</div>
+          <div class="radius-box" style="border-radius:40px;">40px — phone (18px ≤620px)</div>
+          <div class="radius-box" style="border-radius:8px;">8px — event-icon · panel skeleton</div>
+          <div class="radius-box" style="border-radius:6px;">6px — arguments / tag</div>
+          <div class="radius-box" style="border-radius:10px 10px 10px 2px;">10 10 10 2 — bot bubble</div>
+          <div class="radius-box" style="border-radius:10px 10px 2px 10px;">10 10 2 10 — guest bubble</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SHADOWS ============ -->
+    <section id="shadows" aria-labelledby="shadows-h">
+      <div class="wrap">
+        <h2 id="shadows-h">Shadows &amp; motion</h2>
+        <p class="section-intro">Landing declares a three-step scale; the panel declares a single <code>--shadow</code>. Both declare dark-mode overrides (rendered separately below). Easing differs: landing uses <code>cubic-bezier(.2, .8, .3, 1)</code>, the panel tokens <code>--ease: cubic-bezier(.22, 1, .36, 1)</code>.</p>
+        <div class="cols-2" style="margin-bottom: 24px;">
+          <div class="cols-3">
+            <div class="shadow-box" style="box-shadow: var(--shadow-sm);">--shadow-sm</div>
+            <div class="shadow-box" style="box-shadow: var(--shadow-md);">--shadow-md</div>
+            <div class="shadow-box" style="box-shadow: var(--shadow-lg);">--shadow-lg</div>
+          </div>
+          <div class="cols-3">
+            <div class="shadow-box" style="box-shadow: var(--p-shadow); border: 1px solid var(--line);">panel --shadow</div>
+            <div class="shadow-box" style="box-shadow: 0 1px 1px rgb(11 20 26 / 13%);">bubble micro (inline)</div>
+            <div class="shadow-box" style="box-shadow: 0 10px 26px -12px var(--accent);">primary glow (inline)</div>
+          </div>
+        </div>
+        <h3 class="mini-label">Dark shadows — landing/demo.css / copiloto/src/copiloto/static/theme.css</h3>
+        <div class="cols-2" style="margin-bottom:24px; background:#14100b; padding:26px;">
+          <div class="shadow-box" style="background:#201a13; color:#f0e6d5; box-shadow:0 1px 2px rgb(0 0 0 / 30%);">landing --shadow-sm<br>0 1px 2px rgb(0 0 0 / 30%)</div>
+          <div class="shadow-box" style="background:#201a13; color:#f0e6d5; box-shadow:0 2px 6px rgb(0 0 0 / 30%), 0 18px 42px rgb(0 0 0 / 40%);">landing --shadow-md<br>0 2px 6px rgb(0 0 0 / 30%), 0 18px 42px rgb(0 0 0 / 40%)</div>
+          <div class="shadow-box" style="background:#201a13; color:#f0e6d5; box-shadow:0 40px 90px -30px rgb(0 0 0 / 70%);">landing --shadow-lg<br>0 40px 90px -30px rgb(0 0 0 / 70%)</div>
+          <div class="shadow-box" style="background:#201a13; color:#f0e6d5; box-shadow:0 1px 2px rgb(0 0 0 / 35%), 0 14px 30px -22px rgb(0 0 0 / 80%);">panel --shadow<br>0 1px 2px rgb(0 0 0 / 35%), 0 14px 30px -22px rgb(0 0 0 / 80%)</div>
+        </div>
+        <div class="panel-card">
+          <h3>Motion</h3>
+          <div class="cols-2">
+            <p><span class="source-tag">landing</span> <code>cubic-bezier(.2, .8, .3, 1)</code> on .25–.7s transitions; keyframes <code>aurora</code> 18s, <code>ticker</code> 40s linear, <code>message-in</code> .28s (.32s on .event-card), <code>typing</code> 1s, <code>stack-float</code> 12s; reveal stagger .08/.16/.24s. Reduced motion: all animations and transitions disabled.</p>
+            <p><span class="source-tag panel">panel</span> <code>--ease: cubic-bezier(.22, 1, .36, 1)</code>; keyframes <code>rise</code> .42s, <code>pop</code> .5s (stagger <code>var(--i) × 60ms</code>), <code>pulse-red</code>, <code>shimmer</code> 1.4s. Reduced motion: durations .001ms.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ COMPONENTS ============ -->
+    <section id="components" aria-labelledby="components-h">
+      <div class="wrap">
+        <h2 id="components-h">Components</h2>
+        <p class="section-intro">Rules as declared. The panel stylesheet defines no buttons, cards, rows or bubbles — only the skeleton — so those components are rendered with their landing rules and labeled.</p>
+
+        <h3 class="mini-label">Buttons <span class="source-tag">landing/demo.css .button</span></h3>
+        <div class="demo-box" style="margin-bottom: 24px;">
+          <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+            <button type="button" class="button primary">Confirmar reserva</button>
+            <button type="button" class="button">Ver disponibilidad</button>
+            <button type="button" class="button" style="background:transparent;">Ghost</button>
+            <button type="button" class="button" disabled>Disabled</button>
+          </div>
+          <p style="margin-top:14px;">Radius 999px · min-height 50px · padding 12×24 · primary: gradient accent + glow, accent-ink text · hover: translateY(-2px) + shadow-md · disabled: opacity .5. Panel: <strong>not defined</strong> in theme.css.</p>
+        </div>
+
+        <div class="cols-2" style="margin-bottom: 24px;">
+          <div>
+            <h3 class="mini-label">Card <span class="source-tag">landing .card</span></h3>
+            <div class="demo-box">
+              <h3 style="margin:0 0 8px; font-size:1rem;">Ocupación de esta semana</h3>
+              <p>Padding 26px · border 1px --line · radius 22px · bg --card · --shadow-sm. Gradient siblings (.shot, .live-card) use card→card-2 at radius 18px. Only .shot has the card-level hover lift (−4px); .live-card has no such rule.</p>
+            </div>
+          </div>
+          <div>
+            <h3 class="mini-label">Skeleton <span class="source-tag panel">panel .skeleton</span></h3>
+            <div class="demo-box">
+              <p>Radius 8px · shimmer gradient card-2→card→card-2, 1.4s linear (paused under reduced motion). Entrance: .rise / .pop staggered 60ms.</p>
+              <div class="skeleton" style="margin-bottom:8px;"></div>
+              <div class="skeleton" style="width:70%; margin-bottom:8px;"></div>
+              <div class="skeleton" style="width:45%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cols-2" style="margin-bottom: 24px;">
+          <div>
+            <h3 class="mini-label">Message bubbles <span class="source-tag">landing .bubble</span></h3>
+            <div class="demo-box">
+              <div class="chat">
+                <div class="message assistant">
+                  <div class="bubble"><p>Buenas tardes, ¿en qué puedo ayudarle con su estancia?</p></div>
+                  <span class="message-time">16:02 ✓✓</span>
+                </div>
+                <div class="message user">
+                  <div class="bubble"><p>Quisiera reservar una doble para el fin de semana.</p></div>
+                  <span class="message-time">16:03</span>
+                </div>
+              </div>
+              <p style="margin-top:14px;">Bot: radius 10·10·10·2 on --wa-in. Guest: 10·10·2·10 on --wa-out. Text .85rem/1.6, time .59rem tabular-nums. Hero preview .msg uses the same 10px corner patterns, padding 8×11 and .78rem/1.5 text.</p>
+            </div>
+          </div>
+          <div>
+            <h3 class="mini-label">Status dots <span class="source-tag">landing .status-dot / .live-dot</span></h3>
+            <div class="demo-box">
+              <div class="dot-row" style="margin-bottom:14px;">
+                <span><span class="status-dot"></span>Default (--wa-muted, 7px)</span>
+                <span><span class="status-dot ready"></span>Ready (#25d366 + ring)</span>
+              </div>
+              <div class="dot-row" style="margin-bottom:14px;">
+                <span><span class="status-dot ok" style="width:9px;height:9px;"></span>Live .is-ok (--ok, 9px)</span>
+                <span><span class="status-dot error" style="width:9px;height:9px;"></span>Live .is-error (--error, 9px)</span>
+              </div>
+              <div class="dot-row">
+                <span><span class="status-dot" style="width:9px;height:9px;background:#2e7d32;"></span>Panel --ok (token only, no dot rule)</span>
+                <span><span class="status-dot" style="width:9px;height:9px;background:#b26a00;"></span>Panel --warn (token only)</span>
+                <span><span class="status-dot" style="width:9px;height:9px;background:#c62828;"></span>Panel --bad (token only)</span>
+              </div>
+              <p style="margin-top:14px;">The panel declares ok/warn/bad as colors but no dot component; shown here as bare tokens for comparison.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="cols-2">
+          <div>
+            <h3 class="mini-label">Labels &amp; badges <span class="source-tag">landing .pill / .arguments span / .event-source</span></h3>
+            <div class="demo-box">
+              <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px;">
+                <span class="pill">WhatsApp conectado</span>
+                <span class="arg-chip">fecha=2025-11-08</span>
+                <span class="arg-chip">noches=2</span>
+                <span class="source-pill">reservations.search</span>
+              </div>
+              <p>Pill: 6×12 padding, 999px radius, accent text. Arg chip: mono .63rem, 6px radius. Source pill: dashed border.</p>
+            </div>
+          </div>
+          <div>
+            <h3 class="mini-label">Panel row / table row <span class="source-tag">landing .availability-list li</span></h3>
+            <div class="demo-box">
+              <div class="availability">
+                <p class="availability-head">Disponibilidad — fin de semana</p>
+                <ul class="availability-list">
+                  <li>
+                    <strong>Habitación doble</strong>
+                    <span class="right">3 disponibles</span>
+                    <span class="price">Desayuno incluido</span>
+                    <span class="total">€128 / noche</span>
+                  </li>
+                  <li>
+                    <strong>Suite junior</strong>
+                    <span class="right">1 disponible</span>
+                    <span class="price">Vista al patio</span>
+                    <span class="total">€210 / noche</span>
+                  </li>
+                </ul>
+              </div>
+              <p style="margin-top:14px;">Grid 1fr/auto · row separator 1px --line-soft · label .76rem --ink · meta --muted · total 600 right-aligned. Panel: no row rules in theme.css.</p>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="mini-label" style="margin-top:28px;">Demo console — static specimens <span class="source-tag">landing/demo.css</span></h3>
+        <div class="cols-2">
+          <div class="demo-box">
+            <span class="demo-switch" style="color:var(--ink);"><span class="demo-switch-track"><span class="demo-switch-knob"></span></span>Modo demo · activado</span>
+            <div class="console-tabs" role="group" aria-label="Console tab appearance, non-interactive specimen">
+              <span class="tab selected">Huésped</span><span class="tab">Recepción</span><span class="tab">Admin</span>
+            </div>
+            <p style="margin-top:14px;">.demo-switch: 44px minimum, 30×18 track, 14px knob, checked accent-2. .console-tabs: max-width 520px, 5px padding, 4px gap; selected tab uses ink/bg. Source selectors use aria-checked and aria-selected; these specimens are static.</p>
+            <div class="console-row"><div><b>Consulta de reserva</b><span class="sub">Esperando respuesta de recepción</span></div><span class="source-pill">En cola</span></div>
+            <p>.console-row: grid 1fr/auto, gap 2×12, padding 10×8, radius 10px; name .84rem, subtitle .7rem.</p>
+          </div>
+          <div class="demo-box">
+            <div class="console-state">Vacío · No hay conversaciones en la cola.</div>
+            <div class="console-state error">Error · No se pudo cargar la cola.</div>
+            <div class="console-state rate">Límite · Espera antes de volver a consultar.</div>
+            <div class="console-state gate">Acceso · Activa el modo demo para continuar.</div>
+            <p style="margin-top:14px;">.console-state: 14×16 padding, 12px radius, dashed border. Error: error-bg/error; rate and gate: accent-soft/accent. Rate has a solid line border; gate mixes accent 40% with line.</p>
+          </div>
+        </div>
+
+        <div class="not-defined" style="margin-top: 28px;">
+          Not defined: a general spacing scale (landing has only --section-space), radius scale tokens, panel component rules beyond the skeleton/entrance animations, panel mono stack or panel heading sizes.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p>Sources read (read-only): <code>landing/demo.css</code> · <code>copiloto/src/copiloto/static/theme.css</code>. Extracted for <code>design/system.md</code>. Two systems, one product — reconcile the conflicts above before unifying.</p>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

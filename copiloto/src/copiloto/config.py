@@ -2,7 +2,7 @@
 
 import os
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
@@ -10,6 +10,27 @@ from zoneinfo import ZoneInfo
 def _parse_hhmm(value: str) -> time:
     hours, minutes = value.strip().split(":")
     return time(int(hours), int(minutes))
+
+
+# Valores que activan una bandera booleana del entorno; se comparan en minúsculas y sin espacios,
+# igual que la lectura de AI_MODE.
+# PMS simulado de este repositorio (pms_mock): el único inventario que la demo pública puede leer o reservar.
+SANDBOX_PMS_URLS = frozenset({"http://pms-mock:8200", "http://localhost:8200", "http://127.0.0.1:8200"})
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+
+def int_env(env: dict[str, str], name: str, default: int) -> int:
+    """Entero opcional del entorno. Ausente o en blanco cuenta como «sin configurar»: el compose pasa
+    `${VAR:-}` para que las perillas documentadas existan aunque el .env no las defina, y un valor
+    vacío antes rompía int(""). No muta el entorno; app.py resuelve su respaldo con este mismo helper."""
+    raw = (env.get(name) or "").strip()
+    return int(raw) if raw else default
+
+
+def float_env(env: dict[str, str], name: str, default: float | None) -> float | None:
+    """Decimal opcional del entorno, con la misma regla que `int_env`: ausente o en blanco usa el valor por defecto."""
+    raw = (env.get(name) or "").strip()
+    return float(raw) if raw else default
 
 
 @dataclass(frozen=True)
@@ -20,6 +41,9 @@ class Settings:
     chatwoot_public_url: str = "http://localhost:3000"
     chatwoot_account_id: int = 1
     chatwoot_bot_token: str = ""
+    # Integración con Chatwoot (bandeja real y webhook). from_env la deduce del token si CHATWOOT_ENABLED no
+    # está definido: el perfil liviano (sin Chatwoot sembrado) arranca sin token y con el webhook cerrado.
+    chatwoot_enabled: bool = True
     chatwoot_team_id: int | None = None
     env: str = "development"
     webhook_secret: str = ""
@@ -29,6 +53,10 @@ class Settings:
     pms_events_secret: str = ""
     panel_token: str = ""
     pms_url: str = "http://pms-mock:8200"
+    # Inventario de PRUEBA de la demo pública (nunca el PMS de la operación). Vacío: si el PMS operativo es el
+    # simulado autorizado se usa otra instancia apuntando a él; si no, la demo responde «Disponibilidad por
+    # verificar» y deriva igual.
+    demo_pms_url: str = ""
     pms_staff_url: str = "http://localhost:8200"
     pms_timeout_s: float = 4.0
     # Conector del PMS: "http" usa el contrato de docs/conector-pms.md; "none" deja al hotel sin PMS.
@@ -40,9 +68,11 @@ class Settings:
     timezone: str = "America/Santiago"
     shift_start: str = "08:00"
     shift_end: str = "22:00"
+    # Forzar el turno para pruebas reproducibles: "" (según reloj), "open" (en turno) o "closed" (fuera).
+    shift_override: str = ""
     fixed_monthly_clp: int = 90000
     usage_m_clp: int = 0
-    prebooking_minutes: int = 15
+    prebooking_minutes: int = 15  # lo promete docs/ia.md vía la variable PREBOOKING_MINUTES
     retention_days: int = 90
     sla_amber_s: int = 120
     sla_red_s: int = 180
@@ -59,6 +89,9 @@ class Settings:
     # Tope del turno completo (reintentos y herramientas incluidos): pasado ese plazo se vuelve al menú guiado
     ai_turn_timeout_s: float = 12.0
     llm_max_tokens: int = 500
+    # Muestreo: temperatura fija salvo `LLM_TEMPERATURE`; `top_p` solo se envía si `LLM_TOP_P` está definido
+    llm_temperature: float = 0.3
+    llm_top_p: float | None = None
     # Voz de la demo (opcional): sin clave y sin voz elegida, la demo sigue solo con texto
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = ""
@@ -74,6 +107,8 @@ class Settings:
     ai_max_history: int = 12
     pms_staff_token: str = ""
     demo_enabled: bool = True
+    # La demo usa el flujo guiado (reproducible, sin costo). DEMO_AI=1 la conecta al asistente con IA.
+    demo_ai: bool = False
     landing_origin: str = "http://localhost:8080"
     demo_messages_per_session: int = 30
     demo_ip_per_min: int = 20
@@ -91,6 +126,11 @@ class Settings:
             chatwoot_public_url=env.get("CHATWOOT_PUBLIC_URL", cls.chatwoot_public_url),
             chatwoot_account_id=int(env.get("CHATWOOT_ACCOUNT_ID", "1")),
             chatwoot_bot_token=env.get("CHATWOOT_BOT_TOKEN", ""),
+            chatwoot_enabled=(
+                env["CHATWOOT_ENABLED"].strip().lower() in _TRUTHY
+                if (env.get("CHATWOOT_ENABLED") or "").strip()
+                else bool((env.get("CHATWOOT_BOT_TOKEN") or "").strip())
+            ),
             chatwoot_team_id=int(team) if team else None,
             env=env.get("COPILOTO_ENV", "development"),
             webhook_secret=env.get("WEBHOOK_SECRET", ""),
@@ -103,6 +143,8 @@ class Settings:
             # Un modelo local en CPU puede necesitar más de 25 s por turno.
             llm_timeout_s=float(env.get("LLM_TIMEOUT_S", cls.llm_timeout_s)),
             ai_turn_timeout_s=float(env.get("AI_TURN_TIMEOUT_S", cls.ai_turn_timeout_s)),
+            llm_temperature=float_env(env, "LLM_TEMPERATURE", cls.llm_temperature),
+            llm_top_p=float_env(env, "LLM_TOP_P", cls.llm_top_p),
             elevenlabs_api_key=env.get("ELEVENLABS_API_KEY", ""),
             elevenlabs_voice_id=env.get("ELEVENLABS_VOICE_ID", ""),
             elevenlabs_voice_id_en=env.get("ELEVENLABS_VOICE_ID_EN", ""),
@@ -112,11 +154,13 @@ class Settings:
             piper_model_path=env.get("PIPER_MODEL_PATH", ""),
             piper_config_path=env.get("PIPER_CONFIG_PATH", ""),
             pms_staff_token=env.get("PMS_STAFF_TOKEN", ""),
-            demo_enabled=env.get("DEMO_ENABLED", "1") not in ("0", "false", "no"),
+            demo_enabled=env.get("DEMO_ENABLED", "1").strip().lower() in _TRUTHY,
+            demo_ai=env.get("DEMO_AI", "0").strip().lower() in _TRUTHY,
             landing_origin=env.get("LANDING_ORIGIN", cls.landing_origin).rstrip("/"),
             panel_token=env.get("PANEL_TOKEN", ""),
             pms_url=env.get("PMS_URL", cls.pms_url),
             pms_staff_url=env.get("PMS_STAFF_URL", cls.pms_staff_url),
+            demo_pms_url=(env.get("DEMO_PMS_URL") or "").strip(),
             pms_adapter=env.get("PMS_ADAPTER", cls.pms_adapter).strip().lower(),
             pms_availability_path=env.get("PMS_AVAILABILITY_PATH", cls.pms_availability_path),
             pms_booking_path=env.get("PMS_BOOKING_PATH", cls.pms_booking_path),
@@ -125,17 +169,26 @@ class Settings:
             timezone=env.get("TIMEZONE", cls.timezone),
             shift_start=env.get("SHIFT_START", cls.shift_start),
             shift_end=env.get("SHIFT_END", cls.shift_end),
+            shift_override=env.get("SHIFT_OVERRIDE", "").strip().lower(),
             fixed_monthly_clp=int(env.get("FIXED_MONTHLY_CLP", "90000")),
             usage_m_clp=int(env.get("USAGE_M_CLP", "0")),
-            retention_days=int(env.get("RETENTION_DAYS", "90")),
+            prebooking_minutes=int_env(env, "PREBOOKING_MINUTES", cls.prebooking_minutes),
+            retention_days=int_env(env, "RETENTION_DAYS", cls.retention_days),
         )
 
     def validate_runtime(self) -> None:
         """Falla al arrancar si falta un secreto: sin esto cada webhook respondería 401 sin explicación."""
-        secrets = {"WEBHOOK_SECRET": self.webhook_secret, "PMS_EVENTS_SECRET": self.pms_events_secret,
-                   "PANEL_TOKEN": self.panel_token, "PSEUDONYM_SALT": self.pseudonym_salt,
-                   "CHATWOOT_BOT_TOKEN": self.chatwoot_bot_token}
+        secrets = {
+            "PMS_EVENTS_SECRET": self.pms_events_secret,
+            "PANEL_TOKEN": self.panel_token,
+            "PSEUDONYM_SALT": self.pseudonym_salt,
+        }
+        if self.chatwoot_enabled:
+            # Solo con la bandeja real: el token llega de .env.runtime al sembrar Chatwoot (make up-full).
+            secrets.update(WEBHOOK_SECRET=self.webhook_secret, CHATWOOT_BOT_TOKEN=self.chatwoot_bot_token)
         weak = sorted(name for name, value in secrets.items() if len(value) < 16)
+        if self.shift_override not in ("", "open", "closed"):
+            raise ValueError("SHIFT_OVERRIDE debe ser open, closed o vacío")
         if self.ai_mode not in ("off", "assisted", "full"):
             raise ValueError("AI_MODE debe ser off, assisted o full")
         if self.ai_mode == "full" and self.llm_api_key and not self.pms_staff_token:
@@ -144,17 +197,21 @@ class Settings:
             raise ValueError("Secretos ausentes o demasiado cortos (mínimo 16 caracteres): " + ", ".join(weak))
         public = urlsplit(self.public_url)
         if self.env == "production" and not (
-            public.scheme == "https" and public.hostname
-            or public.scheme == "http" and public.hostname in ("localhost", "127.0.0.1")
+            public.scheme == "https"
+            and public.hostname
+            or public.scheme == "http"
+            and public.hostname in ("localhost", "127.0.0.1")
         ):
             raise ValueError("COPILOTO_PUBLIC_URL necesita HTTPS fuera de localhost/127.0.0.1")
 
     @property
     def demo_sandbox_authorized(self) -> bool:
         """Local demo allowlist, not proof that an arbitrary PMS is a sandbox."""
-        return (self.pms_adapter == "http" and self.pms_booking_path == "/api/v1/bookings"
-                and self.pms_url.rstrip("/") in {
-                    "http://pms-mock:8200", "http://localhost:8200", "http://127.0.0.1:8200"})
+        return (
+            self.pms_adapter == "http"
+            and self.pms_booking_path == "/api/v1/bookings"
+            and self.pms_url.rstrip("/") in SANDBOX_PMS_URLS
+        )
 
     @property
     def ai_active(self) -> bool:
@@ -180,6 +237,8 @@ class Settings:
     def in_shift(self, epoch: float) -> bool:
         """True si `epoch` cae dentro del turno humano. Soporta turnos que cruzan medianoche y, con inicio
         igual al fin, un turno de 24 horas (sin la ventana muerta de un minuto de 23:59 a 00:00)."""
+        if self.shift_override in ("open", "closed"):
+            return self.shift_override == "open"
         start, end = _parse_hhmm(self.shift_start), _parse_hhmm(self.shift_end)
         if start == end:
             return True
@@ -187,3 +246,16 @@ class Settings:
         if start <= end:
             return start <= current < end
         return current >= start or current < end
+
+    def next_shift_start(self, epoch: float) -> datetime:
+        """Próximo inicio de turno en hora local del alojamiento, posterior a `epoch`.
+
+        Con el turno forzado a «closed» se informa igual el horario configurado: la demo muestra qué
+        leería el huésped de noche sin depender de la hora real.
+        """
+        start = _parse_hhmm(self.shift_start)
+        current = self.local(epoch)
+        candidate = current.replace(hour=start.hour, minute=start.minute, second=0, microsecond=0)
+        if candidate <= current:
+            candidate += timedelta(days=1)
+        return candidate

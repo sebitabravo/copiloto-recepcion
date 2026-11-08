@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import logging
 import os
@@ -11,12 +12,27 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import yaml
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Response
-from fastapi.responses import HTMLResponse
+from fastapi import BackgroundTasks, Cookie, Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 DEFAULT_HOTEL_PATH = Path(__file__).resolve().parents[3] / "data" / "hotel.yaml"
+
+# Mismo criterio de verdad que copiloto.config._TRUTHY: la entrada de demo está apagada por defecto.
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+STAFF_COOKIE = "staff_session"
+FONTS_DIR = Path(__file__).with_name("fonts")
+FONTS = frozenset({"instrument-serif-normal.woff2", "inter-normal.woff2"})
+
+
+def demo_mode_enabled() -> bool:
+    return os.getenv("DEMO_MODE", "").strip().lower() in _TRUTHY
+
+
+def staff_cookie_value(expected: str) -> str:
+    """Valor de la cookie de personal: un HMAC derivado del STAFF_TOKEN; el token nunca viaja en claro."""
+    return hmac.new(expected.encode(), b"staff-session-v1", hashlib.sha256).hexdigest()
 
 
 class RoomType(BaseModel):
@@ -78,8 +94,7 @@ def initialize(path: str, rooms: list[RoomType]) -> None:
         if "source" not in columns:
             connection.execute("ALTER TABLE bookings ADD COLUMN source TEXT NOT NULL DEFAULT 'personal'")
         # Distribución simulada: dos unidades para los primeros ocho tipos del YAML.
-        expected = [room.code for index, room in enumerate(rooms)
-                    for _ in range(2 if index < 8 else 1)]
+        expected = [room.code for index, room in enumerate(rooms) for _ in range(2 if index < 8 else 1)]
         connection.execute("BEGIN IMMEDIATE")
         try:
             current = connection.execute("SELECT room_code FROM rooms ORDER BY room_id").fetchall()
@@ -145,12 +160,19 @@ class BookingRequest(Stay):
         return value.strip()
 
 
-def require_staff(x_staff_token: Annotated[str | None, Header()] = None) -> None:
+def require_staff(
+    x_staff_token: Annotated[str | None, Header()] = None,
+    staff_session: Annotated[str | None, Cookie()] = None,
+) -> None:
     expected = os.getenv("STAFF_TOKEN")
-    if not expected or not x_staff_token or not hmac.compare_digest(
-        x_staff_token.encode(), expected.encode()
-    ):
+    if not expected:
         raise HTTPException(status_code=401, detail="Valid staff token required")
+    if x_staff_token and hmac.compare_digest(x_staff_token.encode(), expected.encode()):
+        return
+    # Modo demo: la cookie firmada en el servidor a partir del token también autoriza; el header sigue mandando.
+    if staff_session and hmac.compare_digest(staff_session.encode(), staff_cookie_value(expected).encode()):
+        return
+    raise HTTPException(status_code=401, detail="Valid staff token required")
 
 
 def emit_event(url: str, event: dict) -> None:
@@ -167,8 +189,13 @@ def emit_event(url: str, event: dict) -> None:
             return
         except Exception:
             if attempt < 3:
-                time.sleep(0.05 * (2 ** attempt))
-    logger.warning("Booking event delivery failed after retries")
+                logger.warning(
+                    "Fallo entregando el evento de reserva (intento %d); reintentando", attempt + 1, exc_info=True
+                )
+                time.sleep(0.05 * (2**attempt))
+    logger.error(
+        "Evento de reserva NUNCA entregado a %s tras 4 intentos: se perdió la notificación", url, exc_info=True
+    )
 
 
 def create_app() -> FastAPI:
@@ -184,6 +211,14 @@ def create_app() -> FastAPI:
     application.state.database_path = database_path
     application.state.room_types = rooms
 
+    @application.middleware("http")
+    async def robots_header(request: Request, call_next):
+        response = await call_next(request)
+        # El panel del personal es interno: no se indexa.
+        if request.url.path == "/admin" or request.url.path.startswith("/admin/"):
+            response.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
+        return response
+
     @application.get("/health")
     def health():
         return {"status": "ok"}
@@ -194,8 +229,10 @@ def create_app() -> FastAPI:
 
     @application.get("/api/v1/availability")
     def availability(
-        checkin: date, checkout: date,
-        adults: Annotated[int, Query(ge=1)], children: Annotated[int, Query(ge=0)],
+        checkin: date,
+        checkout: date,
+        adults: Annotated[int, Query(ge=1)],
+        children: Annotated[int, Query(ge=0)],
     ):
         if checkout <= checkin:
             raise HTTPException(status_code=422, detail="checkout must be after checkin")
@@ -210,14 +247,21 @@ def create_app() -> FastAPI:
                     continue
                 units = available_units(connection, room.code, checkin, checkout)
                 if units:
-                    result.append({**room.model_dump(), "available_units": units,
-                                   "nightly_price_clp": 65000 + index * 5000})
+                    result.append(
+                        {**room.model_dump(), "available_units": units, "nightly_price_clp": 65000 + index * 5000}
+                    )
             connection.rollback()
-        return {"read_at": datetime.now(ZoneInfo("America/Santiago")).isoformat(),
-                "source": "pms-mock", "simulated": True, "room_types": result}
+        return {
+            "read_at": datetime.now(ZoneInfo("America/Santiago")).isoformat(),
+            "source": "pms-mock",
+            "simulated": True,
+            "room_types": result,
+        }
 
     @application.post("/api/v1/bookings", dependencies=[Depends(require_staff)], status_code=201)
     def book(payload: BookingRequest, background_tasks: BackgroundTasks):
+        if os.getenv("SIMULATE_DOWN") == "1":
+            raise HTTPException(status_code=503, detail="Simulated PMS outage")
         room = next((room for room in rooms if room.code == payload.room_code), None)
         if room is None:
             raise HTTPException(status_code=422, detail="Unknown room_code")
@@ -231,9 +275,16 @@ def create_app() -> FastAPI:
                 cursor = connection.execute(
                     """INSERT INTO bookings(guest_name, checkin, checkout, room_code,
                        adults, children, conversation_id, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (payload.guest_name, payload.checkin.isoformat(), payload.checkout.isoformat(),
-                     payload.room_code, payload.adults, payload.children, payload.conversation_id,
-                     payload.source),
+                    (
+                        payload.guest_name,
+                        payload.checkin.isoformat(),
+                        payload.checkout.isoformat(),
+                        payload.room_code,
+                        payload.adults,
+                        payload.children,
+                        payload.conversation_id,
+                        payload.source,
+                    ),
                 )
                 booking_id = cursor.lastrowid
                 connection.commit()
@@ -242,10 +293,16 @@ def create_app() -> FastAPI:
                 raise
         event_url = os.getenv("COPILOTO_EVENTS_URL")
         if event_url:
-            background_tasks.add_task(emit_event, event_url, {
-                "kind": "booking_confirmed", "conversation_id": payload.conversation_id,
-                "booking_id": booking_id, "source": payload.source,
-            })
+            background_tasks.add_task(
+                emit_event,
+                event_url,
+                {
+                    "kind": "booking_confirmed",
+                    "conversation_id": payload.conversation_id,
+                    "booking_id": booking_id,
+                    "source": payload.source,
+                },
+            )
         return {"booking_id": booking_id, **payload.model_dump(), "simulated": True}
 
     @application.get("/api/v1/bookings", dependencies=[Depends(require_staff)])
@@ -255,8 +312,26 @@ def create_app() -> FastAPI:
         return [{**dict(row), "simulated": bool(row["simulated"])} for row in rows]
 
     @application.get("/admin", response_class=HTMLResponse)
-    def admin():
+    def admin(demo: Annotated[str | None, Query()] = None):
+        if demo == "1":
+            # Entrada de demo (sin credenciales en el navegador): la cookie de personal se firma aquí a
+            # partir del STAFF_TOKEN. El token nunca va en la URL, el cuerpo ni el HTML. Sin demo, 404.
+            expected = os.getenv("STAFF_TOKEN")
+            if demo_mode_enabled() and expected:
+                redirect = RedirectResponse("/admin", status_code=303)
+                redirect.set_cookie(STAFF_COOKIE, staff_cookie_value(expected), httponly=True, samesite="lax")
+                return redirect
+            raise HTTPException(status_code=404, detail="Not Found")
         return Path(__file__).with_name("admin.html").read_text(encoding="utf-8")
+
+    @application.get("/admin/fonts/{name}", include_in_schema=False)
+    def admin_font(name: str):
+        # Tipografías del sistema visual servidas por el mismo PMS: sin CDN. Solo los .woff2 incluidos.
+        if name not in FONTS:
+            raise HTTPException(status_code=404, detail="Not Found")
+        return FileResponse(
+            FONTS_DIR / name, media_type="font/woff2", headers={"Cache-Control": "public, max-age=86400"}
+        )
 
     @application.get("/favicon.ico", include_in_schema=False)
     def favicon():

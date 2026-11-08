@@ -61,6 +61,7 @@ El puente solo atiende la sesión `default`: eventos de otra cuenta vinculada se
 - No hay cola persistente: los webhooks se aceptan antes de entregar. Si el puente se reinicia en pleno envío o agota los reintentos, ese mensaje se pierde (queda en el log). Un reintento tras un timeout ambiguo de OpenWA puede duplicar un mensaje. Para producción, la entrega debe pasar por una cola durable.
 - Los mapeos huésped-conversación se borran tras 90 días sin actividad (no desde su creación) y solo al arrancar el puente.
 - Si recepción responde en Chatwoot y OpenWA no tiene sesión lista, Chatwoot muestra el mensaje pero el huésped no lo recibe. Revisa `make wa-qr` y los logs del puente antes de la demo.
+- El puente no arranca si `CHATWOOT_ADMIN_TOKEN` o `CHATWOOT_WA_INBOX_SECRET` están vacíos: falla rápido en el arranque, porque con un secreto vacío cada webhook de Chatwoot respondería 401 y el canal quedaría muerto en silencio.
 
 ## Prueba de punta a punta (con el teléfono)
 

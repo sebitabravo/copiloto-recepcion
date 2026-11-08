@@ -4,7 +4,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE=(docker compose -f "$ROOT/infra/docker-compose.yml" --project-directory "$ROOT")
+COMPOSE=(docker compose -f "$ROOT/infra/docker-compose.yml" --project-directory "$ROOT" --profile full)
 COPILOTO="${COPILOTO_URL:-http://localhost:8100}"
 LANDING="${LANDING_URL:-http://localhost:8080}"
 PMS="${PMS_URL:-http://localhost:8200}"
@@ -26,22 +26,52 @@ check() { # nombre, comando...
 
 http_ok() { [ "$(curl -s -o /dev/null -w '%{http_code}' -m 5 "$1")" = "200" ]; }
 
+running() { docker ps --format '{{.Names}}' | grep -qx "copiloto-$1-1"; }
+
 echo "1) Servicios del stack"
 check "landing $LANDING" http_ok "$LANDING/"
 check "copiloto $COPILOTO/health" http_ok "$COPILOTO/health"
 check "PMS simulado $PMS/health" http_ok "$PMS/health"
-check "Chatwoot $CHATWOOT" http_ok "$CHATWOOT/"
+# La demo liviana no incluye Chatwoot: se comprueba solo cuando forma parte del stack.
+if running chatwoot; then
+  check "Chatwoot $CHATWOOT" http_ok "$CHATWOOT/"
+else
+  echo "  · Chatwoot no está en este stack (modo demo): se omite"
+fi
 
 echo "2) Modelo local en el puerto $MODEL_PORT"
-if ! curl -s -o /dev/null -m 2 "http://localhost:$MODEL_PORT/v1/models"; then
+model_dead=0
+if ! curl -s -o /dev/null -m 2 "http://localhost:$MODEL_PORT/v1/models" && ! command -v llama-server >/dev/null; then
+  # Sin llama-server en el host (el caso normal en Windows): el modelo va en Docker, en la GPU si la hay.
+  echo "  · no está arriba: levantando el modelo en Docker (scripts/demo.sh ia)"
+  model_log="$(mktemp "${TMPDIR:-/tmp}/local-model.XXXXXX.log")"
+  if ! "$ROOT/scripts/demo.sh" ia >"$model_log" 2>&1; then
+    printf '  \033[31m✗\033[0m scripts/demo.sh ia falló · log: %s\n' "$model_log"
+    model_dead=1
+    fail=$((fail + 1))
+  fi
+elif ! curl -s -o /dev/null -m 2 "http://localhost:$MODEL_PORT/v1/models"; then
   echo "  · no está arriba: levantando scripts/local-model.sh"
-  nohup "$ROOT/scripts/local-model.sh" >/tmp/local-model.log 2>&1 &
+  model_log="$(mktemp "${TMPDIR:-/tmp}/local-model.XXXXXX.log")"
+  nohup "$ROOT/scripts/local-model.sh" >"$model_log" 2>&1 &
+  model_pid=$!
   for _ in $(seq 1 $((MODEL_WAIT / 5))); do
     curl -s -o /dev/null -m 2 "http://localhost:$MODEL_PORT/v1/models" && break
+    if ! kill -0 "$model_pid" 2>/dev/null; then
+      wait "$model_pid"; status=$?
+      printf '  \033[31m✗\033[0m scripts/local-model.sh terminó con código %s · log: %s\n' "$status" "$model_log"
+      model_dead=1
+      fail=$((fail + 1))
+      break
+    fi
     sleep 5
   done
+else
+  model_log="/dev/null"
 fi
-check "servidor del modelo responde" http_ok "http://localhost:$MODEL_PORT/v1/models"
+if [ "$model_dead" = 0 ]; then
+  check "servidor del modelo responde" http_ok "http://localhost:$MODEL_PORT/v1/models"
+fi
 
 echo "3) Copiloto con IA"
 status=$(curl -s -m 5 "$COPILOTO/api/demo/status")
@@ -72,5 +102,5 @@ if [ "$fail" -eq 0 ]; then
   exit 0
 fi
 printf '\033[31m%s comprobación(es) fallaron\033[0m · %s en verde\n' "$fail" "$ok"
-echo "Revisa: make ps · docker compose logs copiloto · /tmp/local-model.log"
+echo "Revisa: make ps · docker compose logs copiloto · log del modelo en ${model_log:-/dev/null}"
 exit 1

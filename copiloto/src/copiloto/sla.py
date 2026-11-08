@@ -19,11 +19,18 @@ logger = logging.getLogger(__name__)
 
 class SlaWorker:
     def __init__(self, settings: Settings, db: sqlite3.Connection, chatwoot: ChatwootClient,
-                 clock: Callable[[], float]):
+                 clock: Callable[[], float], demo_channel=None):
         self.settings = settings
         self.db = db
         self.chatwoot = chatwoot
         self.clock = clock
+        # Las conversaciones de la demo avisan en su propio hilo: nunca se llama a Chatwoot con ellas.
+        self.demo_channel = demo_channel
+
+    def _channel(self, conversation_id: int):
+        if self.demo_channel is not None and store.conversation_source(self.db, conversation_id) == store.DEMO_SOURCE:
+            return self.demo_channel
+        return self.chatwoot
 
     async def tick(self, now: float | None = None) -> None:
         """Una pasada: marca ámbar/vencido y expira pre-reservas. El reloj se inyecta para testear."""
@@ -56,19 +63,24 @@ class SlaWorker:
         if state is None:
             return
         elapsed = now - state.sla_started_at
+        channel = self._channel(conversation_id)
         if elapsed >= self.settings.sla_red_s:
             # Si el worker se atrasó y nunca marcó el ámbar, la etiqueta se pone junto con la roja
             missed_amber = [] if state.sla_amber_done else ["sla-ambar"]
-            await self.chatwoot.add_labels(conversation_id, [*missed_amber, "sla-vencido"])
+            await channel.add_labels(conversation_id, [*missed_amber, "sla-vencido"])
             if self._running(conversation_id) is None:
                 return
-            await self.chatwoot.send_message(
+            await channel.send_message(
                 conversation_id,
-                f"SLA vencido: pasaron {int(elapsed)} s sin respuesta humana "
+                f"SLA vencido: pasaron {int(elapsed)} s sin respuesta humana pertinente "
                 f"(meta {self.settings.sla_red_s} s).", private=True)
-            store.mark_sla(self.db, conversation_id, red=True)
+            # El incumplimiento queda registrado, no solo etiquetado: la medición lo puede recalcular.
+            with store.transaction(self.db):
+                store.mark_sla(self.db, conversation_id, red=True)
+                store.mark_request_breached(self.db, conversation_id, now)
+                record_event(self.db, conversation_id, "sla_breached", now, {"elapsed_s": int(elapsed)})
         elif elapsed >= self.settings.sla_amber_s and not state.sla_amber_done:
-            await self.chatwoot.add_labels(conversation_id, ["sla-ambar"])
+            await channel.add_labels(conversation_id, ["sla-ambar"])
             store.mark_sla(self.db, conversation_id, amber=True)
 
     async def run(self) -> None:

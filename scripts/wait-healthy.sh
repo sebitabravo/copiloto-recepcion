@@ -15,10 +15,17 @@ wait_for() {
   return 1
 }
 
-wait_for chatwoot http://localhost:3000/api 120
+# Solo se espera lo que este stack levantó: la demo liviana no incluye Chatwoot.
+running() { docker ps --format '{{.Names}}' | grep -qx "copiloto-$1-1"; }
+
+if running chatwoot; then
+  wait_for chatwoot http://localhost:3000/api 120
+else
+  echo "OMITE chatwoot (no está en este stack)"
+fi
 wait_for pms-mock http://localhost:8200/health 24
 wait_for landing http://localhost:8080 24
 # copiloto puede no existir aún en la primera pasada de `make up` (se recrea tras el seed)
-if docker ps --format '{{.Names}}' | grep -q '^copiloto-copiloto-1$'; then
+if running copiloto; then
   wait_for copiloto http://localhost:8100/health 24
 fi

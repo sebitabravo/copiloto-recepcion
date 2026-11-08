@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "chosen": "01-recorrido-guiado.html",
+  "handoffs": {
+    "01-recorrido-guiado.html": {
+      "status": "implemented",
+      "queued": false,
+      "sentAt": "2026-11-08T01:30:26.140Z",
+      "startedAt": "2026-11-08T01:30:45.778Z",
+      "implementedAt": "2026-11-08T02:27:39.795Z",
+      "feature": "odd/tasks/demo-route-ux.md",
+      "note": "Second iteration evolved the original direction into an actionable workspace: cross-view navigation, reception search/SLA filters, reversible PMS expansion and secondary disclosures. 41 Node tests and intercepted browser checks pass. Real backend/voice/PMS integration remains unverified.",
+      "previewUrl": "http://localhost:8080/demo"
+    }
+  }
+}

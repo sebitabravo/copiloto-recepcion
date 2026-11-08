@@ -4,6 +4,9 @@ El copiloto no habla con cada PMS: habla con **un contrato**. El hotel conecta s
 contrato y el código no cambia. `HttpPmsAdapter` es el cliente que lo consume, y el servicio
 `pms-mock` es la implementación de referencia.
 
+En `pms-mock`, `SIMULATE_DOWN=1` simula una caída total: la lectura **y** `POST /api/v1/bookings`
+responden `503`, así que la demo práctica cubre también la escritura, no solo la disponibilidad.
+
 Si el PMS del hotel no expone el contrato, se escribe un **puente** pequeño entre su API y este
 contrato. El copiloto no se toca.
 

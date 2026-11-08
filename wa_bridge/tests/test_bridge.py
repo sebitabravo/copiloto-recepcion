@@ -4,14 +4,14 @@ import asyncio
 import hashlib
 import hmac
 import json
-import os
+import logging
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 from wa_bridge.bridge import Bridge, render_content
 from wa_bridge.config import Settings
-from wa_bridge.main import create_app, verify_chatwoot_signature
+from wa_bridge.main import create_app, purge_once, verify_chatwoot_signature
 from wa_bridge.openwa import OpenWAClient, to_chat_id, verify_openwa_signature
 
 from wa_bridge import store
@@ -60,9 +60,17 @@ class FakeOpenWA:
 
 
 def settings(**overrides) -> Settings:
-    values = dict(openwa_url="http://openwa:2785", openwa_api_key="k", openwa_webhook_secret=OPENWA_SECRET,
-                  chatwoot_url="http://chatwoot:3000", chatwoot_account_id=1, chatwoot_admin_token="t",
-                  inbox_identifier="ident", inbox_secret=INBOX_SECRET, db_path=":memory:")
+    values = dict(
+        openwa_url="http://openwa:2785",
+        openwa_api_key="k",
+        openwa_webhook_secret=OPENWA_SECRET,
+        chatwoot_url="http://chatwoot:3000",
+        chatwoot_account_id=1,
+        chatwoot_admin_token="t",
+        inbox_identifier="ident",
+        inbox_secret=INBOX_SECRET,
+        db_path=":memory:",
+    )
     values.update(overrides)
     return Settings(**values)
 
@@ -79,20 +87,35 @@ def parts():
 
 
 def received(body="Hola", message_id="m1", **data):
-    payload = {"id": message_id, "chatId": GUEST, "from": GUEST, "body": body, "type": "chat",
-               "fromMe": False, "isGroup": False, "contact": {"pushName": "Ana"}}
+    payload = {
+        "id": message_id,
+        "chatId": GUEST,
+        "from": GUEST,
+        "body": body,
+        "type": "chat",
+        "fromMe": False,
+        "isGroup": False,
+        "contact": {"pushName": "Ana"},
+    }
     payload.update(data)
     return {"event": "message.received", "data": payload}
 
 
 def outgoing(conversation_id=100, content="Hola, soy el asistente", message_id=7, **extra):
-    event = {"event": "message_created", "id": message_id, "message_type": "outgoing", "private": False,
-             "content": content, "conversation": {"id": conversation_id}}
+    event = {
+        "event": "message_created",
+        "id": message_id,
+        "message_type": "outgoing",
+        "private": False,
+        "content": content,
+        "conversation": {"id": conversation_id},
+    }
     event.update(extra)
     return event
 
 
 # ---------- firmas ----------
+
 
 def sign_openwa(body: bytes, secret=OPENWA_SECRET) -> str:
     return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
@@ -126,13 +149,49 @@ def test_webhook_endpoints_return_401_without_a_valid_signature(parts):
     assert client.post("/webhooks/chatwoot", content=b"{}").status_code == 401
 
 
+# ---------- arranque: los secretos de Chatwoot vacíos matan el canal en silencio ----------
+
+
+def test_create_app_fails_fast_without_chatwoot_secrets():
+    with pytest.raises(ValueError, match="CHATWOOT_ADMIN_TOKEN"):
+        create_app(settings(chatwoot_admin_token=""))
+    with pytest.raises(ValueError, match="CHATWOOT_WA_INBOX_SECRET"):
+        create_app(settings(inbox_secret=""))
+    with pytest.raises(ValueError, match="CHATWOOT_ADMIN_TOKEN, CHATWOOT_WA_INBOX_SECRET"):
+        create_app(settings(chatwoot_admin_token="", inbox_secret=""))
+
+
+def test_create_app_builds_when_the_chatwoot_secrets_are_present():
+    assert create_app(settings(), clock=lambda: 1000.0).title
+
+
+def test_purge_once_removes_old_dedupe_keys_and_stale_mappings():
+    db = store.connect(":memory:")
+    now = 1_000_000.0
+    store.mark_processed(db, "viejo", now - 31 * 86400)
+    store.mark_processed(db, "reciente", now - 86400)
+    store.save_contact(db, "viejo@c.us", "src-1")
+    store.save_conversation(db, "viejo@c.us", 1, now - 91 * 86400)
+    store.save_contact(db, "activo@c.us", "src-2")
+    store.save_conversation(db, "activo@c.us", 2, now - 86400)
+
+    purged = purge_once(db, now)
+
+    assert purged == 1
+    assert not store.is_processed(db, "viejo") and store.is_processed(db, "reciente")
+    assert store.chat_for_conversation(db, 1) is None
+    assert store.chat_for_conversation(db, 2) == "activo@c.us" and store.contact_source(db, "activo@c.us") == "src-2"
+
+
 def test_webhook_endpoints_accept_signed_requests_and_process_them(parts):
     bridge, chatwoot, openwa = parts
     store.save_conversation(bridge.db, GUEST, 100, 1.0)
     client = TestClient(create_app(settings(), bridge, clock=lambda: 1000.0))
     body = json.dumps(received("Hola")).encode()
-    assert client.post("/webhooks/openwa", content=body,
-                       headers={"x-openwa-signature": sign_openwa(body)}).status_code == 200
+    assert (
+        client.post("/webhooks/openwa", content=body, headers={"x-openwa-signature": sign_openwa(body)}).status_code
+        == 200
+    )
     body = json.dumps(outgoing()).encode()
     assert client.post("/webhooks/chatwoot", content=body, headers=chatwoot_headers(body)).status_code == 200
     assert chatwoot.messages and openwa.sent == [(GUEST, "Hola, soy el asistente")]
@@ -145,6 +204,7 @@ def test_oversized_bodies_are_rejected_before_authentication(parts):
 
 
 # ---------- huésped -> Chatwoot ----------
+
 
 async def test_first_message_creates_contact_and_conversation_and_posts_the_text(parts):
     bridge, chatwoot, _ = parts
@@ -186,8 +246,9 @@ async def test_messages_sent_by_the_bot_session_never_loop_back(parts):
 
 async def test_groups_and_status_broadcasts_are_ignored(parts):
     bridge, chatwoot, openwa = parts
-    for number, extra in enumerate([{"isGroup": True}, {"isStatusBroadcast": True},
-                                    {"chatId": "1203630@g.us", "from": "1203630@g.us"}]):
+    for number, extra in enumerate(
+        [{"isGroup": True}, {"isStatusBroadcast": True}, {"chatId": "1203630@g.us", "from": "1203630@g.us"}]
+    ):
         await bridge.handle_openwa(received("hola a todos", message_id=f"g{number}", **extra))
     assert chatwoot.messages == [] and openwa.sent == []
 
@@ -281,6 +342,7 @@ async def test_events_are_accepted_by_session_name_or_id(parts):
 
 # ---------- Chatwoot -> huésped ----------
 
+
 async def test_public_outgoing_messages_are_delivered_to_the_guest(parts):
     bridge, _, openwa = parts
     store.save_conversation(bridge.db, GUEST, 100, 1.0)
@@ -310,6 +372,18 @@ async def test_messages_of_conversations_the_bridge_does_not_own_are_ignored(par
     assert openwa.sent == []
 
 
+async def test_an_unmapped_conversation_is_logged_before_dropping(parts, caplog):
+    bridge, _, openwa = parts
+    with caplog.at_level(logging.WARNING, logger="wa_bridge.bridge"):
+        await bridge.handle_chatwoot(outgoing(conversation_id=999, content="Secreto", message_id=55))
+    assert openwa.sent == []
+    dropped = [
+        record for record in caplog.records if record.levelno == logging.WARNING and "999" in record.getMessage()
+    ]
+    assert dropped, "el descarte debe quedar registrado con la conversación"
+    assert "Secreto" not in dropped[0].getMessage(), "el texto del mensaje no va al log"
+
+
 async def test_replies_of_an_old_conversation_still_reach_the_same_guest(parts):
     bridge, chatwoot, openwa = parts
     await bridge.handle_openwa(received("Hola", message_id="m1"))
@@ -330,20 +404,20 @@ def test_a_conversation_with_recent_activity_survives_the_mapping_purge():
     assert store.chat_for_conversation(db, 7) == "viva@c.us" and store.contact_source(db, "viva@c.us") == "src-1"
 
 
-def test_an_old_database_without_the_activity_column_is_migrated():
+def test_an_old_database_without_the_activity_column_is_migrated(tmp_path):
     import sqlite3
-    path = "/tmp/wa-bridge-migration-test.sqlite"
-    if os.path.exists(path):
-        os.remove(path)
+
+    path = tmp_path / "migration-test.sqlite"
     legacy = sqlite3.connect(path)
-    legacy.executescript("CREATE TABLE conversations (conversation_id INTEGER PRIMARY KEY, chat_id TEXT NOT NULL, "
-                         "created_at REAL NOT NULL); INSERT INTO conversations VALUES (1, 'a@c.us', 50.0);")
+    legacy.executescript(
+        "CREATE TABLE conversations (conversation_id INTEGER PRIMARY KEY, chat_id TEXT NOT NULL, "
+        "created_at REAL NOT NULL); INSERT INTO conversations VALUES (1, 'a@c.us', 50.0);"
+    )
     legacy.commit()
     legacy.close()
-    db = store.connect(path)
+    db = store.connect(str(path))
     store.purge_mappings(db, older_than=10.0)
     assert store.chat_for_conversation(db, 1) == "a@c.us"
-    os.remove(path)
 
 
 async def test_a_session_list_failure_does_not_drop_events_tagged_with_the_session_uuid():
@@ -386,8 +460,7 @@ async def test_a_burst_of_replies_reaches_the_guest_in_message_order(parts):
     """Chatwoot entrega cada webhook en un job distinto: el puente reordena por id antes de enviar."""
     bridge, _, openwa = parts
     store.save_conversation(bridge.db, GUEST, 100, 1.0)
-    await asyncio.gather(*(bridge.handle_chatwoot(outgoing(content=f"mensaje {n}", message_id=n))
-                           for n in (3, 1, 2)))
+    await asyncio.gather(*(bridge.handle_chatwoot(outgoing(content=f"mensaje {n}", message_id=n)) for n in (3, 1, 2)))
     assert [text for _, text in openwa.sent] == ["mensaje 1", "mensaje 2", "mensaje 3"]
 
 
@@ -454,13 +527,16 @@ async def test_empty_outgoing_content_is_not_sent(parts):
 
 
 def test_buttons_are_rendered_as_a_numbered_list():
-    event = outgoing(content="¿En qué te ayudo?", content_type="input_select",
-                     content_attributes={"items": [{"title": "Reservar", "value": "a"},
-                                                   {"title": "Consultar", "value": "b"}]})
+    event = outgoing(
+        content="¿En qué te ayudo?",
+        content_type="input_select",
+        content_attributes={"items": [{"title": "Reservar", "value": "a"}, {"title": "Consultar", "value": "b"}]},
+    )
     assert render_content(event) == "¿En qué te ayudo?\n1. Reservar\n2. Consultar\nResponde con el número de la opción."
 
 
 # ---------- cliente OpenWA ----------
+
 
 def test_chat_ids_accept_whatsapp_ids_and_reject_anything_else():
     assert to_chat_id("56911111111@c.us") == "56911111111@c.us"
@@ -477,12 +553,18 @@ async def test_openwa_client_uses_the_configured_session_not_just_any_ready_one(
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request.url.path)
         if request.url.path == "/api/sessions":
-            return httpx.Response(200, json=[{"id": "otra", "name": "personal", "status": "ready"},
-                                             {"id": "s1", "name": "default", "status": "ready"}])
+            return httpx.Response(
+                200,
+                json=[
+                    {"id": "otra", "name": "personal", "status": "ready"},
+                    {"id": "s1", "name": "default", "status": "ready"},
+                ],
+            )
         return httpx.Response(200, json={"ok": True})
 
-    client = OpenWAClient("http://openwa:2785", "key", httpx.AsyncClient(transport=httpx.MockTransport(handler)),
-                          session_name="default")
+    client = OpenWAClient(
+        "http://openwa:2785", "key", httpx.AsyncClient(transport=httpx.MockTransport(handler)), session_name="default"
+    )
     await client.send_text("56911111111@c.us", "Hola")
     assert calls[-1] == "/api/sessions/s1/messages/send-text"
     assert await client.allowed_session_ids() == {"default", "s1"}
@@ -492,22 +574,35 @@ async def test_openwa_client_sends_text_with_the_ready_session():
     calls = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        calls.append((request.method, request.url.path, request.headers.get("x-api-key"),
-                      json.loads(request.content) if request.content else None))
+        calls.append(
+            (
+                request.method,
+                request.url.path,
+                request.headers.get("x-api-key"),
+                json.loads(request.content) if request.content else None,
+            )
+        )
         if request.url.path == "/api/sessions":
-            sessions = [{"id": "s0", "name": "default", "status": "qr"},
-                        {"id": "s1", "name": "default", "status": "ready"}]
+            sessions = [
+                {"id": "s0", "name": "default", "status": "qr"},
+                {"id": "s1", "name": "default", "status": "ready"},
+            ]
             return httpx.Response(200, json=sessions)
         return httpx.Response(200, json={"ok": True})
 
     client = OpenWAClient("http://openwa:2785", "key", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     await client.send_text("56911111111@c.us", "Hola")
-    assert calls[-1] == ("POST", "/api/sessions/s1/messages/send-text", "key",
-                         {"chatId": "56911111111@c.us", "text": "Hola"})
+    assert calls[-1] == (
+        "POST",
+        "/api/sessions/s1/messages/send-text",
+        "key",
+        {"chatId": "56911111111@c.us", "text": "Hola"},
+    )
 
 
 async def test_openwa_client_fails_loudly_when_no_session_is_ready():
     from wa_bridge.openwa import OpenWAError
+
     sessions = [{"id": "s0", "name": "default", "status": "qr"}]
     transport = httpx.MockTransport(lambda request: httpx.Response(200, json=sessions))
     client = OpenWAClient("http://openwa:2785", "key", httpx.AsyncClient(transport=transport))

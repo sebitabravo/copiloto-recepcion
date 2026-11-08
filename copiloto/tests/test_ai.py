@@ -6,6 +6,7 @@ from copiloto.ai import sessions as ai_sessions
 from copiloto.ai.llm import LlmUnavailable
 from copiloto.ai.sessions import AiSession
 from copiloto.ai.tools import ToolHooks, ToolRunner, tool_specs
+from copiloto.flow import AI_FALLBACK_NOTICE
 from copiloto.pms import PmsConflict, PmsUnavailable
 
 from copiloto import store
@@ -29,8 +30,10 @@ async def test_free_language_goes_to_the_model_not_a_rigid_format(make_ai):
     h, llm = make_ai([say("Claro, ¿cuántas personas viajan?")])
     await h.say("quiero ir el fin de semana largo con mi familia")
     assert "Escríbelas así" not in " ".join(h.chatwoot.guest_texts())
-    assert llm.calls[0]["messages"][-1] == {"role": "user",
-                                            "content": "quiero ir el fin de semana largo con mi familia"}
+    assert llm.calls[0]["messages"][-1] == {
+        "role": "user",
+        "content": "quiero ir el fin de semana largo con mi familia",
+    }
     assert h.chatwoot.guest_texts()[-1].startswith("Claro")
 
 
@@ -52,8 +55,9 @@ async def test_availability_tool_loop_records_prebooking_and_quick_replies(make_
 async def test_availability_event_carries_a_structured_result_for_the_demo_card(make_ai):
     h, _ = make_ai([call("check_availability", **STAY), say("Tengo estas opciones.")])
     session = ai_sessions.load(h.db, "cw:card", h.clock())
-    result = await h.core.agent.respond(session, "2 adultos y un niño del 15 al 18 de noviembre",
-                                        ToolHooks(conversation_id=None, in_shift=True))
+    result = await h.core.agent.respond(
+        session, "2 adultos y un niño del 15 al 18 de noviembre", ToolHooks(conversation_id=None, in_shift=True)
+    )
     event = next(e for e in result.events if e["name"] == "check_availability")
     card = event["result"]
     assert card["noches"] == 3 and card["lectura"] and card["opciones"]
@@ -62,8 +66,9 @@ async def test_availability_event_carries_a_structured_result_for_the_demo_card(
 
 
 async def test_booking_without_a_fresh_matching_availability_reading_is_refused(make_ai):
-    book = call("create_booking", guest_name="Camila Rojas", room_code="doble_con_jacuzzi", guest_confirmed=True,
-                **STAY)
+    book = call(
+        "create_booking", guest_name="Camila Rojas", room_code="doble_con_jacuzzi", guest_confirmed=True, **STAY
+    )
     h, _ = make_ai([book, say("Antes reviso la disponibilidad.")])
     await h.say("hola")
     await h.say("reserva la doble con jacuzzi, soy Camila Rojas")
@@ -72,8 +77,14 @@ async def test_booking_without_a_fresh_matching_availability_reading_is_refused(
 
 async def test_booking_requires_an_explicit_guest_confirmation(make_ai):
     avail = call("check_availability", **STAY)
-    book = call("create_booking", call_id="c2", guest_name="Camila Rojas", room_code="doble_con_jacuzzi",
-                guest_confirmed=False, **STAY)
+    book = call(
+        "create_booking",
+        call_id="c2",
+        guest_name="Camila Rojas",
+        room_code="doble_con_jacuzzi",
+        guest_confirmed=False,
+        **STAY,
+    )
     h, _ = make_ai([avail, book, say("¿Me confirmas con un sí?")])
     await h.say("hola")
     await h.say("quiero reservar")
@@ -82,12 +93,25 @@ async def test_booking_requires_an_explicit_guest_confirmation(make_ai):
 
 async def test_full_booking_flow_creates_one_booking_and_appends_the_server_summary(make_ai):
     avail = call("check_availability", **STAY)
-    book = call("create_booking", call_id="c2", guest_name="Camila Rojas", room_code="doble_con_jacuzzi",
-                guest_confirmed=True, **STAY)
-    again = call("create_booking", call_id="c3", guest_name="Camila Rojas", room_code="doble_con_jacuzzi",
-                 guest_confirmed=True, **STAY)
-    h, _ = make_ai([avail, say("Opciones listas. ¿Te sirve alguna?"), book, say("Resumen"),
-                    book, again, say("¡Listo, Camila!")])
+    book = call(
+        "create_booking",
+        call_id="c2",
+        guest_name="Camila Rojas",
+        room_code="doble_con_jacuzzi",
+        guest_confirmed=True,
+        **STAY,
+    )
+    again = call(
+        "create_booking",
+        call_id="c3",
+        guest_name="Camila Rojas",
+        room_code="doble_con_jacuzzi",
+        guest_confirmed=True,
+        **STAY,
+    )
+    h, _ = make_ai(
+        [avail, say("Opciones listas. ¿Te sirve alguna?"), book, say("Resumen"), book, again, say("¡Listo, Camila!")]
+    )
     await h.say("hola")
     await h.say("2 adultos y 1 niño del 15 al 18 de noviembre")
     await h.say("sí, la doble con jacuzzi, soy Camila Rojas")
@@ -132,9 +156,17 @@ async def test_tool_arguments_from_the_model_are_validated(make_ai):
 
 async def test_booking_rejects_names_that_look_like_personal_data_or_unknown_rooms(make_ai):
     h, _ = make_ai([])
-    session = AiSession("cw:1", state={"last_availability": {
-        **STAY, "read_label": "x", "options": {"doble_con_jacuzzi": {"name": "n", "price": 80000, "units": 1}},
-        "ts": h.clock()}})
+    session = AiSession(
+        "cw:1",
+        state={
+            "last_availability": {
+                **STAY,
+                "read_label": "x",
+                "options": {"doble_con_jacuzzi": {"name": "n", "price": 80000, "units": 1}},
+                "ts": h.clock(),
+            }
+        },
+    )
     runner = ToolRunner(h.hotel, h.pms, h.settings, h.clock, session, ToolHooks(conversation_id=1))
     base = {"room_code": "doble_con_jacuzzi", "guest_confirmed": True, **STAY}
     for name in ("camila@correo.cl", "12345678-9", "Camila", "+56 9 1234 5678"):
@@ -147,10 +179,15 @@ async def test_booking_rejects_names_that_look_like_personal_data_or_unknown_roo
 async def test_pms_conflict_or_outage_on_booking_never_claims_success(make_ai):
     for error in (PmsConflict("sin cupo"), PmsUnavailable("caído")):
         avail = call("check_availability", **STAY)
-        book = call("create_booking", call_id="c2", guest_name="Camila Rojas", room_code="doble_con_jacuzzi",
-                    guest_confirmed=True, **STAY)
-        h, _ = make_ai([avail, book, say("Resumen"), book,
-                        say("Qué bien, tu reserva está lista y reservada")])
+        book = call(
+            "create_booking",
+            call_id="c2",
+            guest_name="Camila Rojas",
+            room_code="doble_con_jacuzzi",
+            guest_confirmed=True,
+            **STAY,
+        )
+        h, _ = make_ai([avail, book, say("Resumen"), book, say("Qué bien, tu reserva está lista y reservada")])
         h.pms.book_error = error
         await h.say("hola")
         await h.say("Soy Camila Rojas, reserva")
@@ -163,8 +200,14 @@ async def test_assisted_mode_cannot_create_bookings(make_ai, ai_settings):
     assisted = replace(ai_settings, ai_mode="assisted")
     assert "create_booking" not in [t["function"]["name"] for t in tool_specs("assisted")]
     avail = call("check_availability", **STAY)
-    book = call("create_booking", call_id="c2", guest_name="Camila Rojas", room_code="doble_con_jacuzzi",
-                guest_confirmed=True, **STAY)
+    book = call(
+        "create_booking",
+        call_id="c2",
+        guest_name="Camila Rojas",
+        room_code="doble_con_jacuzzi",
+        guest_confirmed=True,
+        **STAY,
+    )
     h, _ = make_ai([avail, book, say("Queda pendiente con recepción.")], settings=assisted)
     await h.say("hola")
     await h.say("reserva")
@@ -188,7 +231,7 @@ async def test_a_handoff_already_done_survives_a_later_model_outage(make_ai):
     await h.say("hola")
     await h.say("quiero hablar con una persona")
     assert h.chatwoot.statuses[1] == "open" and store.get_state(h.db, 1).step != "menu"
-    assert not any("no está disponible ahora" in t for t in h.chatwoot.guest_texts())
+    assert not any(AI_FALLBACK_NOTICE in t for t in h.chatwoot.guest_texts())
     assert llm.calls == [], "no hace falta consultar al modelo para avisar a recepción"
 
 
@@ -196,6 +239,7 @@ async def test_the_deadline_also_covers_the_work_before_the_first_model_call(mak
     import asyncio
 
     from copiloto.ai import agent as agent_module
+
     original = agent_module.ToolRunner.run
 
     async def slow(self, name, args):
@@ -206,7 +250,7 @@ async def test_the_deadline_also_covers_the_work_before_the_first_model_call(mak
     h, llm = make_ai([say("no debería llegar")], replace(ai_settings, ai_turn_timeout_s=0.05))
     await h.say("hola")
     await h.say("¿cómo llego al hotel?")
-    assert any("no está disponible ahora" in t for t in h.chatwoot.guest_texts())
+    assert any(AI_FALLBACK_NOTICE in t for t in h.chatwoot.guest_texts())
     assert llm.calls == []
 
 
@@ -224,7 +268,7 @@ async def test_the_whole_ai_turn_has_a_deadline_and_falls_back_to_the_menu(make_
     started = time.monotonic()
     await h.say("quiero reservar")
     assert time.monotonic() - started < 2
-    assert any("no está disponible ahora" in t for t in h.chatwoot.guest_texts())
+    assert any(AI_FALLBACK_NOTICE in t for t in h.chatwoot.guest_texts())
     assert store.get_state(h.db, 1).step == "menu"
 
 
@@ -232,13 +276,14 @@ async def test_llm_outage_degrades_to_the_guided_menu(make_ai):
     h, _ = make_ai([LlmUnavailable("http 503")])
     await h.say("hola")
     await h.say("quiero reservar")
-    assert any("no está disponible ahora" in t for t in h.chatwoot.guest_texts())
+    assert any(AI_FALLBACK_NOTICE in t for t in h.chatwoot.guest_texts())
     assert h.chatwoot.messages[-1]["options"], "queda el menú de botones"
     assert store.get_state(h.db, 1).step == "menu"
 
 
 async def test_conversation_cap_hands_off_to_a_person(make_ai):
     from copiloto.flow import AI_CONVERSATION_CAP
+
     h, _ = make_ai([say("ok")] * 3)
     await h.say("hola")
     session = ai_sessions.load(h.db, "cw:1", h.clock())
@@ -246,6 +291,40 @@ async def test_conversation_cap_hands_off_to_a_person(make_ai):
     ai_sessions.save(h.db, session, h.clock())
     await h.say("otra pregunta")
     assert h.chatwoot.statuses[1] == "open"
+
+
+async def test_conversation_cap_persists_the_counter_before_handing_off(make_ai):
+    from copiloto.flow import AI_CONVERSATION_CAP
+
+    h, _ = make_ai([say("ok")] * 2)
+    await h.say("hola")
+    session = ai_sessions.load(h.db, "cw:1", h.clock())
+    session.msg_count = AI_CONVERSATION_CAP
+    ai_sessions.save(h.db, session, h.clock())
+    await h.say("una más")
+    assert ai_sessions.load(h.db, "cw:1", h.clock()).msg_count == AI_CONVERSATION_CAP + 1, (
+        "el contador del tope debe quedar guardado aunque el turno termine en traspaso"
+    )
+
+
+async def test_a_guest_who_returns_after_the_ai_cap_gets_answered_again(make_ai):
+    """Regresión: al volver tras el tope de IA se reutilizaba la sesión agotada (cw:<id> con su
+    msg_count al tope), así que cada mensaje nuevo volvía a derivar de inmediato y el huésped
+    jamás era respondido otra vez."""
+    from copiloto.flow import AI_CONVERSATION_CAP
+
+    h, _ = make_ai([say("Con gusto te ayudo de nuevo.")])
+    await h.say("hola")
+    session = ai_sessions.load(h.db, "cw:1", h.clock())
+    session.msg_count = AI_CONVERSATION_CAP
+    ai_sessions.save(h.db, session, h.clock())
+    await h.say("otra pregunta")
+    assert h.chatwoot.statuses[1] == "open"
+    h.clock.advance(400)
+    await h.say("hola", status="pending")
+    await h.say("¿tienen piscina?")
+    assert h.chatwoot.guest_texts()[-1] == "Con gusto te ayudo de nuevo."
+    assert ai_sessions.load(h.db, "cw:1", h.clock()).msg_count == 1, "la sesión de IA arranca de cero"
 
 
 async def test_history_is_bounded_and_system_prompt_carries_session_state(make_ai):
@@ -271,16 +350,74 @@ async def test_retention_purge_deletes_old_ai_sessions(make_ai):
 
 async def test_server_templates_never_claim_a_confirmation():
     from copiloto.ai.agent import SAFE_NO_BOOKING, STUCK
+
     assert "confirmad" not in (SAFE_NO_BOOKING + STUCK).lower()
 
 
 async def test_booking_a_room_that_is_not_among_the_offers_explains_the_alternatives(make_ai):
     h, _ = make_ai([])
-    session = AiSession("cw:1", state={"last_availability": {
-        **STAY, "read_label": "x", "options": {"doble_sin_vista": {"name": "n", "price": 70000, "units": 1}},
-        "ts": h.clock()}})
+    session = AiSession(
+        "cw:1",
+        state={
+            "last_availability": {
+                **STAY,
+                "read_label": "x",
+                "options": {"doble_sin_vista": {"name": "n", "price": 70000, "units": 1}},
+                "ts": h.clock(),
+            }
+        },
+    )
     runner = ToolRunner(h.hotel, h.pms, h.settings, h.clock, session, ToolHooks(conversation_id=1))
-    result = await runner.run("create_booking", {"guest_name": "Camila Rojas", "room_code": "doble_con_jacuzzi",
-                                                 "guest_confirmed": True, **STAY})
+    result = await runner.run(
+        "create_booking",
+        {"guest_name": "Camila Rojas", "room_code": "doble_con_jacuzzi", "guest_confirmed": True, **STAY},
+    )
     assert not result.ok and result.data["error"] == "habitacion_no_ofrecida"
     assert result.data["opciones_vigentes"] == ["doble_sin_vista"] and h.pms.bookings == []
+
+
+async def test_ai_reply_trace_records_request_model_prompt_and_outcome(make_ai):
+    from copiloto.ai.prompts import PROMPT_VERSION
+
+    h, _ = make_ai([call("check_availability", **STAY), say("Tengo estas opciones desde $75.000 por noche.")])
+    await h.say("hola")
+    await h.say("2 adultos y un niño del 15 al 18 de noviembre")
+    payload = ai_events(h)[0]
+    assert payload["outcome"] == "answered"
+    assert payload["request_id"] == "cw:1:1", "request_id determinista de conversación y turno, sin PII"
+    assert payload["model"] == "qwen2.5-7b-instruct"
+    assert payload["prompt_version"] == PROMPT_VERSION
+    assert "niño del 15" not in json.dumps(payload), "la traza por turno nunca guarda texto del huésped"
+
+
+async def test_a_handoff_turn_is_traced_with_outcome_handoff(make_ai):
+    h, llm = make_ai([])
+    await h.say("hola")
+    await h.say("quiero hablar con una persona")
+    assert llm.calls == []
+    assert ai_events(h)[0]["outcome"] == "handoff"
+
+
+async def test_llm_outage_traces_outcome_fallback_and_an_event_with_closed_reason(make_ai):
+    from copiloto.ai.llm import LlmUnavailable
+
+    h, _ = make_ai([LlmUnavailable("http 503")])
+    await h.say("hola")
+    await h.say("quiero reservar")
+    fallbacks = [json.loads(e["payload"]) for e in h.events("ai_fallback")]
+    assert [f["reason"] for f in fallbacks] == ["unavailable"]
+    assert ai_events(h)[0]["outcome"] == "fallback"
+
+
+async def test_a_turn_over_the_deadline_traces_reason_timeout(make_ai, ai_settings):
+    import asyncio
+
+    class SlowLlm:
+        async def chat(self, *args, **kwargs):
+            await asyncio.sleep(5)
+
+    h, _ = make_ai([], replace(ai_settings, ai_turn_timeout_s=0.1))
+    h.core.agent.llm = SlowLlm()
+    await h.say("hola")
+    await h.say("quiero reservar")
+    assert [json.loads(e["payload"])["reason"] for e in h.events("ai_fallback")] == ["timeout"]

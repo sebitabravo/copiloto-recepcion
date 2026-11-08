@@ -2,9 +2,20 @@
 
 ## Local (demo)
 
+El arranque oficial de la evaluación no usa Docker:
+
 ```bash
-make up && make creds
+make demo-local          # = ./scripts/demo-local.sh · http://localhost:8080/demo
 ```
+
+Con Docker, la misma demo (`make up`) o el stack completo con Chatwoot:
+
+```bash
+make up-full && make creds
+```
+
+Sin `make` (Windows con Git Bash), `./scripts/demo.sh` expone los mismos comandos con el mismo nombre:
+`./scripts/demo.sh local`, `./scripts/demo.sh up`, `./scripts/demo.sh up-full && ./scripts/demo.sh creds`.
 
 Requiere Docker con 4 GB o más. Si Chatwoot no arranca por falta de memoria con OrbStack, sube el límite:
 `orb config set memory_mib 8192` (reinicia la VM de Docker, así que detiene otros contenedores).
@@ -12,10 +23,63 @@ Requiere Docker con 4 GB o más. Si Chatwoot no arranca por falta de memoria con
 El stack se define en `infra/docker-compose.yml` con imágenes fijadas: `chatwoot/chatwoot:v4.18.0-ce`,
 `pgvector/pgvector:pg16`, `redis:7-alpine`, `nginx:alpine`. `make up` es idempotente: puedes repetirlo.
 
+## Dos modos de arranque
+
+La demo no necesita Chatwoot. Hay dos formas de levantar el proyecto y conviene elegir la liviana para
+presentar:
+
+| Comando | Servicios | RAM en reposo | Cuándo usarlo |
+| --- | --- | --- | --- |
+| `make up` | landing, copiloto, pms-mock | ~110 MB | Presentar `/demo`: huésped → recepción → respuesta |
+| `make up-full` | los anteriores + Chatwoot, Sidekiq, Postgres, Redis | ~1,3 GB | Probar la bandeja real, el widget y WhatsApp |
+
+Chatwoot, Sidekiq, Postgres y Redis están detrás del perfil `full` (`docker compose --profile full`), así
+que un `docker compose up -d` normal arranca solo la demo. `seed-chatwoot.sh`, `smoke-docker.sh`,
+`backup.sh` y `wa-e2e.sh` declaran ese perfil porque operan sobre Chatwoot. `wait-healthy.sh` y
+`preflight.sh` esperan solo los servicios que están corriendo, así que funcionan en ambos modos.
+`./scripts/demo.sh up` es el perfil liviano y `./scripts/demo.sh up-full` el completo, igual que en el Makefile.
+
+En el perfil liviano el copiloto arranca con `CHATWOOT_ENABLED` deducido del token: sin `CHATWOOT_BOT_TOKEN`
+(solo existe tras sembrar Chatwoot) la integración queda apagada, el token no se exige y `/webhooks/chatwoot`
+responde 503 sin leer el cuerpo. Con la integración encendida, el token y `WEBHOOK_SECRET` son obligatorios y
+el webhook exige firma válida (401 sin ella).
+
+Sin Chatwoot, el botón «Escribir a recepción» de la landing muestra su aviso de canal no disponible en vez
+de abrir el widget: el canal real es opcional para la demo.
+
+### IA y voz por API
+
+El contenedor local de modelo (`llama.cpp`/Qwen, 4,4 GB de imagen) es opcional y ya no hace falta: el
+cliente del copiloto habla la API de DeepSeek. Basta con dejar en `.env`:
+
+```sh
+LLM_API_KEY=<clave de DeepSeek>      # sin esto la demo responde en modo guiado, sin IA
+# LLM_BASE_URL y LLM_MODEL ya apuntan a DeepSeek por defecto en el compose
+ELEVENLABS_API_KEY=<clave>           # sin esto la voz usa la síntesis del navegador
+ELEVENLABS_VOICE_ID=<id>
+ELEVENLABS_VOICE_ID_EN=<id en inglés>
+```
+
+El modelo local sigue disponible como respaldo con `infra/docker-compose.ia.yml` y `make model`.
+
+Este repo se desarrolla en Windows con Git Bash y los scripts lo tienen en cuenta: desactivan la conversión
+de rutas de MSYS (`MSYS_NO_PATHCONV`) y los comandos de Python usan `uv run python`, así que `make piloto` y
+`make e2e` (que añade `tzdata`) funcionan igual en Windows y Linux.
+
 ## Red
 
 Los puertos se publican solo en `127.0.0.1`. Para mostrar la demo a otros equipos de tu red define
 `BIND_ADDR=0.0.0.0` antes de `make up`; en ese caso protege el panel y las métricas (ver «Servidor»).
+
+Al abrir la demo desde otro equipo, define también `LANDING_ORIGIN` con la URL que escribes en el navegador
+(por ejemplo `http://192.168.1.50:8080`), no la de `localhost`. El copiloto solo acepta peticiones de ese
+origen (CORS) y tanto la consola (`/demo`) como el chat hablan con el copiloto en `:8100` de forma
+*cross-origin*: si el origen no coincide, el navegador bloquea las llamadas y el síntoma es que la consola
+queda en «Sin sesión» y el chat no responde. Déjalo en `.env` y reinicia el copiloto.
+
+Las URLs públicas no se editan a mano en la landing: `scripts/seed-chatwoot.sh` genera `landing/config.js`
+(gitignored) con la URL de Chatwoot, la del copiloto, el token del widget y `privacyUrl`. Si cambias
+`COPILOTO_PUBLIC_URL` o `CHATWOOT_PUBLIC_URL`, vuelve a correr `make seed` para regenerarla.
 
 ## Requisitos medidos
 
@@ -24,6 +88,36 @@ Chatwoot ~570 MB, Sidekiq ~510 MB, Postgres ~70 MB, copiloto ~40 MB, pms-mock ~4
 pocos MB: cerca de 1,3 GB en total. El mínimo recomendado sigue siendo 4 GB de RAM por el primer arranque de
 Chatwoot (migraciones). No es una medición de carga: no se probó con tráfico sostenido ni en un host de menor
 capacidad, y limitar CPU en una máquina potente no reproduce la contención de un servidor pequeño.
+
+## Presentar sin VPS
+
+La demo no necesita servidor propio para la presentación. Tres caminos, de menor a mayor riesgo:
+
+1. **En persona, local (recomendado).** `make up` y abrir `http://localhost:8080/demo`. Sin internet ni
+   cuentas; es el escenario que está probado de punta a punta.
+2. **Audiencia remota, túnel gratuito.** Con el stack liviano arriba:
+   ```sh
+   cloudflared tunnel --url http://localhost:8080
+   ```
+   Copia la URL `https://…trycloudflare.com` y regenera la configuración con **ese** origen:
+   ```sh
+   COPILOTO_PUBLIC_URL=https://…trycloudflare.com ./scripts/landing-config.sh
+   ```
+   Así el navegador pide `/api/...` a la misma URL del túnel y nginx la pasa al copiloto
+   (`location /api/`), de modo que la cookie de sesión del panel sigue siendo same-site. Con ngrok el
+   procedimiento es el mismo (`ngrok http 8080`). La URL cambia en cada arranque gratuito.
+   Límite: la pestaña Administración embebe el PMS en `http://localhost:8200`, que no existe para la
+   audiencia remota; para mostrarla completa hay que presentar en local.
+3. **Portfolio público, sin servidor.** `make static-demo` genera `dist/`: la landing y `/demo` con
+   `static-demo.js`, que responde `/api/*` desde el navegador con guiones preparados. No hay backend, IA,
+   PMS ni Chatwoot: la propia interfaz lo declara («Flujo guiado · sin IA», «Datos ficticios, sin
+   reservas reales») y la sección «Conexiones en vivo» se retira por no poder comprobarse. Se publica gratis:
+   ```sh
+   PUBLIC_SITE_URL=https://mi-portfolio.vercel.app ./scripts/build-static-demo.sh
+   npx vercel deploy --prod dist
+   ```
+   En Netlify basta arrastrar `dist/` (lleva `_redirects`); en Vercel, `cleanUrls` resuelve `/demo`.
+   Comprobado: en esa versión ninguna petición a `/api` sale a la red.
 
 ## Verificación de las imágenes
 
@@ -54,7 +148,8 @@ levantarlo. Prueba la restauración antes de depender de ella.
   caracteres. `/health?probe=readiness` revisa la base; el healthcheck de Docker usa la sonda `liveness`.
 - Los webhooks aceptan cuerpos de hasta 256 KB y las páginas de lectura tienen un límite de 60 solicitudes por
   minuto por IP. Si pones un proxy delante, el límite verá la IP del proxy: aplícalo también ahí.
-- CI en `.github/workflows/ci.yml` (tests de ambos servicios y ruff).
+- CI en `.github/workflows/ci.yml` (pytest de `copiloto`, `pms_mock`, `pms_bridge` y `wa_bridge`, ruff sobre
+  los mismos cuatro, y los tests de la UI de la demo con `node --test scripts/test-demo-ui.mjs`).
 
 ## Variables
 
@@ -76,7 +171,10 @@ en `.env.runtime` (gitignored). Nunca las commitees.
 1. Una VM con 4 GB de RAM y Docker. Copia el repo, corre `make up`.
 2. Pon un proxy con HTTPS delante (Caddy o nginx) y ajusta `FRONTEND_URL` en `infra/docker-compose.yml` a la URL pública de Chatwoot.
    Configura también `COPILOTO_PUBLIC_URL` con HTTPS: determina el atributo `Secure` de la cookie del panel.
-   En producción solo se permite HTTP para `localhost` y `127.0.0.1`, para conservar la demo local.
+   `COPILOTO_PUBLIC_URL` y `CHATWOOT_PUBLIC_URL` alimentan la landing: el seed las escribe en `landing/config.js`
+   (URL del copiloto, URL de Chatwoot para el SDK del widget, token y enlace de privacidad `privacyUrl`, que
+   sigue a `COPILOTO_PUBLIC_URL`). En producción solo se permite HTTP para `localhost` y `127.0.0.1`, para
+   conservar la demo local.
 3. `/api/panel/*` exige una sesión firmada o el `PANEL_TOKEN` en el header `X-Panel-Token`.
    Sin clave configurada se rechazan ambos mecanismos, incluso en desarrollo. El acceso manual usa
    `POST /api/panel/login`; la cookie dura 12 horas y es `HttpOnly`, `SameSite=Lax` y `Secure` con HTTPS.
@@ -85,9 +183,10 @@ en `.env.runtime` (gitignored). Nunca las commitees.
    No lo guarda en almacenamiento del navegador ni lo agrega a enlaces posteriores. El primer acceso
    aún puede dejar esa URL inicial en logs del proxy: evita registrar query strings del panel y no compartas
    ese enlace. Solo se cargan datos del personal después del intercambio y la validación de sesión.
-   `/webhooks/*` verifican firma o secreto. **`/metricas*` no tiene autenticación** (solo contadores):
-   protégelo con login en el proxy. Expón sin login solo `/webhooks/*`, `/panel` (HTML estático) y
-   `/privacidad`.
+   `/webhooks/*` verifican firma o secreto. **`/metricas` y `/metricas/data.json` exigen la sesión del
+   panel o el header `X-Panel-Token`** (401 sin credenciales); con el modo demo encendido la consola abre
+   esa sesión y los scripts locales la obtienen por la misma vía o con `PANEL_TOKEN`. Expón sin login solo
+   `/webhooks/*`, `/panel` (HTML estático) y `/privacidad`.
 4. Cambia la URL del Dashboard App en Chatwoot (Configuración → Integraciones → Dashboard Apps) a la URL
    pública del panel, y `PMS_STAFF_URL` a la del PMS.
 5. Respalda con `make backup` (Chatwoot y las bases SQLite; ver `docs/whatsapp-demo.md` para el canal de WhatsApp).

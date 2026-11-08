@@ -24,8 +24,10 @@ logger = logging.getLogger(__name__)
 TEXT_TYPES = {"chat", "text", ""}
 VOICE_TYPES = {"voice", "ptt", "audio"}
 UNSUPPORTED_REPLY = "Por ahora solo puedo leer mensajes de texto. ¿Me escribes tu consulta?"
-VOICE_NOTICE = ("Si me envías una nota de voz, la transcribimos aquí en el hotel y el audio se borra al terminar. "
-                "Si prefieres, escribe tu consulta.")
+VOICE_NOTICE = (
+    "Si me envías una nota de voz, la transcribimos aquí en el hotel y el audio se borra al terminar. "
+    "Si prefieres, escribe tu consulta."
+)
 VOICE_UNCLEAR_REPLY = "No logré entender la nota de voz. ¿Me la envías de nuevo o me escribes tu consulta?"
 
 
@@ -53,9 +55,16 @@ def render_content(event: dict) -> str:
 
 
 class Bridge:
-    def __init__(self, settings: Settings, db: sqlite3.Connection, chatwoot: ChatwootClient,
-                 openwa: OpenWAClient, clock: Callable[[], float], sleep=asyncio.sleep,
-                 transcriber: Callable[[bytes], Awaitable[str]] | None = None):
+    def __init__(
+        self,
+        settings: Settings,
+        db: sqlite3.Connection,
+        chatwoot: ChatwootClient,
+        openwa: OpenWAClient,
+        clock: Callable[[], float],
+        sleep=asyncio.sleep,
+        transcriber: Callable[[bytes], Awaitable[str]] | None = None,
+    ):
         self.settings = settings
         self.transcriber = transcriber
         self.sleep = sleep
@@ -142,8 +151,7 @@ class Bridge:
         async def post() -> None:
             async with self._lock(chat_id):
                 source_id, conversation_id = await self._conversation_for(chat_id, name)
-                await self.chatwoot.post_guest_message(source_id, conversation_id,
-                                                       text[:self.settings.max_text_chars])
+                await self.chatwoot.post_guest_message(source_id, conversation_id, text[: self.settings.max_text_chars])
                 store.touch_conversation(self.db, conversation_id, self.clock())
 
         await self._deliver(f"wa:{message_id}", post)
@@ -195,6 +203,10 @@ class Bridge:
         conversation_id = conversation.get("id") or event.get("conversation_id")
         chat_id = store.chat_for_conversation(self.db, conversation_id) if conversation_id else None
         if chat_id is None:
+            # Sin mapeo no hay a quién enviarle: se descarta, pero debe quedar rastro para diagnosticarlo.
+            logger.warning(
+                "Respuesta descartada: la conversación %s no tiene un chat de WhatsApp mapeado", conversation_id
+            )
             return
         text = render_content(event)
         if text:

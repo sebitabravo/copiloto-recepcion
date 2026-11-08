@@ -23,6 +23,8 @@ DEFAULT_API = "https://api.beds24.com/v2"
 class Beds24Error(Exception):
     """La API de Beds24 respondió algo que el puente no puede usar."""
 
+    status: int | None = None
+
 
 @dataclass(frozen=True)
 class RoomMap:
@@ -48,9 +50,16 @@ def parse_rooms(raw: str) -> list[RoomMap]:
     rooms: list[RoomMap] = []
     for item in items:
         try:
-            rooms.append(RoomMap(code=str(item["code"]), room_id=int(item["roomId"]), name=str(item["name"]),
-                                 max_adults=int(item["max_adults"]), max_children=int(item["max_children"]),
-                                 m2=float(item["m2"])))
+            rooms.append(
+                RoomMap(
+                    code=str(item["code"]),
+                    room_id=int(item["roomId"]),
+                    name=str(item["name"]),
+                    max_adults=int(item["max_adults"]),
+                    max_children=int(item["max_children"]),
+                    m2=float(item["m2"]),
+                )
+            )
         except (KeyError, TypeError, ValueError) as exc:
             raise Beds24Error(f"Habitación incompleta en BEDS24_ROOMS: {item!r}") from exc
     return rooms
@@ -59,14 +68,27 @@ def parse_rooms(raw: str) -> list[RoomMap]:
 class Beds24Client:
     """Cliente mínimo: obtiene un token de acceso y lee el calendario por rango de fechas."""
 
-    def __init__(self, access_token: str = "", refresh_token: str = "", base_url: str = DEFAULT_API,
-                 timeout_s: float = 10.0, http: httpx.AsyncClient | None = None, clock=time.time):
+    def __init__(
+        self,
+        access_token: str = "",
+        refresh_token: str = "",
+        base_url: str = DEFAULT_API,
+        timeout_s: float = 10.0,
+        http: httpx.AsyncClient | None = None,
+        clock=time.time,
+    ):
         self._access = access_token
         self._refresh = refresh_token
         self._base = base_url.rstrip("/")
         self._expires_at = 0.0 if not access_token else float("inf")
+        self._owns_http = http is None
         self._http = http or httpx.AsyncClient(timeout=timeout_s)
         self._clock = clock
+
+    async def aclose(self) -> None:
+        """Cierra el cliente HTTP solo si este cliente lo creó; el inyectado es del llamador."""
+        if self._owns_http:
+            await self._http.aclose()
 
     async def token(self) -> str:
         if self._access and self._clock() < self._expires_at:
@@ -75,8 +97,7 @@ class Beds24Client:
             if self._access:
                 return self._access
             raise Beds24Error("Falta BEDS24_ACCESS_TOKEN o BEDS24_REFRESH_TOKEN")
-        response = await self._request(f"{self._base}/authentication/token",
-                                       headers={"refreshToken": self._refresh})
+        response = await self._request(f"{self._base}/authentication/token", headers={"refreshToken": self._refresh})
         payload = self._payload(response)
         self._access = str(payload["token"])
         # El token de Beds24 dura una hora; se renueva un minuto antes para no fallar en el borde.
@@ -84,18 +105,35 @@ class Beds24Client:
         return self._access
 
     async def calendar(self, room_ids: list[int], start: date, end: date) -> list[dict]:
+        try:
+            return await self._read_calendar(room_ids, start, end)
+        except Beds24Error as error:
+            if error.status != 401 or not self._refresh:
+                raise
+            # El token de acceso ya no sirve (estático caducado o vencido antes de tiempo):
+            # refrescar una vez y reintentar la lectura una vez.
+            self._expires_at = 0.0
+            return await self._read_calendar(room_ids, start, end)
+
+    async def _read_calendar(self, room_ids: list[int], start: date, end: date) -> list[dict]:
         token = await self.token()
         params: list[tuple[str, str]] = [("roomId", str(room)) for room in room_ids]
-        params += [("startDate", start.isoformat()), ("endDate", end.isoformat()),
-                   ("includePrices", "true"), ("includeNumAvail", "true")]
-        response = await self._request(f"{self._base}/inventory/rooms/calendar", params=params,
-                                       headers={"token": token})
+        params += [
+            ("startDate", start.isoformat()),
+            ("endDate", end.isoformat()),
+            ("includePrices", "true"),
+            ("includeNumAvail", "true"),
+        ]
+        response = await self._request(
+            f"{self._base}/inventory/rooms/calendar", params=params, headers={"token": token}
+        )
         return list(self._payload(response).get("data") or [])
 
     async def _request(self, url: str, **kwargs) -> httpx.Response:
         try:
-            return await self._http.get(url, headers={"accept": "application/json", **kwargs.pop("headers", {})},
-                                        **kwargs)
+            return await self._http.get(
+                url, headers={"accept": "application/json", **kwargs.pop("headers", {})}, **kwargs
+            )
         except httpx.HTTPError as exc:
             raise Beds24Error(f"Beds24 no respondió: {type(exc).__name__}") from exc
 
@@ -106,12 +144,15 @@ class Beds24Client:
         except ValueError as exc:
             raise Beds24Error("Beds24 no devolvió JSON") from exc
         if response.status_code >= 400 or payload.get("success") is False:
-            raise Beds24Error(f"Beds24 respondió {response.status_code}: {payload.get('error') or payload}")
+            error = Beds24Error(f"Beds24 respondió {response.status_code}: {payload.get('error') or payload}")
+            error.status = response.status_code
+            raise error
         return payload
 
 
-def stay_offers(rooms: list[RoomMap], days: list[dict], checkin: date, checkout: date, *,
-                clp_rate: float = 1.0) -> list[dict]:
+def stay_offers(
+    rooms: list[RoomMap], days: list[dict], checkin: date, checkout: date, *, clp_rate: float = 1.0
+) -> list[dict]:
     """Convierte filas por día en ofertas por habitación.
 
     - Cupo: el mínimo de las noches; si falta una noche o alguna está cerrada, no hay oferta.
@@ -127,8 +168,9 @@ def stay_offers(rooms: list[RoomMap], days: list[dict], checkin: date, checkout:
             continue
         by_room.setdefault(room_id, {})[night.isoformat()] = row
 
-    nights = [(checkin.fromordinal(checkin.toordinal() + offset)).isoformat()
-              for offset in range((checkout - checkin).days)]
+    nights = [
+        (checkin.fromordinal(checkin.toordinal() + offset)).isoformat() for offset in range((checkout - checkin).days)
+    ]
 
     offers: list[dict] = []
     for room in rooms:
@@ -139,15 +181,17 @@ def stay_offers(rooms: list[RoomMap], days: list[dict], checkin: date, checkout:
         prices = [float(rows[night].get("price1") or 0) for night in nights]
         if min(units) <= 0 or min(prices) <= 0:
             continue
-        offers.append({
-            "code": room.code,
-            "name": room.name,
-            "max_adults": room.max_adults,
-            "max_children": room.max_children,
-            "m2": room.m2,
-            "available_units": min(units),
-            "nightly_price_clp": round(sum(prices) / len(prices) * clp_rate),
-        })
+        offers.append(
+            {
+                "code": room.code,
+                "name": room.name,
+                "max_adults": room.max_adults,
+                "max_children": room.max_children,
+                "m2": room.m2,
+                "available_units": min(units),
+                "nightly_price_clp": round(sum(prices) / len(prices) * clp_rate),
+            }
+        )
     return sorted(offers, key=lambda offer: offer["nightly_price_clp"])
 
 

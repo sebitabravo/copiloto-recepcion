@@ -1,28 +1,29 @@
 #!/usr/bin/env bash
-# Levanta el modelo local que usa el copiloto (llama.cpp, compatible con OpenAI).
+# Levanta el modelo local que usa el copiloto con un llama-server instalado en el host (compatible con OpenAI).
 #
-# El modelo corre en el host, no dentro de Docker: el contenedor lo alcanza por
-# host.docker.internal. Así el límite de memoria del stack no incluye la inferencia.
+# La vía recomendada es Docker (./scripts/demo.sh ia). Este script es para correr el modelo fuera de Docker:
+# el contenedor del copiloto lo alcanza por host.docker.internal.
 #
-#   ./scripts/local-model.sh                     # 7B por defecto (dev en Mac)
-#   LLM_MODEL_HF=Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M \
-#     LLM_MODEL_NAME=qwen2.5-3b-instruct ./scripts/local-model.sh   # equipo con poca RAM
+#   ./scripts/local-model.sh                          # Qwen3-4B-Instruct-2507, el mismo modelo del perfil Docker
+#   LLM_MODEL_HF=<repo:quant> LLM_MODEL_NAME=<alias> ./scripts/local-model.sh   # otro modelo (evalúalo antes)
 set -euo pipefail
 
-MODEL="${LLM_MODEL_HF:-Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M}"
-ALIAS="${LLM_MODEL_NAME:-qwen2.5-7b-instruct}"
+MODEL="${LLM_MODEL_HF:-unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M}"
+ALIAS="${LLM_MODEL_NAME:-qwen3-4b-instruct-2507}"
 PORT="${LLM_PORT:-11434}"
 CTX="${LLM_CTX:-8192}"
 
 command -v llama-server >/dev/null || {
-  echo "Falta llama-server. Instálalo con: brew install llama.cpp" >&2
+  echo "Falta llama-server: instálalo y asegúrate de que quede en el PATH (llama-server --version)." >&2
+  echo "  macOS (Homebrew): brew install llama.cpp" >&2
   exit 1
 }
 
-args=(-hf "$MODEL" --host 0.0.0.0 --port "$PORT" -c "$CTX" --alias "$ALIAS" --no-webui)
+args=(-hf "$MODEL" --host 0.0.0.0 --port "$PORT" -c "$CTX" --alias "$ALIAS" --parallel 1
+  --jinja --reasoning off --cache-reuse 256 --top-k 20 --top-p 0.8 --min-p 0 --no-webui)
 
-# Metal en macOS; en CPU pura se deja que llama.cpp decida.
-if [[ "$(uname -s)" == "Darwin" ]]; then
+# Metal en macOS y CUDA con una GPU NVIDIA: todas las capas en la GPU. En CPU pura decide llama.cpp.
+if [[ "$(uname -s)" == "Darwin" ]] || command -v nvidia-smi >/dev/null 2>&1; then
   args+=(-ngl 99)
 fi
 

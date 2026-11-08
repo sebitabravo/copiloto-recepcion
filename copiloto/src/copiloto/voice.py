@@ -43,8 +43,9 @@ def guess_language(text: str) -> str:
 
 
 def greeting_en(hotel_name: str) -> str:
-    return (f"Hello, I'm the virtual assistant of {hotel_name}. I can help with information and availability; "
-            "reception confirms any booking. Hold the button to talk, or tell me if you'd rather speak with a person.")
+    return (f"Hello, I'm the virtual assistant at {hotel_name}. I can help with information and availability; "
+            "a person on our team confirms every booking. Tap the button to talk, or tell me if you'd rather "
+            "speak with the reception team.")
 
 
 def greeting_for(language: str, hotel_name: str) -> str:
@@ -56,9 +57,9 @@ class TtsUnavailable(Exception):
 
 
 def greeting(hotel_name: str) -> str:
-    return (f"Hola, soy el asistente virtual del {hotel_name}. Puedo ayudarte con información y disponibilidad; "
-            "recepción confirma cualquier reserva. Mantén presionado el botón para hablar, o dime si prefieres "
-            "que te pase con una persona.")
+    return (f"Hola, soy el asistente virtual del {hotel_name}. Te ayudo con información y disponibilidad; "
+            "las reservas las confirma una persona del equipo. Toca el botón para hablar, o dime si prefieres "
+            "que te pase con alguien de recepción.")
 
 
 def speakable(text: str, max_chars: int) -> str:

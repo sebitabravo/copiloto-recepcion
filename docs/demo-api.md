@@ -1,11 +1,128 @@
-# API de la demo con IA
+# API de la demo
 
-La landing conversa con el copiloto por esta API, sin pasar por Chatwoot. Es pública y está limitada por IP,
-por sesión y globalmente para acotar el costo de la IA. Base: `http://localhost:8100` (configurable en
-`landing/config.js` como `copilotoUrl`). Solo se aceptan peticiones desde el origen de la landing
-(`LANDING_ORIGIN`, por defecto `http://localhost:8080`).
+La página `/demo` conversa con el copiloto por esta API, sin pasar por Chatwoot. Base: `http://localhost:8100`
+(configurable en `landing/config.js` como `copilotoUrl`, o la misma origen detrás de nginx). Solo se aceptan
+peticiones desde el origen de la landing (`LANDING_ORIGIN`, por defecto `http://localhost:8080`).
 
-Todo es ficticio: la reserva se crea en el PMS simulado y se rotula como demostración.
+Por defecto la demo corre el **flujo guiado** (`flow.Copiloto`, el mismo motor del canal de Chatwoot) con el
+mismo hotel y el mismo PMS simulado que la portada (`data/hotel.yaml`, `pms_mock`). El resumen de la consulta
+incluye una lectura preliminar del PMS con su hora. El motor escribe por `DemoChannel`, que guarda todo en la
+transcripción aislada de la demo: hay una sola fuente de verdad para el hilo y la solicitud.
+Con `DEMO_AI=1` y un modelo configurado, el turno lo responde el asistente con IA (sección final).
+
+## Corridas (aislamiento entre presentaciones)
+
+Cada presentación es una **corrida** que emite el servidor. La página `/demo` la pide al abrir y la guarda en la
+URL (`?corrida=`): una recarga y los enlaces «Abrir … en otra ventana» siguen en la misma corrida. El huésped y la
+recepción de una corrida comparten el caso; **otra corrida no lo ve** (lista, detalle, tomar, responder, cerrar,
+inventario, resumen del turno ni métricas: 404 o vacío).
+
+| Método y ruta | Qué hace |
+|---|---|
+| `POST /api/demo/run` | 201 `{"run": "<16 caracteres>", "ttl_s": 86400}`. Id aleatorio: el cliente no lo elige. Tope global por hora (429 con `Retry-After`). |
+| `GET /api/demo/run/{run}` | 200 si sigue viva (cada uso la renueva); 404 `corrida_desconocida` si venció o es inventada. |
+
+- El huésped manda `run` en `POST /api/demo/chat` y en `GET /api/demo/conversation?run=`. Una sesión de huésped
+  queda unida a su corrida: con otra corrida, el chat responde 409 y la lectura responde como sesión desconocida.
+  Sin `run` (clientes antiguos o pruebas) el caso no llega a ninguna bandeja.
+- Recepción entra con `POST /api/demo/session` `{"name", "run", "operator_key"}`. `operator_key` es una llave
+  aleatoria que guarda su navegador; el servidor deriva de ella y de la corrida un **id de operador estable** y lo
+  firma en la cookie. El nombre es solo una etiqueta: dos «Sofía» son dos operadores, y solo quien tomó el caso
+  responde o cierra. Sin `run`, la sesión no ve ningún caso.
+- Cada lectura de recepción manda la cabecera `X-Demo-Run`: si la cookie es de otra corrida (otra pestaña), 401 y
+  la bandeja vuelve a entrar con la suya.
+- Inventario de prueba: la demo lee `DEMO_PMS_URL` o, si el PMS operativo es el simulado de este repositorio, otra
+  instancia apuntando a él. Con cualquier otra configuración (p. ej. un PMS real) la demo **no** lee cupos: dice
+  «Disponibilidad por verificar» y la solicitud entra igual. El token de personal solo viaja al PMS simulado.
+
+## Huésped
+
+### `POST /api/demo/chat`
+
+```json
+{"session_id": "<16-64 [A-Za-z0-9-]>", "message": "<1-400>",
+ "client_message_id": "<8-64 [A-Za-z0-9-], opcional>", "shift": "open | closed (opcional)"}
+```
+
+- `client_message_id`: llave de idempotencia, **por sesión** (la misma llave en otra sesión es otra acción). El
+  mensaje y su llave se guardan en una sola transacción; la llave queda `started` hasta que el asistente
+  contesta y `done` al terminar. Un reintento con la misma llave:
+  - si la acción terminó, **no** se vuelve a ejecutar: trae el hilo completo con `"duplicate": true` (incluida la
+    respuesta que se perdió en la red);
+  - si el turno se cortó después de guardar el mensaje, lo termina sin volver a guardarlo (una sola solicitud);
+  - si falló antes de guardar, no quedó nada: se procesa como nuevo;
+  - con **otro texto**, responde 409 (`Esa llave ya se usó con otro mensaje`) en vez de descartarlo callado.
+  El cliente reintenta siempre con la misma llave y el mismo texto.
+- `shift`: escenario de prueba de la sesión (`open` en turno, `closed` fuera de turno). Sin él manda la hora de
+  Chile y `SHIFT_START`/`SHIFT_END` (o `SHIFT_OVERRIDE` para todo el servidor).
+- Mientras la solicitud está abierta en recepción, el mensaje le llega a ella y el asistente no contesta
+  (`"mode": "human"`).
+
+Respuesta 200 (además de `reply`, `mode`, `events`, `quick_replies` y `usage` de siempre):
+
+```json
+{
+  "conversation_id": -1234567,
+  "messages": [{"id": 7, "role": "assistant", "body": "Solicitud enviada a recepción. Te responderán por aquí.\n\nN.º BDL-024 · La lectbilidad por verificar: …",
+                "created_at": 1794122324.4, "options": null, "author": null, "kind": null}],
+  "request": {"code": "BDL-024", "status": "pendiente", "label": "Enviada a recepción · te responderán por aquí",
+              "assignee": null, "in_shift": true, "open": true},
+  "handled_by": "recepcion",
+  "duplicate": false
+}
+```
+
+- `messages`: solo lo nuevo de este turno (incluido el mensaje del huésped). Roles visibles: `guest`,
+  `assistant`, `staff`. Las notas internas (`note`) nunca llegan al huésped.
+- `options` de un mensaje del asistente son botones sugeridos (también en `quick_replies`).
+
+### `GET /api/demo/conversation?session_id=…&after=<id>`
+
+El hilo del huésped (solo mensajes con id mayor que `after`), su solicitud y quién lo atiende. Sin
+conversación: `{"conversation_id": null, "step": null, "messages": [], "request": null, "handled_by":
+"asistente", "quick_replies": []}`.
+
+### `GET /api/demo/status`
+
+Agrega `engine` (`guided` | `ai`), `hotel` (`name`, `channel_label`), `menu` (atajos), `shift` (`start`, `end`,
+`timezone`, `in_shift`, `override`, `next_opening`) y `privacy_url` (`/privacidad`; vacío en la versión estática, que no publica el aviso).
+
+## Recepción (sesión firmada)
+
+`POST /api/demo/session` con `{"name": "Sofía", "run": "<corrida>", "operator_key": "<llave>"}` abre la sesión de
+demostración en una cookie HttpOnly. Esa sesión **solo** ve y escribe solicitudes de **su corrida**; el token del
+personal real (`X-Panel-Token`) solo ve la operación y no puede responder desde aquí (se responde en Chatwoot).
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /api/panel/requests?selected=<id>` | Bandeja ordenada (pendientes con más espera primero) y, en la misma lectura, el detalle de `selected`. |
+| `GET /api/panel/requests/{id}` | Detalle: datos, `messages` (con notas internas), `events`, `faq` (latencias), `measurement`, `actions`. |
+| `POST /api/panel/requests/{id}/take` | Asigna a quien llama: **Pendiente de recepción → En atención**. No reinicia el reloj. Otra persona: 409. |
+| `POST /api/panel/requests/{id}/reply` | `{"body": "…", "kind": "answer"\|"ack", "client_id": "…"}`. `answer` deja **Respondida** y, si es la primera, detiene el reloj (`human_first_reply`). `ack` se envía pero no cuenta. Sin tomarla: 409. `client_id` es **por solicitud** y se guarda en la misma transacción que el mensaje, el estado y el evento: repetido devuelve `"duplicate": true` sin reenviar; con otro texto, 409. |
+| `POST /api/panel/requests/{id}/inventory` | `{"simulate_down": false}`. Lee el **PMS simulado**: origen, hora y las 4 opciones más económicas (`more` cuenta el resto), preliminar. PMS caído o `simulate_down`: `ok: false` y nota «cupo desconocido». |
+| `POST /api/panel/requests/{id}/close` | **Cerrada**: el hilo vuelve al asistente; una consulta nueva crea otra solicitud. |
+
+Estados: atención `pendiente`, `en_atencion`, `respondida`, `cerrada`; reserva `pendiente_confirmacion` (y
+`confirmada` solo cuando una persona confirma en el PMS real del canal operativo). Son conceptos separados.
+
+`measurement` de una solicitud: `state` (`en_curso`, `cumplida`, `vencida`, `fuera_de_turno`), `elapsed_s` desde
+`commercial_at` (el ingreso de la consulta comercial, hora del servidor) y `target_s` (180).
+
+Turno: `intake_in_shift` es el turno **al ingreso** de la consulta comercial y decide si la solicitud cuenta para
+la meta (una consulta que entra a las 21:59:50 y se envía a las 22:00:10 sigue en turno; una que entra a las
+07:59:50 y se envía a las 08:00:10 sigue fuera). `in_shift` es el turno **al derivar** y solo decide lo que se le
+dice al huésped («te responderán por aquí» o el horario de apertura).
+
+Orden de la bandeja (en SQL, antes del límite de 50): pendientes, en atención y respondidas por espera desde
+`commercial_at` (empate: la que llegó antes); las cerradas al final, la más reciente primero.
+
+---
+
+# Modo con IA (`DEMO_AI=1`)
+
+Pública y limitada por IP, por sesión y globalmente para acotar el costo de la IA. Todo es ficticio: la reserva
+se crea en el PMS simulado y se rotula como demostración. Un traspaso de la IA crea la misma solicitud que el
+flujo guiado.
 
 ## `GET /api/demo/status`
 
@@ -89,6 +206,56 @@ Errores (JSON `{"detail": "...", ...}`):
 Petición `{"session_id": "..."}`. Borra el historial de esa sesión. Respuesta `{"status": "ok"}`.
 No elimina reservas del PMS ni conversaciones de Chatwoot. El navegador inicia después un identificador nuevo.
 
+## `POST /api/demo/session`
+
+Crea la sesión firmada del panel sin credenciales en el navegador: es lo que usa la bandeja de `/demo`. Cuerpo
+opcional (tope de 4 KB): `name`, `run` (corrida viva; 404 si no) y `operator_key` (`[A-Za-z0-9-]{16,64}`).
+
+Respuesta 204, sin cuerpo: la sesión viaja solo en una cookie `HttpOnly` (`SameSite=Lax`, `Secure` con
+HTTPS). Nunca devuelve el token ni ningún secreto.
+
+| Código | Cuándo |
+|---|---|
+| 204 | Sesión demo creada (`DEMO_ENABLED=1`, el valor por defecto) |
+| 403 | Demo apagada (`DEMO_ENABLED=0`); no deja cookie |
+| 404 | `run` vencida o inventada |
+| 413 | Cuerpo de más de 4 KB |
+| 422 | Nombre, `run` u `operator_key` con formato inválido |
+
+## `GET /api/demo/session`
+
+```json
+{"demo": true, "name": "Recepción (demo)", "run": "<corrida o null>"}
+```
+
+La página pregunta si el modo demo está disponible y quién es la sesión, sin secretos: `demo` refleja
+`DEMO_ENABLED` y `name` es el nombre de la sesión del panel de esta cookie, o `null` si no hay sesión.
+
+## `POST /api/demo/voice`
+
+Mismo cuerpo y mismos límites que `POST /api/demo/chat` (`session_id` y `message`); comparten sesión,
+cupo de mensajes y límites por IP con el chat de texto. A la respuesta del turno le agrega la síntesis:
+
+```json
+{
+  "reply": "Estamos en el sector Molco...",
+  "mode": "ai",
+  "spoken": "Estamos en el sector Molco...",
+  "spoken_language": "es",
+  "audio_b64": "<base64>",
+  "audio_format": "mp3",
+  "voice_error": null
+}
+```
+
+- Se sintetiza solo la respuesta del asistente (`spoken`), nunca texto enviado por el navegador.
+- `audio_b64` y `audio_format` pueden ser `null` con `voice_error`: sin proveedor configurado, presupuesto
+  de voz agotado (`tope_de_voz`) o falla del proveedor (`voz_no_disponible`). El texto siempre llega: la voz
+  nunca impide que el huésped lea la respuesta.
+- `audio_format` es `mp3` (ElevenLabs) o `wav` (Piper local), según el proveedor que respondió.
+- `spoken_language` se deduce del mensaje del huésped (`es` o `en`).
+- La voz no crea reservas autónomas.
+
 ## Canales y comprobaciones
 
 - El simulador del navegador usa esta API: no es WhatsApp y no crea conversaciones en Chatwoot.
@@ -96,7 +263,12 @@ No elimina reservas del PMS ni conversaciones de Chatwoot. El navegador inicia d
 - La voz usa su API independiente y no crea reservas autónomas. Su aviso de privacidad explica el
   reconocimiento del navegador y la síntesis de ElevenLabs; no se guarda audio en el prototipo.
 - `/health?probe=readiness` comprueba proceso/SQLite, no todas las integraciones.
-- `/metricas/data.json?days=7` muestra actividad realmente registrada de la demo, no métricas de huéspedes reales.
+- `/metricas/data.json?days=7` mide solo el mundo de la sesión (`"scope": "demo"` con la sesión de la demo,
+  `"operation"` con el token o el login del panel): la demo nunca se suma a la operación. Por solicitud: FAQ
+  bajo 10 s (`faq_within_target_pct`), primera respuesta pertinente bajo 180 s para lo que entró en turno
+  (`commercial_response_compliance_pct`, `first_reply_median_s`); tomas (`requests_taken`) y acuses (`acks`) se
+  informan aparte y no cuentan. `historical_incomplete` declara cuántos eventos antiguos (sin solicitud o sin
+  origen) se midieron con la regla anterior, y cuál es esa regla.
 - El saludo y los números del hero son ilustrativos, no mediciones ni promesas de disponibilidad.
 
 Para preparar y recorrer cada canal, consulta el [flujo del proyecto](workflow.md).

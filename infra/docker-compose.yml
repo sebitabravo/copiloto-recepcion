@@ -24,6 +24,7 @@ x-chatwoot-env: &chatwoot-env
 
 services:
   postgres:
+    profiles: ["full"]
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: chatwoot
@@ -39,6 +40,7 @@ services:
     restart: unless-stopped
 
   redis:
+    profiles: ["full"]
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
@@ -51,6 +53,7 @@ services:
     restart: unless-stopped
 
   chatwoot:
+    profiles: ["full"]
     image: chatwoot/chatwoot:v4.18.0-ce
     entrypoint: docker/entrypoints/rails.sh
     command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
@@ -72,6 +75,7 @@ services:
     restart: unless-stopped
 
   sidekiq:
+    profiles: ["full"]
     image: chatwoot/chatwoot:v4.18.0-ce
     entrypoint: docker/entrypoints/rails.sh
     command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
@@ -89,6 +93,7 @@ services:
       HOTEL_DATA_PATH: /app/data/hotel.yaml
       PMS_DB_PATH: /var/lib/pms/pms.sqlite
       STAFF_TOKEN: ${STAFF_TOKEN}
+      DEMO_MODE: ${DEMO_ENABLED:-1}
       COPILOTO_EVENTS_URL: http://copiloto:8100/webhooks/pms
       COPILOTO_EVENTS_TOKEN: ${PMS_EVENTS_SECRET}
       SIMULATE_DOWN: ${SIMULATE_DOWN:-0}
@@ -143,7 +148,7 @@ services:
       HOTEL_DATA_PATH: /app/data/hotel.yaml
       COPILOTO_DB_PATH: /var/lib/copiloto/copiloto.sqlite
       CHATWOOT_URL: http://chatwoot:3000
-      CHATWOOT_PUBLIC_URL: http://localhost:3000
+      CHATWOOT_PUBLIC_URL: ${CHATWOOT_PUBLIC_URL:-http://localhost:3000}
       COPILOTO_PUBLIC_URL: ${COPILOTO_PUBLIC_URL:-http://localhost:8100}
       PMS_URL: http://pms-mock:8200
       PMS_STAFF_URL: http://localhost:8200
@@ -154,7 +159,7 @@ services:
       AI_MODE: ${AI_MODE:-assisted}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
-      LLM_MODEL: ${LLM_MODEL:-deepseek-flash}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
       LLM_TIMEOUT_S: ${LLM_TIMEOUT_S:-25}
       AI_TURN_TIMEOUT_S: ${AI_TURN_TIMEOUT_S:-12}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
@@ -167,10 +172,18 @@ services:
       VOICE_CHARS_PER_MONTH: ${VOICE_CHARS_PER_MONTH:-30000}
       PMS_STAFF_TOKEN: ${STAFF_TOKEN}
       DEMO_ENABLED: ${DEMO_ENABLED:-1}
+      # 1 conecta /demo al asistente con IA; por defecto la demo corre el flujo guiado (reproducible).
+      DEMO_AI: ${DEMO_AI:-0}
       LANDING_ORIGIN: ${LANDING_ORIGIN:-http://localhost:8080}
       SHIFT_START: ${SHIFT_START:-08:00}
       SHIFT_END: ${SHIFT_END:-22:00}
+      # open | closed fuerza el turno para pruebas reproducibles; vacío = según la hora de Chile.
+      SHIFT_OVERRIDE: ${SHIFT_OVERRIDE:-}
       FIXED_MONTHLY_CLP: ${FIXED_MONTHLY_CLP:-90000}
+      # Perillas documentadas (docs/consentimiento-y-retencion.md y docs/ia.md): en blanco cuentan como
+      # sin configurar y Settings usa sus valores por defecto (90 / 15).
+      RETENTION_DAYS: ${RETENTION_DAYS:-}
+      PREBOOKING_MINUTES: ${PREBOOKING_MINUTES:-}
     volumes:
       - ./data:/app/data:ro
       - copiloto_state:/var/lib/copiloto
@@ -263,9 +276,17 @@ services:
 
   landing:
     image: nginx:alpine
+    environment:
+      # URL pública de la portada: canónicos, Open Graph, JSON-LD, robots.txt y sitemap.xml (sin barra final)
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:8080}
+      # Servicio que atiende /privacidad en la misma origen de la portada
+      COPILOTO_UPSTREAM: ${COPILOTO_UPSTREAM:-http://copiloto:8100}
+      # envsubst solo toca estas dos: las variables propias de Nginx quedan intactas
+      NGINX_ENVSUBST_FILTER: ^(PUBLIC_SITE_URL|COPILOTO_UPSTREAM)$$
     volumes:
       - ./landing:/usr/share/nginx/html:ro
-      - ./infra/landing/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Plantilla: la imagen oficial la pasa por envsubst a /etc/nginx/conf.d/default.conf al arrancar
+      - ./infra/landing/nginx.conf:/etc/nginx/templates/default.conf.template:ro
     ports:
       - "${BIND_ADDR:-127.0.0.1}:8080:80"
     restart: unless-stopped

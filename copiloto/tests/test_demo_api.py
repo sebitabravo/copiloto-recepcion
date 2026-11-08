@@ -32,6 +32,12 @@ def test_status_reports_ai_configuration(ai_settings, harness):
     assert off["ai_enabled"] is False and off["mode"] == "off" and off["model"] is None
 
 
+def test_status_reports_assisted_when_an_agent_serves_without_ai_mode(settings, harness):
+    body = client_for(replace(settings, demo_ai=True), harness, FakeLlm([])).get("/api/demo/status").json()
+    assert body["ai_enabled"] is True
+    assert body["mode"] == "assisted", "un agente inyectado sin AI_MODE sirve turnos asistidos"
+
+
 def test_chat_runs_the_agent_and_returns_the_contract(ai_settings, harness):
     llm = FakeLlm([call("check_availability", **STAY), say("Hay opciones desde $75.000 por noche.")])
     body = chat(client_for(ai_settings, harness, llm), "2 adultos y 1 niño del 15 al 18 de noviembre").json()
@@ -40,6 +46,12 @@ def test_chat_runs_the_agent_and_returns_the_contract(ai_settings, harness):
     assert event["type"] == "tool_call" and event["name"] == "check_availability" and event["ok"] is True
     assert event["label"] and event["summary"] and isinstance(event["ms"], int)
     assert body["quick_replies"] and body["usage"]["messages_left"] == 29
+
+
+def test_demo_reply_is_plain_text_with_chilean_amounts(ai_settings, harness):
+    llm = FakeLlm([call("check_availability", **STAY), say("**Doble con Jacuzzi**: $85,000 la noche")])
+    body = chat(client_for(ai_settings, harness, llm), "2 adultos y 1 niño del 15 al 18 de noviembre").json()
+    assert body["reply"] == "Doble con Jacuzzi: $85.000 la noche"
 
 
 def test_demo_booking_is_created_in_the_simulated_pms_with_a_booking_event(ai_settings, harness):
@@ -72,10 +84,14 @@ def test_external_pms_demo_can_read_but_cannot_offer_or_execute_booking(ai_setti
     assert harness.events("ai_booking", 0) == []
 
 
-def test_without_ai_the_demo_answers_in_guided_mode(ai_settings, harness):
-    body = chat(client_for(replace(ai_settings, llm_api_key=""), harness), "¿tienen piscina?").json()
-    assert body["mode"] == "guided" and "piscina temperada" in body["reply"]
-    assert body["events"] == [{"type": "fallback", "reason": "ia_no_configurada"}]
+def test_without_ai_the_demo_runs_the_guided_flow_of_the_landing_hotel(ai_settings, harness):
+    client = client_for(replace(ai_settings, llm_api_key=""), harness)
+    status = client.get("/api/demo/status").json()
+    assert status["engine"] == "guided" and status["hotel"]["name"] == "Hotel Boutique Bordeluz"
+    body = chat(client, "¿Dónde queda el hotel?").json()
+    assert body["mode"] == "guided" and "sector Molco" in body["reply"]
+    assert body["events"] == [{"type": "guided"}]
+    assert "963949710" not in body["reply"], "la demo nunca deriva al número real de un hotel"
 
 
 def test_llm_outage_falls_back_to_guided_mode(ai_settings, harness):
@@ -225,3 +241,24 @@ def test_settings_enable_ai_only_with_a_key_and_full_needs_the_pms_token(ai_sett
     with pytest.raises(ValueError, match="PMS_STAFF_TOKEN"):
         replace(ai_settings, pms_staff_token="", webhook_secret="w" * 32, pms_events_secret="p" * 32,
                 panel_token="t" * 32, pseudonym_salt="s" * 32, chatwoot_bot_token="b" * 32).validate_runtime()
+
+
+def test_demo_ai_turn_trace_records_request_model_prompt_and_outcome(ai_settings, harness):
+    from copiloto.ai.prompts import PROMPT_VERSION
+
+    client = client_for(ai_settings, harness, FakeLlm([say("Si prefieres, te lo cuento: es sector Molco.")]))
+    chat(client, "¿cómo llego?")
+    payload = json.loads(harness.events("ai_reply", 0)[0]["payload"])
+    assert payload["outcome"] == "answered"
+    assert payload["request_id"] == f"demo:{SESSION}:1"
+    assert payload["model"] == "qwen2.5-7b-instruct" and payload["prompt_version"] == PROMPT_VERSION
+    assert "cómo llego" not in json.dumps(payload), "la traza no guarda texto del huésped"
+
+
+def test_demo_llm_outage_records_an_ai_fallback_event_with_closed_reason(ai_settings, harness):
+    client = client_for(ai_settings, harness, FakeLlm([LlmUnavailable("http 503")]))
+    assert chat(client, "¿cómo llego?").json()["mode"] == "guided"
+    fallback = json.loads(harness.events("ai_fallback", 0)[0]["payload"])
+    assert fallback["reason"] == "unavailable"
+    reply = json.loads(harness.events("ai_reply", 0)[0]["payload"])
+    assert reply["outcome"] == "fallback" and reply["request_id"] == f"demo:{SESSION}:1"

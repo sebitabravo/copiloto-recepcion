@@ -29,8 +29,12 @@ def compute(conn, config=None):
 def test_empty_data(conn):
     result = compute(conn)
     for key in (
-        "faq_latency_median_s", "faq_latency_p95_s", "commercial_response_compliance_pct",
-        "night_capture_rate_pct", "direct_conversion_pct", "cost_per_query_clp",
+        "faq_latency_median_s",
+        "faq_latency_p95_s",
+        "commercial_response_compliance_pct",
+        "night_capture_rate_pct",
+        "direct_conversion_pct",
+        "cost_per_query_clp",
     ):
         assert result[key] is None
     assert result["commercial_started_in_shift"] == 0
@@ -103,10 +107,13 @@ def test_cost_per_query_in_metrics(conn):
     assert result["cost_per_query_clp"] == 3000.0
 
 
-@pytest.mark.parametrize("config", [
-    {"fixed_monthly_clp": 600, "usage_m_clp": 40},
-    SimpleNamespace(fixed_monthly_clp=600, usage_m_clp=40),
-])
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"fixed_monthly_clp": 600, "usage_m_clp": 40},
+        SimpleNamespace(fixed_monthly_clp=600, usage_m_clp=40),
+    ],
+)
 def test_config_dict_and_object(conn, config):
     add(conn, 1, "inbound", greeting=False, text="Consulta")
     result = compute(conn, config)
@@ -195,3 +202,29 @@ def test_ai_metrics_count_replies_tools_latency_and_bookings(conn):
 def test_ai_metrics_are_empty_without_ai_events(conn):
     result = compute(conn)
     assert result["ai_replies"] == 0 and result["ai_latency_median_s"] is None and result["ai_tools"] == {}
+
+
+def test_compliance_key_follows_the_configured_threshold(conn):
+    add(conn, 1, "commercial_started", in_shift=True)
+    add(conn, 1, "human_first_reply", 200, user_id=1)
+    result = compute(conn, {"sla_red_s": 240})
+    assert result["commercial_answered_within_240"] == 1
+    assert result["commercial_answered_within_180"] == 1, "la clave histórica se conserva como alias de compatibilidad"
+
+
+def test_ai_fallbacks_count_and_rate(conn):
+    add(conn, 1, "ai_reply", 1, latency_ms=1000, tools=[], request_id="cw:1:1", outcome="answered")
+    add(conn, 1, "ai_reply", 2, latency_ms=0, tools=[], request_id="cw:1:2", outcome="fallback")
+    add(conn, 1, "ai_fallback", 2, reason="timeout")
+    result = compute(conn)
+    assert result["ai_fallbacks"] == 1
+    assert result["ai_fallback_rate_pct"] == 50
+    assert result["ai_replies"] == 2
+    assert result["ai_latency_median_s"] == 1.0, "los turnos degradados no contaminan la latencia"
+
+
+def test_ai_fallbacks_without_replies_give_rate_none_and_legacy_traces_count(conn):
+    add(conn, 1, "ai_reply", 1, latency_ms=1000, tools=["check_availability"], tokens=300)
+    result = compute(conn)
+    assert result["ai_fallbacks"] == 0
+    assert result["ai_fallback_rate_pct"] == 0

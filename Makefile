@@ -1,8 +1,10 @@
 # Copiloto de Recepción · demo Hotel Bordeluz
 COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
+# Chatwoot, Postgres, Redis y Sidekiq solo existen con este perfil: la demo no los necesita.
+COMPOSE_FULL = $(COMPOSE) --profile full
 
 .DEFAULT_GOAL := help
-.PHONY: help up down reset env ps logs test seed health e2e creds smoke backup ai-smoke demo model piloto beds24-check wa-up wa-down wa-qr wa-e2e
+.PHONY: help up up-full down reset env ps logs test lint bridge seed health e2e creds smoke backup ai-smoke demo model ui-test piloto beds24-check wa-up wa-down wa-qr wa-e2e config static-demo demo-local demo-local-check
 
 help: ## Muestra esta ayuda
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z0-9_-]+:.*## / {printf "  \033[1m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -10,23 +12,49 @@ help: ## Muestra esta ayuda
 env: ## Crea .env con secretos aleatorios si falta
 	./scripts/bootstrap.sh
 
-# Levanta todo el stack local; el primer arranque de Chatwoot puede tardar varios minutos.
-up: env ## Levanta todo el stack (primer arranque: varios minutos)
-	$(COMPOSE) build
-	$(COMPOSE) up -d postgres redis
-	$(COMPOSE) run --rm chatwoot bundle exec rails db:chatwoot_prepare
-	$(COMPOSE) up -d chatwoot sidekiq pms-mock landing
+# Demo liviana: landing + copiloto + PMS simulado. Sin Chatwoot no hay bandeja real ni widget,
+# y el aviso de «canal no disponible» aparece solo. La IA usa DeepSeek con LLM_API_KEY.
+up: env ## Levanta la demo liviana (landing, copiloto y PMS)
+	$(COMPOSE) build copiloto pms-mock
+	$(COMPOSE) up -d pms-mock landing copiloto
+	./scripts/wait-healthy.sh
+	$(COMPOSE) restart landing
+	@echo "Demo: http://localhost:8080/demo · API: http://localhost:8100 · PMS: http://localhost:8200"
+
+# Stack completo con Chatwoot (bandeja real, widget y WhatsApp). Primer arranque: varios minutos.
+up-full: env ## Levanta todo el stack, incluido Chatwoot (primer arranque: varios minutos)
+	$(COMPOSE_FULL) build
+	$(COMPOSE_FULL) up -d postgres redis
+	$(COMPOSE_FULL) run --rm chatwoot bundle exec rails db:chatwoot_prepare
+	$(COMPOSE_FULL) up -d chatwoot sidekiq pms-mock landing
 	./scripts/wait-healthy.sh
 	./scripts/seed-chatwoot.sh
-	$(COMPOSE) up -d --force-recreate copiloto
+	$(COMPOSE_FULL) up -d --force-recreate copiloto
 	./scripts/wait-healthy.sh
+	# nginx lee el bind-mount de infra/landing/nginx.conf al arrancar: un reinicio evita que /demo
+	# dé 404 en un stack ya levantado tras un cambio de configuración.
+	$(COMPOSE_FULL) restart landing
 	@echo "Listo. Landing: http://localhost:8080 · Recepción: http://localhost:3000 · Métricas: http://localhost:8100/metricas"
 
-seed: ## Vuelve a sembrar Chatwoot (idempotente)
+# Arranque oficial de la evaluación: PMS simulado, copiloto y portada sin Docker, con uv y Python.
+# Conserva los datos por defecto; solo LIMPIO=1 (o si/true/yes) los borra. LIMPIO=0 los conserva.
+demo-local: ## Arranque oficial: http://localhost:8080/demo sin Docker; LIMPIO=1 borra los datos
+	./scripts/demo-local.sh $(if $(filter 1 si sí true yes,$(LIMPIO)),--limpio,)
+
+demo-local-check: ## Prueba el arranque oficial en una copia limpia (LIMPIO, puertos, caídas, Ctrl+C)
+	python3 scripts/check_demo_local.py
+
+static-demo: ## Construye dist/ estático para portfolio (sin backend; Vercel/Netlify)
+	./scripts/build-static-demo.sh
+
+config: ## Regenera landing/config.js sin Chatwoot (modo demo o túnel)
+	./scripts/landing-config.sh
+
+seed: ## Vuelve a sembrar Chatwoot (idempotente; requiere --profile full)
 	./scripts/seed-chatwoot.sh
 
 ps: ## Estado de los contenedores
-	$(COMPOSE) ps
+	$(COMPOSE_FULL) ps
 
 logs: ## Sigue los logs del copiloto y el PMS
 	$(COMPOSE) logs -f --tail=100 copiloto pms-mock
@@ -40,20 +68,36 @@ test: ## Tests de copiloto, pms_mock y los puentes (PMS y WhatsApp)
 	cd pms_bridge && uv run pytest -q
 	cd wa_bridge && uv run pytest -q
 
+lint: ## Lint de Python igual que CI (ruff con versión fijada)
+	uvx ruff@0.17.3 check copiloto pms_mock pms_bridge wa_bridge scripts
+
 bridge: ## Levanta el puente Beds24 en 8300 (requiere BEDS24_* configurado)
 	cd pms_bridge && uv run uvicorn pms_bridge.main:app --port 8300
 
 e2e: ## 4 casos reales contra el stack levantado
-	uv run --with httpx python scripts/e2e.py
+	uv run --with httpx --with tzdata python scripts/e2e.py
 
 # Detiene los contenedores y conserva los datos
 down: ## Detiene el stack (conserva los datos; pide confirmación)
-	@read -p "Esto detiene el stack (los datos se conservan). ¿Seguir? [s/N] " ok; [ "$$ok" = "s" ] && $(COMPOSE) down
+	@if ! read -p "Esto detiene el stack (los datos se conservan). ¿Seguir? [s/N] " ok; then \
+	  echo "Error: confirmación requerida y la entrada está cerrada; el stack sigue levantado." >&2; \
+	  exit 1; \
+	fi; \
+	case "$$ok" in \
+	  s) $(COMPOSE_FULL) down ;; \
+	  *) echo "Cancelado: el stack sigue levantado." ;; \
+	esac
 
 # Borra los volúmenes: conversaciones, reservas simuladas y cuentas demo
 reset: ## BORRA volúmenes y datos (pide confirmación)
-	@read -p "ATENCIÓN: borra TODOS los volúmenes (conversaciones, base de Chatwoot, reservas simuladas). ¿Seguir? [s/N] " ok; \
-	  [ "$$ok" = "s" ] && $(COMPOSE) down -v && rm -f .env.runtime landing/config.js
+	@if ! read -p "ATENCIÓN: borra TODOS los volúmenes (conversaciones, base de Chatwoot, reservas simuladas). ¿Seguir? [s/N] " ok; then \
+	  echo "Error: confirmación requerida y la entrada está cerrada; los datos se conservan." >&2; \
+	  exit 1; \
+	fi; \
+	case "$$ok" in \
+	  s) $(COMPOSE_FULL) down -v && rm -f .env.runtime landing/config.js ;; \
+	  *) echo "Cancelado: los datos se conservan." ;; \
+	esac
 
 creds: ## Muestra usuarios demo y contraseña locales
 	./scripts/show-credentials.sh
@@ -77,18 +121,24 @@ model: ## Levanta el modelo local (llama.cpp) que usa el copiloto
 	./scripts/local-model.sh
 
 piloto: ## Informe del piloto: métricas contra las metas de la Unidad 2 (DAYS=14)
-	python3 scripts/pilot_report.py --days $${DAYS:-14}
+	uv run python scripts/pilot_report.py --days $${DAYS:-14}
 
 beds24-check: ## Verifica credenciales y lectura de Beds24 antes de conectar el copiloto
-	python3 scripts/beds24_check.py
+	uv run python scripts/beds24_check.py
+
+# Tests de la UI de la demo contra los módulos de landing (corre en CI también; Ubuntu trae Node)
+ui-test: ## Tests de la UI de la demo (node --test)
+	node --test scripts/*.mjs
 
 # Canal de WhatsApp (OpenWA, no oficial). Requiere `make up` previo. Re-siembra para crear el inbox de WhatsApp.
 wa-up: env ## Levanta el canal de WhatsApp de la demo (OpenWA + puente); luego escanea el QR
-	$(COMPOSE) --profile whatsapp build wa-bridge
-	$(COMPOSE) --profile whatsapp up -d openwa
+	# WhatsApp vive en Chatwoot: el stack completo tiene que estar arriba antes de sembrar.
+	$(COMPOSE_FULL) up -d postgres redis chatwoot sidekiq
+	$(COMPOSE_FULL) --profile whatsapp build wa-bridge
+	$(COMPOSE_FULL) --profile whatsapp up -d openwa
 	WA_BRIDGE_URL=http://wa-bridge:8400 ./scripts/seed-chatwoot.sh
-	$(COMPOSE) --profile whatsapp up -d --force-recreate wa-bridge
-	$(COMPOSE) up -d --force-recreate copiloto
+	$(COMPOSE_FULL) --profile whatsapp up -d --force-recreate wa-bridge
+	$(COMPOSE_FULL) up -d --force-recreate copiloto
 	@echo "Siguiente paso: make wa-qr (crea la sesión y muestra dónde escanear el QR)"
 
 wa-qr: ## Muestra cómo vincular el teléfono dedicado (QR de OpenWA)

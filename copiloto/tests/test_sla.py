@@ -45,14 +45,17 @@ async def test_a_delayed_worker_still_labels_amber_when_it_jumps_straight_to_red
     assert {"sla-ambar", "sla-vencido"} <= set(harness.chatwoot.labels[1])
 
 
-async def test_sla_clock_not_reset_on_assignment(harness):
+async def test_open_conversation_messages_do_not_touch_the_clock(harness):
+    """Un mensaje entrante en una conversación ya atendida (open) se ignora: no toca el cronómetro."""
     await handed_off(harness)
     started = store.get_state(harness.db, 1).sla_started_at
+    inbound_before = len(harness.events("inbound"))
     harness.clock.advance(50)
-    await harness.core.handle_webhook({"event": "conversation_updated", "conversation": {"id": 1}})
-    await harness.core.handle_webhook({"event": "conversation_status_changed", "conversation": {"id": 1}})
     await harness.say("necesito hablar con recepción", status="open")
-    assert store.get_state(harness.db, 1).sla_started_at == started
+    await harness.say("¿siguen ahí?", status="open")
+    state = store.get_state(harness.db, 1)
+    assert state.sla_started_at == started and state.sla_stopped_at is None
+    assert len(harness.events("inbound")) == inbound_before, "los mensajes en abierto no se procesan"
 
 
 async def test_human_reply_stops_clock_and_records_event(harness, settings):
@@ -117,15 +120,24 @@ async def test_sla_worker_does_not_overwrite_a_recorded_human_stop(harness, sett
     assert "sla-vencido" not in harness.chatwoot.labels[1]
 
 
-async def test_sla_starts_at_handoff_time_not_at_inbound_time(harness):
+async def test_sla_starts_when_the_commercial_query_entered_not_at_handoff(harness):
+    """EVA 3: la meta de 180 s se mide desde que ENTRÓ la consulta comercial, antes de capturar datos.
+
+    Capturar fechas, leer el PMS o asignar no reinicia el reloj; el evento conserva ese instante.
+    """
+    entered = harness.clock.now
     await harness.say("quiero reservar")
+    harness.clock.advance(20)
     await harness.say("15/11 al 18/11")
+    harness.clock.advance(10)
     await harness.say("2")
     await harness.say("0")
     harness.chatwoot.during["set_status"] = lambda: None
     harness.clock.advance(30)
     await harness.say("1")
-    assert store.get_state(harness.db, 1).sla_started_at == harness.clock.now
+    assert store.get_state(harness.db, 1).sla_started_at == entered
+    started = json.loads(harness.events("commercial_started")[-1]["payload"])
+    assert started["inbound_ts"] == entered
 
 
 async def test_returning_guest_greeting_gets_the_menu_not_a_fallback(harness):
@@ -158,6 +170,7 @@ async def test_sla_worker_survives_a_clock_cleared_mid_check(harness, settings):
 async def test_unexpected_failure_hands_off_with_note_and_events(harness):
     async def boom(*args):
         raise RuntimeError("falla inesperada")
+
     harness.pms.availability = boom
     await harness.say("quiero reservar")
     await harness.say("15/11 al 18/11")

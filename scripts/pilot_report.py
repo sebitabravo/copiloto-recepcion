@@ -3,8 +3,10 @@
 
 Uso:
     python scripts/pilot_report.py --days 14
-    python scripts/pilot_report.py --days 14 --csv piloto.csv
-    COPILOTO_URL=http://localhost:8100 PANEL_TOKEN=... python scripts/pilot_report.py
+    PANEL_TOKEN=... python scripts/pilot_report.py --days 14 --csv piloto.csv
+
+/metricas exige sesión del panel: el token sale de PANEL_TOKEN del entorno; si falta, se abre una
+sesión de demo (POST /api/demo/session, requiere DEMO_ENABLED) y se reutiliza su cookie firmada.
 
 Las metas salen de la Unidad 2: FAQ bajo 10 s, primera respuesta comercial humana bajo 180 s en
 al menos 90 % de las consultas del turno, y captura nocturna informada aparte.
@@ -12,34 +14,43 @@ al menos 90 % de las consultas del turno, y captura nocturna informada aparte.
 
 import argparse
 import csv
+import http.cookiejar
 import json
 import os
+import sys
 import urllib.error
 import urllib.request
 
 FAQ_TARGET_S = 10.0
 COMPLIANCE_TARGET_PCT = 90.0
 
+# Windows con consola cp1252: los símbolos (≥, —) del informe no caben en el codec local.
+reconfigure = getattr(sys.stdout, "reconfigure", None)
+if callable(reconfigure):
+    reconfigure(encoding="utf-8")
+
+
+# La cookie de la sesión de demo es HttpOnly y firmada: el jar la guarda y la reenvía por host.
+OPENER = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+
 
 def fetch(path: str, token: str | None = None) -> dict:
-    request = urllib.request.Request(path, headers={"X-Panel-Token": token} if token else {})
-    with urllib.request.urlopen(request, timeout=15) as response:
+    headers = {"X-Panel-Token": token} if token else {}
+    request = urllib.request.Request(path, headers=headers)
+    with OPENER.open(request, timeout=15) as response:
         return json.load(response)
 
 
+def open_demo_session(base: str) -> None:
+    """Sin PANEL_TOKEN, el modo demo local entrega la cookie firmada que /metricas acepta."""
+    request = urllib.request.Request(f"{base}/api/demo/session", data=b"", method="POST")
+    with OPENER.open(request, timeout=15):
+        return None
+
+
 def panel_token() -> str:
-    """Toma la variable de entorno y, si no está, la lee del .env local (sin imprimirla)."""
-    token = os.environ.get("PANEL_TOKEN", "")
-    if token:
-        return token
-    try:
-        with open(".env", encoding="utf-8") as handle:
-            for line in handle:
-                if line.startswith("PANEL_TOKEN="):
-                    return line.split("=", 1)[1].strip()
-    except OSError:
-        pass
-    return ""
+    """PANEL_TOKEN del entorno; si falta, main abre una sesión de demo y usa su cookie."""
+    return (os.environ.get("PANEL_TOKEN") or "").strip()
 
 
 def status(ok: bool | None) -> str:
@@ -57,10 +68,26 @@ def main() -> int:
     base = os.environ.get("COPILOTO_URL", "http://localhost:8100").rstrip("/")
     token = panel_token()
 
+    if not token:
+        try:
+            open_demo_session(base)
+        except (urllib.error.URLError, OSError) as error:
+            print(
+                "No pude obtener acceso a /metricas. Ese panel exige sesión: define PANEL_TOKEN en el "
+                "entorno, o habilita el modo demo (DEMO_ENABLED=1 y el stack levantado) para que "
+                f"POST {base}/api/demo/session entregue la cookie. Detalle: {type(error).__name__}",
+                flush=True,
+            )
+            return 2
+
     try:
-        metrics = fetch(f"{base}/metricas/data.json?days={args.days}")
+        metrics = fetch(f"{base}/metricas/data.json?days={args.days}", token)
     except (urllib.error.URLError, ValueError) as error:
-        print(f"No pude leer las métricas en {base}: {error}", flush=True)
+        print(
+            f"No pude leer las métricas en {base}: /metricas requiere PANEL_TOKEN o la cookie de demo. "
+            f"Detalle: {error}",
+            flush=True,
+        )
         return 2
 
     shift = {}
@@ -79,16 +106,29 @@ def main() -> int:
             return "—"
         return f"{round(float(number), digits):g} {unit}".strip()
 
+    faq_median = value("faq_latency_median_s")
+    compliance_pct = value("commercial_response_compliance_pct")
+
     rows = [
-        ("Latencia FAQ (mediana)", fmt(value("faq_latency_median_s"), "s", 2), f"< {FAQ_TARGET_S:g} s",
-         status(None if value("faq_latency_median_s") is None else value("faq_latency_median_s") < FAQ_TARGET_S)),
+        (
+            "Latencia FAQ (mediana)",
+            fmt(faq_median, "s", 2),
+            f"< {FAQ_TARGET_S:g} s",
+            status(None if faq_median is None else faq_median < FAQ_TARGET_S),
+        ),
         ("Latencia FAQ (p95)", fmt(value("faq_latency_p95_s"), "s", 2), "informativo", "—"),
-        ("Cumplimiento comercial <180 s", fmt(value("commercial_response_compliance_pct"), "%"),
-         f"≥ {COMPLIANCE_TARGET_PCT:g} %",
-         status(None if value("commercial_response_compliance_pct") is None
-                else value("commercial_response_compliance_pct") >= COMPLIANCE_TARGET_PCT)),
-        ("Captura nocturna", fmt(value("night_capture_rate_pct"), "%"),
-         f"{metrics.get('counts', {}).get('night_capture', 0)} solicitudes", "—"),
+        (
+            "Cumplimiento comercial <180 s",
+            fmt(compliance_pct, "%"),
+            f"≥ {COMPLIANCE_TARGET_PCT:g} %",
+            status(None if compliance_pct is None else compliance_pct >= COMPLIANCE_TARGET_PCT),
+        ),
+        (
+            "Captura nocturna",
+            fmt(value("night_capture_rate_pct"), "%"),
+            f"{metrics.get('counts', {}).get('night_capture', 0)} solicitudes",
+            "—",
+        ),
         ("Conversión directa", fmt(value("direct_conversion_pct"), "%"), "informativo", "—"),
         ("Costo por consulta", fmt(value("cost_per_query_clp"), "CLP", 0), "informativo", "—"),
         ("Respuestas de IA", str(value("ai_replies")), "informativo", "—"),

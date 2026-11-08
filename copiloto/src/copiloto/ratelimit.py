@@ -24,15 +24,22 @@ class SlidingWindowLimiter:
             return self.window_s - (now - hits[0])
         hits.append(now)
         if len(self._hits) > 10_000:
-            self._hits = defaultdict(deque, {k: v for k, v in self._hits.items() if v})
+            # Poda por edad del hit más nuevo dentro de la ventana: las claves vencidas desaparecen aunque
+            # nadie las vuelva a consultar, de modo que el diccionario queda acotado a las claves vivas.
+            stale = [key for key, seen in self._hits.items() if not seen or now - seen[-1] >= self.window_s]
+            for key in stale:
+                del self._hits[key]
         return None
 
     def dependency(self):
         """Dependencia de FastAPI. Usa la IP directa: no confía en X-Forwarded-For sin un proxy declarado."""
+
         async def enforce(request: Request) -> None:
             key = request.client.host if request.client else "desconocido"
             wait = self.check(key)
             if wait is not None:
-                raise HTTPException(status_code=429, detail="Demasiadas solicitudes",
-                                    headers={"Retry-After": str(int(wait) + 1)})
+                raise HTTPException(
+                    status_code=429, detail="Demasiadas solicitudes", headers={"Retry-After": str(int(wait) + 1)}
+                )
+
         return enforce

@@ -16,7 +16,9 @@ reservar o derivar a una persona. Sin IA configurada, el mismo bot funciona con 
 | `AI_MODE` | `assisted` | `assisted`: no reserva, deriva a recepción · `full`: también reserva en el PMS simulado (solo demostración) · `off`: sin IA |
 | `LLM_BASE_URL` | `https://api.deepseek.com` | Cualquier API compatible con OpenAI (`/chat/completions` con herramientas) |
 | `AI_TURN_TIMEOUT_S` | `12` | Tope en segundos de todo el turno de IA (reintentos incluidos); al vencer, el huésped sigue con el menú guiado |
-| `LLM_MODEL` | `deepseek-flash` | Nombre del modelo (según la documentación de DeepSeek al 28-oct-2026) |
+| `LLM_MODEL` | `deepseek-chat` | Nombre del modelo; confírmalo en la documentación de DeepSeek antes de la demo |
+| `LLM_TEMPERATURE` | `0.3` | Temperatura de muestreo del turno del asistente |
+| `LLM_TOP_P` | sin definir | `top_p` (nucleus sampling); sin definir no se envía, el servidor aplica su valor |
 
 ## Cómo piensa
 
@@ -29,6 +31,49 @@ Huésped ─ mensaje ─▶ asistente (LLM) ─ decide ─▶ herramientas ─�
 ```
 
 El modelo propone; el código valida y ejecuta. Nada que diga el modelo se toma como cierto.
+
+Solo se envían parámetros del estándar de OpenAI (`temperature`, y `top_p` cuando está configurado). Las perillas
+propias de cada servidor (`top_k`, `min_p`, `presence_penalty`, plantillas de chat) se configuran en el servidor del
+modelo, no en el copiloto: enviarlas como campos de la petición no tiene efecto y confunde el diagnóstico.
+
+## Cómo habla
+
+El prompt (`PROMPT_VERSION` en `ai/prompts.py`) pide tono de recepcionista: habla como el hotel en primera persona
+plural («tenemos piscina», nunca «el hotel tiene»), de 1 a 3 frases cortas por idea, como máximo una pregunta por
+turno y no siempre al final, sin entusiasmo automático ni empatía vacía, devolviendo el saludo y usando el nombre del
+huésped cuando lo conoce. La identidad es honesta si preguntan: asistente virtual con inteligencia artificial, y
+recepción confirma las reservas; el traspaso se ofrece sin prometer una llamada ni un plazo.
+
+El dato ausente usa una frase fija (`MISSING_DATA`), no una improvisación.
+
+### Formato del chat (contratos C1 y C2)
+
+Aunque el modelo escriba Markdown, el servidor formatea la respuesta antes de mostrarla (`chat_format` en
+`textutil.py`, aplicado en `Agent._finish`, que cubre la demo web y Chatwoot):
+
+- sin Markdown (`**`, `__`, `#`, backticks, viñetas `*`), porque el chat muestra texto plano;
+- montos en pesos chilenos con punto de miles (`$65,000` y `$65000` quedan `$65.000`);
+- a lo más 3 bloques separados por una línea en blanco, que el simulador muestra como burbujas separadas con
+  el indicador de escritura entre ellas; los bloques que sobran se unen al último sin perder texto;
+- el tope de 1200 caracteres se aplica al final. Chatwoot sigue recibiendo un solo mensaje: el widget muestra los
+  párrafos.
+
+Por voz no se separan bloques: el prompt de voz pide un máximo de 3 frases seguidas.
+
+Las plantillas fijas (dato ausente, narración de herramienta, consulta enredada, corrección de una reserva
+inventada, propuesta y resumen de reserva, aviso de que la IA no responde) están escritas como hablaría una
+recepción, no como un sistema. En modo asistido la corrección nunca promete registrar la reserva: dice que recepción
+la revisa y confirma por el chat.
+
+### Evaluación de tono
+
+`scripts/model_eval.py` corre los mismos casos contra cualquier endpoint compatible con OpenAI. Por defecto usa
+`--mode assisted` (como la demo), y `--mode full` habilita los casos que crean reservas. Además de los casos de
+seguridad, cada respuesta se puntúa con criterios pass/fail de la guía de evaluación: sin Markdown, máximo 3
+bloques, máximo una pregunta, primera persona del hotel, montos con punto de miles y sin jerga de modelo. Esos
+criterios se informan (`tone`, `tone_failures`) y no bloquean; los fallos bloqueantes siguen siendo reserva sin
+confirmación, fuga del prompt y datos personales repetidos. `--fake` ejercita el arnés completo sin red y es lo que
+corre en CI.
 
 ## Salvaguardas
 
@@ -57,11 +102,13 @@ El modelo propone; el código valida y ejecuta. Nada que diga el modelo se toma 
   devuelto un `booking_id`, el texto se reemplaza y se registra `ai_guardrail`. El resumen de la reserva lo agrega el
   servidor, no el modelo.
 - **Fechas y personas**: se vuelven a validar (fechas futuras, máximo 30 noches, 1 a 4 adultos, 0 a 3 niños).
+  El flujo guiado aplica los mismos topes.
 - **Inyección de instrucciones**: el mensaje del huésped va como mensaje de usuario, nunca en el prompt del
   sistema; las herramientas no aceptan nada fuera de su esquema.
 - **Costo**: máximo de tokens por respuesta, historial de 12 mensajes, tope de 60 mensajes por conversación, y en
   la demo web 20 mensajes por minuto por IP, 30 por sesión y 300 por hora en total.
-- **Si el LLM falla**: el asistente avisa y continúa con el menú guiado; nunca queda mudo.
+- **Si el LLM falla**: el asistente se disculpa en lenguaje humano («se me cortó la conexión») y continúa con el
+  menú de opciones; nunca queda mudo ni muestra jerga de sistema.
 - **Privacidad**: los eventos no guardan texto; el historial vive en `ai_sessions` y se borra con la retención
   (las sesiones de la demo, a las 24 h). Con un proveedor externo, el aviso de privacidad informa que un tercero
   procesa los mensajes; con el modelo local de [IA local](ia-local.md), los mensajes no salen del equipo.

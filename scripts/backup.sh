@@ -7,8 +7,9 @@ cd "$(dirname "$0")/.."
 
 dest="backups/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$dest"
-chmod 700 backups "$dest"
-compose=(docker compose -f infra/docker-compose.yml --project-directory . --profile whatsapp)
+# NTFS no soporta el modelo de permisos de Unix: si chmod falla (Windows) se continúa.
+chmod 700 backups "$dest" 2>/dev/null || true
+compose=(docker compose -f infra/docker-compose.yml --project-directory . --profile full --profile whatsapp)
 
 "${compose[@]}" exec -T postgres pg_dump -U postgres --no-owner chatwoot | gzip >"$dest/chatwoot.sql.gz"
 
@@ -31,14 +32,21 @@ if "${compose[@]}" ps --status running --services | grep -qx wa-bridge; then
   sqlite_dump wa-bridge /var/lib/wa-bridge/bridge.sqlite "$dest/wa-bridge.sqlite"
   databases+=(wa-bridge)
 fi
-chmod 600 "$dest"/*
+chmod 600 "$dest"/* 2>/dev/null || true
+
+# Python portátil: en Windows `python3` suele ser el stub de la Microsoft Store.
+if command -v python >/dev/null 2>&1 && python -c 'import sys' >/dev/null 2>&1; then
+  PY=python
+else
+  PY=python3
+fi
 
 for db in "${databases[@]}"; do
-  python3 -I -c "
+  "$PY" -I -c "
 import sqlite3, sys
 check = sqlite3.connect('$dest/$db.sqlite').execute('PRAGMA integrity_check').fetchone()[0]
 sys.exit(0 if check == 'ok' else 'integridad fallida en $db: ' + check)
 "
 done
-rm -f "$dest"/*-wal "$dest"/*-shm
+# serialize() nunca escribe -wal/-shm: la copia es un SQLite único y autónomo, no hace falta limpiar.
 echo "Respaldo listo en $dest (chatwoot.sql.gz y SQLite: ${databases[*]})"
