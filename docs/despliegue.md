@@ -76,6 +76,30 @@ pocos MB: cerca de 1,3 GB en total. El mínimo recomendado sigue siendo 4 GB de 
 Chatwoot (migraciones). No es una medición de carga: no se probó con tráfico sostenido ni en un host de menor
 capacidad, y limitar CPU en una máquina potente no reproduce la contención de un servidor pequeño.
 
+## Presentar sin VPS
+
+La demo no necesita servidor propio para la presentación. Tres caminos, de menor a mayor riesgo:
+
+1. **En persona, local (recomendado).** `make up` y abrir `http://localhost:8080/demo`. Sin internet ni
+   cuentas; es el escenario que está probado de punta a punta.
+2. **Audiencia remota, túnel gratuito.** Con el stack liviano arriba:
+   ```sh
+   cloudflared tunnel --url http://localhost:8080
+   ```
+   Copia la URL `https://…trycloudflare.com` y regenera la configuración con **ese** origen:
+   ```sh
+   COPILOTO_PUBLIC_URL=https://…trycloudflare.com ./scripts/landing-config.sh
+   ```
+   Así el navegador pide `/api/...` a la misma URL del túnel y nginx la pasa al copiloto
+   (`location /api/`), de modo que la cookie de sesión del panel sigue siendo same-site. Con ngrok el
+   procedimiento es el mismo (`ngrok http 8080`). La URL cambia en cada arranque gratuito.
+   Límite: la pestaña Administración embebe el PMS en `http://localhost:8200`, que no existe para la
+   audiencia remota; para mostrarla completa hay que presentar en local.
+3. **Vercel.** Solo sirve para publicar la landing como sitio estático: no ejecuta Docker, ni SQLite
+   persistente, ni el worker de SLA, y no recibe el webhook de Chatwoot. Además el HTML usa el marcador
+   `__PUBLIC_SITE_URL__` que hoy reemplaza nginx (`sub_filter`), así que habría que resolverlo en un paso
+   de build. La demo interactiva no puede funcionar ahí.
+
 ## Verificación de las imágenes
 
 `make smoke` valida el compose (`docker compose config`), construye las imágenes de `copiloto` y `pms_mock` y
