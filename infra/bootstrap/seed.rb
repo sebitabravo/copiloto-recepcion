@@ -76,6 +76,28 @@ abi = AgentBotInbox.find_or_initialize_by(inbox: inbox, agent_bot: bot)
 abi.status = :active
 abi.save!
 
+# Inbox de WhatsApp (canal API): lo alimenta wa_bridge con los mensajes de OpenWA. Mismo AgentBot que el widget,
+# así que el copiloto responde igual y el SLA no cambia. Se crea con WA_BRIDGE_URL (make wa-up);
+# si ya existe, un seed normal lo conserva y vuelve a exportar sus variables.
+wa_bridge_url = ENV['WA_BRIDGE_URL']
+wa_inbox = account.inboxes.find_by(name: 'WhatsApp demo')
+if wa_bridge_url.present?
+  if wa_inbox.nil?
+    wa_channel = Channel::Api.create!(account: account, webhook_url: "#{wa_bridge_url}/webhooks/chatwoot")
+    wa_inbox = Inbox.create!(account: account, channel: wa_channel, name: 'WhatsApp demo',
+                             greeting_enabled: false, enable_auto_assignment: false)
+  else
+    wa_inbox.channel.update!(webhook_url: "#{wa_bridge_url}/webhooks/chatwoot")
+  end
+end
+if wa_inbox
+  wa_inbox.update!(enable_email_collect: false)
+  [rec1, rec2, admin].each { |u| InboxMember.find_or_create_by!(inbox: wa_inbox, user: u) }
+  wa_abi = AgentBotInbox.find_or_initialize_by(inbox: wa_inbox, agent_bot: bot)
+  wa_abi.status = :active
+  wa_abi.save!
+end
+
 app = DashboardApp.find_or_initialize_by(account: account, title: 'Copiloto')
 app.user = admin
 app.content = [{ 'type' => 'frame', 'url' => panel_url }]
@@ -89,4 +111,8 @@ puts "RUNTIME_VAR CHATWOOT_ADMIN_TOKEN=#{admin.access_token.token}"
 puts "RUNTIME_VAR CHATWOOT_BOT_TOKEN=#{bot.access_token.token}"
 puts "RUNTIME_VAR CHATWOOT_WEBSITE_TOKEN=#{inbox.channel.website_token}"
 puts "RUNTIME_VAR CHATWOOT_TEAM_ID=#{team.id}"
+if wa_inbox
+  puts "RUNTIME_VAR CHATWOOT_WA_INBOX_IDENTIFIER=#{wa_inbox.channel.identifier}"
+  puts "RUNTIME_VAR CHATWOOT_WA_INBOX_SECRET=#{wa_inbox.channel.secret}"
+end
 puts 'SEED_OK'

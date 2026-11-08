@@ -39,6 +39,39 @@ else
   echo "  · Chatwoot no está en este stack (modo demo): se omite"
 fi
 
+echo "2) Modelo local en el puerto $MODEL_PORT"
+model_dead=0
+if ! curl -s -o /dev/null -m 2 "http://localhost:$MODEL_PORT/v1/models" && ! command -v llama-server >/dev/null; then
+  # Sin llama-server en el host (el caso normal en Windows): el modelo va en Docker, en la GPU si la hay.
+  echo "  · no está arriba: levantando el modelo en Docker (scripts/demo.sh ia)"
+  model_log="$(mktemp "${TMPDIR:-/tmp}/local-model.XXXXXX.log")"
+  if ! "$ROOT/scripts/demo.sh" ia >"$model_log" 2>&1; then
+    printf '  \033[31m✗\033[0m scripts/demo.sh ia falló · log: %s\n' "$model_log"
+    model_dead=1
+    fail=$((fail + 1))
+  fi
+elif ! curl -s -o /dev/null -m 2 "http://localhost:$MODEL_PORT/v1/models"; then
+  echo "  · no está arriba: levantando scripts/local-model.sh"
+  model_log="$(mktemp "${TMPDIR:-/tmp}/local-model.XXXXXX.log")"
+  nohup "$ROOT/scripts/local-model.sh" >"$model_log" 2>&1 &
+  model_pid=$!
+  for _ in $(seq 1 $((MODEL_WAIT / 5))); do
+    curl -s -o /dev/null -m 2 "http://localhost:$MODEL_PORT/v1/models" && break
+    if ! kill -0 "$model_pid" 2>/dev/null; then
+      wait "$model_pid"; status=$?
+      printf '  \033[31m✗\033[0m scripts/local-model.sh terminó con código %s · log: %s\n' "$status" "$model_log"
+      model_dead=1
+      fail=$((fail + 1))
+      break
+    fi
+    sleep 5
+  done
+else
+  model_log="/dev/null"
+fi
+if [ "$model_dead" = 0 ]; then
+  check "servidor del modelo responde" http_ok "http://localhost:$MODEL_PORT/v1/models"
+fi
 
 echo "3) Copiloto con IA"
 status=$(curl -s -m 5 "$COPILOTO/api/demo/status")

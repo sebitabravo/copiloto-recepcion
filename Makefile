@@ -4,7 +4,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml --project-directory .
 COMPOSE_FULL = $(COMPOSE) --profile full
 
 .DEFAULT_GOAL := help
-.PHONY: help up up-full down reset env ps logs test lint seed health e2e creds smoke backup ai-smoke demo ui-test piloto config static-demo demo-local
+.PHONY: help up up-full down reset env ps logs test lint bridge seed health e2e creds smoke backup ai-smoke demo model ui-test piloto beds24-check wa-up wa-down wa-qr wa-e2e config static-demo demo-local
 
 help: ## Muestra esta ayuda
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z0-9_-]+:.*## / {printf "  \033[1m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -58,12 +58,17 @@ logs: ## Sigue los logs del copiloto y el PMS
 health: ## Espera y comprueba los healthchecks
 	./scripts/wait-healthy.sh
 
-test: ## Tests de copiloto y pms_mock
+test: ## Tests de copiloto, pms_mock y los puentes (PMS y WhatsApp)
 	cd copiloto && uv run pytest -q
 	cd pms_mock && uv run pytest -q
+	cd pms_bridge && uv run pytest -q
+	cd wa_bridge && uv run pytest -q
 
 lint: ## Lint de Python igual que CI (ruff con versión fijada)
-	uvx ruff@0.17.3 check copiloto pms_mock scripts
+	uvx ruff@0.17.3 check copiloto pms_mock pms_bridge wa_bridge scripts
+
+bridge: ## Levanta el puente Beds24 en 8300 (requiere BEDS24_* configurado)
+	cd pms_bridge && uv run uvicorn pms_bridge.main:app --port 8300
 
 e2e: ## 4 casos reales contra el stack levantado
 	uv run --with httpx --with tzdata python scripts/e2e.py
@@ -108,9 +113,35 @@ ai-smoke: ## Prueba en vivo del asistente con IA
 demo: ## Chequeo previo a la presentación: verifica, levanta el modelo y precalienta
 	./scripts/preflight.sh
 
+model: ## Levanta el modelo local (llama.cpp) que usa el copiloto
+	./scripts/local-model.sh
+
 piloto: ## Informe del piloto: métricas contra las metas de la Unidad 2 (DAYS=14)
 	uv run python scripts/pilot_report.py --days $${DAYS:-14}
+
+beds24-check: ## Verifica credenciales y lectura de Beds24 antes de conectar el copiloto
+	uv run python scripts/beds24_check.py
 
 # Tests de la UI de la demo contra los módulos de landing (corre en CI también; Ubuntu trae Node)
 ui-test: ## Tests de la UI de la demo (node --test)
 	node --test scripts/*.mjs
+
+# Canal de WhatsApp (OpenWA, no oficial). Requiere `make up` previo. Re-siembra para crear el inbox de WhatsApp.
+wa-up: env ## Levanta el canal de WhatsApp de la demo (OpenWA + puente); luego escanea el QR
+	# WhatsApp vive en Chatwoot: el stack completo tiene que estar arriba antes de sembrar.
+	$(COMPOSE_FULL) up -d postgres redis chatwoot sidekiq
+	$(COMPOSE_FULL) --profile whatsapp build wa-bridge
+	$(COMPOSE_FULL) --profile whatsapp up -d openwa
+	WA_BRIDGE_URL=http://wa-bridge:8400 ./scripts/seed-chatwoot.sh
+	$(COMPOSE_FULL) --profile whatsapp up -d --force-recreate wa-bridge
+	$(COMPOSE_FULL) up -d --force-recreate copiloto
+	@echo "Siguiente paso: make wa-qr (crea la sesión y muestra dónde escanear el QR)"
+
+wa-qr: ## Muestra cómo vincular el teléfono dedicado (QR de OpenWA)
+	./scripts/wa-session.sh
+
+wa-down: ## Detiene OpenWA y el puente (conserva la sesión vinculada)
+	$(COMPOSE) --profile whatsapp stop openwa wa-bridge
+
+wa-e2e: ## Prueba E2E del canal de WhatsApp sin teléfono (OpenWA simulado). SLA=1 agrega la prueba de 195 s
+	./scripts/wa-e2e.sh $(if $(SLA),--sla,)

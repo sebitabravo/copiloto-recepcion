@@ -28,10 +28,10 @@ Los límites de escala y la comparación con la competencia están en
 
 El PMS se integra por **contrato**, no por código nuevo: rutas, cabecera y token se configuran por
 hotel, y `PMS_ADAPTER=none` deja al copiloto operando sin PMS (orienta y deriva, nunca promete
-cupos). El copiloto habla con el PMS por HTTP (`copiloto/src/copiloto/pms.py`) y en este repositorio se usa el PMS simulado.
+cupos). El contrato y el checklist de incorporación están en [conector de PMS](docs/conector-pms.md).
 
-Todo el stack es abierto: el modelo se consume por API (DeepSeek por defecto), las tipografías se
-sirven desde el propio sitio y no hay CDNs. Licencias y límites en [stack abierto](docs/stack-abierto.md).
+Todo el stack es abierto y sin costo por consulta: el modelo corre local, las tipografías se sirven
+desde el propio sitio y no hay CDNs. Licencias y límites en [stack abierto](docs/stack-abierto.md).
 
 ```
 Huésped ─ widget web / Telegram / WhatsApp
@@ -122,7 +122,7 @@ El recorrido completo, las decisiones y lo que falló en el camino están en el
 
 ```bash
 make help   # lista todos los comandos
-make test   # pytest de copiloto y pms_mock
+make test   # pytest de copiloto, pms_mock y los puentes (PMS y WhatsApp)
 make ui-test # tests de la UI de la demo (node --test)
 make demo-local # demo sin Docker (copiloto con uv + portada); LIMPIO=1 parte de cero
 make e2e    # 4 casos reales contra el stack levantado (FAQ, disponibilidad, fuera de turno, PMS caído)
@@ -142,6 +142,7 @@ El guion de la sesión con recepción, las cinco tareas y los criterios de avanc
 - [Costos](docs/costos.md)
 - [Privacidad (Ley 21.719)](docs/privacidad.md)
 - [Asistente con IA](docs/ia.md) y su [API de la demo](docs/demo-api.md)
+- [IA local (modelo y GPU)](docs/ia-local.md)
 - [SEO y metadatos](docs/seo.md)
 
 ## Datos del hotel y qué falta validar
@@ -154,13 +155,17 @@ Quedan **pendientes de validar con el hotel**: Km 12.5 vs 2.5 de la dirección, 
 ## Límites declarados
 
 - **PMS real**: Pxsol no tiene API pública documentada. El adaptador HTTP genérico (`HttpPmsAdapter`) habla el
-  contrato HTTP del adaptador; la integración con un PMS real necesita credenciales del
+  contrato de `docs/conector-pms.md` y `pms_bridge` conecta Beds24; la integración real necesita credenciales del
   hotel y el acuerdo con el proveedor.
 - **Canales**: la demo usa el chat web. WhatsApp y Telegram no están incluidos ni se probaron; nunca conectes el
   número real del hotel a esta demo.
+- **Modelo local**: el perfil `infra/docker-compose.ia.yml` sirve Qwen3-4B-Instruct-2507 en la GPU NVIDIA
+  (~1,5 s por turno) y `infra/docker-compose.ia-cpu.yml` hace lo mismo en CPU; `./scripts/demo.sh ia` elige
+  solo. La comparación medida está en [IA local](docs/ia-local.md).
 - **IA opcional**: con `LLM_API_KEY` el asistente entiende lenguaje libre y, conversa, consulta y deriva, y
   recepción confirma (`AI_MODE=assisted`, el valor por defecto, coherente con EVA2); `AI_MODE=full` agrega la
-  reserva automática en el PMS simulado, solo como demostración técnica. Sin key funciona con el flujo guiado. Ver [asistente con IA](docs/ia.md).
+  reserva automática en el PMS simulado, solo como demostración técnica. Sin key funciona con el flujo guiado. Ver [asistente con IA](docs/ia.md). Para correrlo con un modelo
+  local sin costo, ver [IA local](docs/ia-local.md).
 - Las métricas exigen la misma sesión firmada del panel o el `PANEL_TOKEN` (header `X-Panel-Token`); con el
   modo demo activo, la consola abre la sesión sola. En un servidor, mantenlas detrás del proxy con login
   (ver [despliegue](docs/despliegue.md)).

@@ -7,7 +7,7 @@ Este documento describe qué datos trata el copiloto, para qué, cuánto tiempo 
 | Dato | Dónde | Finalidad | Cuánto se conserva |
 |---|---|---|---|
 | Texto de mensajes escritos | Chatwoot y copiloto | Responder la consulta del huésped | Chatwoot: su política. Copiloto: la variable `RETENTION_DAYS` del entorno; si no está definida, `privacy.retention_days` de `data/hotel.yaml` (90 días por defecto) |
-| Número de WhatsApp (chat_id) | Chatwoot | Enviar la respuesta a la misma persona | Chatwoot: su política |
+| Número de WhatsApp (chat_id) | Puente (`wa_bridge`) y Chatwoot | Enviar la respuesta a la misma persona | Puente: mapeo 90 días sin actividad. Chatwoot: su política |
 | **Nota de voz (audio)** | Solo en memoria y en un directorio temporal del contenedor | Transcribirla | **Se borra al terminar la transcripción**, aunque esta falle |
 | Texto transcrito de la nota | Igual que un mensaje escrito | Responder la consulta | Igual que el texto escrito |
 | Aviso de notas de voz (fecha) | Puente, tabla `voice_notice` | No repetir el aviso a la misma persona | 90 días sin actividad |
@@ -27,7 +27,7 @@ Este documento describe qué datos trata el copiloto, para qué, cuánto tiempo 
 
 ## Cómo se borra
 
-- Audio: la demo de voz no guarda audio; el reconocimiento ocurre en el navegador y el aviso de privacidad lo declara.
+- Audio: automático, al terminar la transcripción (`wa_bridge/src/wa_bridge/transcribe.py`). Está probado en `wa_bridge/tests/test_voice_notes.py`.
 - Mapeos, dedupe y avisos: `store.purge_mappings` y `store.purge_processed` al arrancar el puente. El copiloto purga sus datos cada 24 horas.
 - Pedido de borrado de un huésped: **manual**. Hay que borrar el contacto y las conversaciones en Chatwoot y las filas de su chat_id en la base del puente. No hay un botón ni un proceso automatizado.
 - Respaldos (`scripts/backup.sh`): incluyen la base del puente. Los respaldos no se purgan solos: el hotel debe definir su plazo. La sesión de OpenWA no se respalda.
