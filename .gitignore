@@ -22,3 +22,5 @@ dist/
 
 # Artefactos locales de revisión (copias de candidatos; no versionar)
 .review/
+.vercel/
+.vercel/
