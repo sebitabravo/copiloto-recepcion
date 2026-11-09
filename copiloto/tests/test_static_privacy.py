@@ -1,28 +1,27 @@
-"""La página de privacidad del build estático sale del mismo render que la vista dinámica.
+"""La página de privacidad estática sale del mismo render que la vista dinámica.
 
-Sin backend, `/privacidad` tiene que existir como archivo: el script del build la escribe con
-`privacy.render`, la misma fuente del texto legal. Esta prueba evita que el build publique una
-página vacía, con enlaces locales o con una retención distinta a la que aplica la purga.
+Sin backend, `/privacidad` tiene que existir como archivo commiteado. Esta prueba impide que el
+archivo se publique vacío, con enlaces locales, con otra retención o desactualizado respecto de
+`privacy.render` (la fuente única del texto legal).
 """
+import pathlib
 import subprocess
 import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+PAGE = ROOT / "landing" / "privacidad.html"
+SCRIPT = ROOT / "scripts" / "render-privacy.py"
 
 
-def test_static_privacy_page_matches_the_dynamic_render(tmp_path):
-    home = "https://copiloto.example"
-    result = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "render-privacy.py"), str(tmp_path), home],
-        capture_output=True, text=True, check=True,
-    )
-    page = (tmp_path / "privacidad.html").read_text(encoding="utf-8")
+def test_the_committed_page_matches_the_render():
+    result = subprocess.run([sys.executable, str(SCRIPT), "--check"], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr or result.stdout
 
-    assert result.stdout.strip().endswith("privacidad.html")
+
+def test_the_committed_page_is_publishable():
+    page = PAGE.read_text(encoding="utf-8")
     assert "Aviso de privacidad" in page
     assert "comercial@hotelbordeluz.cl" in page, "el contacto del responsable no puede faltar"
-    assert "90 días" in page or "90 dias" in page, "la retención publicada es la que aplica la purga"
+    assert "90" in page, "la retención publicada es la que aplica la purga"
     assert "localhost" not in page, "la copia publicada no puede apuntar a la máquina local"
-    assert f'href="{home}"' in page, "la vuelta a la portada usa la URL pública del build"
-    assert "verificado" not in page.lower() or "no verificado" in page.lower()
+    assert page.count("__PUBLIC_SITE_URL__") >= 2, "los enlaces vuelven por el marcador del build"

@@ -10,11 +10,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # STATIC_DEMO_OUT: dist/ o un directorio externo vacío/creado por este script.
 # Una salida externa lleva un marcador; nunca se limpia un directorio ajeno ni código fuente.
+# En Vercel la imagen trae python3 (no siempre `python`) y no hace falta uv: este build solo usa
+# la biblioteca estándar.
+PYTHON_BIN="$(command -v python || command -v python3 || true)"
+[ -n "$PYTHON_BIN" ] || { echo "Falta python o python3 para construir el sitio." >&2; exit 1; }
 OUT="${STATIC_DEMO_OUT:-$ROOT/dist}"
 PUBLIC_SITE_URL="${PUBLIC_SITE_URL:-https://demo.example.com}"
 
 # Validar ANTES de crear o borrar nada. Se resuelven también alias y enlaces a fuentes.
-OUT="$(python - "$ROOT" "$OUT" <<'PY'
+OUT="$("$PYTHON_BIN" - "$ROOT" "$OUT" <<'PY'
 import pathlib
 import shutil
 import sys
@@ -59,7 +63,7 @@ for asset in favicon.svg og-image.png robots.txt sitemap.xml; do
 done
 
 # El marcador que reemplaza nginx (`sub_filter`) se resuelve aquí, en tiempo de build.
-python - "$OUT" "$PUBLIC_SITE_URL" <<'PY'
+"$PYTHON_BIN" - "$OUT" "$PUBLIC_SITE_URL" <<'PY'
 import pathlib, sys
 out, public = pathlib.Path(sys.argv[1]), sys.argv[2]
 for page in out.glob('*'):
@@ -78,12 +82,8 @@ for page in out.glob('*'):
     '};\n', encoding='utf-8')
 PY
 
-# La página de privacidad no existe como archivo: se renderiza con el mismo texto legal que la
-# vista dinámica, para que `/privacidad` funcione sin backend y sin enlaces a localhost.
-uv run --project "$ROOT/copiloto" python "$ROOT/scripts/render-privacy.py" "$OUT" "$PUBLIC_SITE_URL"
-
 # static-demo.js tiene que ejecutarse antes que la interfaz (demo-shared.js) para interceptar fetch.
-python - "$OUT" <<'PY'
+"$PYTHON_BIN" - "$OUT" <<'PY'
 import pathlib, sys
 out = pathlib.Path(sys.argv[1])
 for page in out.glob('*.html'):
