@@ -29,6 +29,7 @@
   // qué sí y qué no está disponible. Solo el sitio servido con el stack completo usa los puertos.
   const staticDemo = config.staticDemo === true;
   // La bandeja de recepción es /demo?vista=recepcion (enlace fijo); Chatwoot solo existe con el stack completo.
+  const STATIC_VIEWS = {pms: '/demo?vista=admin', metrics: '/demo?vista=recepcion'};
   const services = staticDemo ? {} : {
     pms: `${trim(config.pmsUrl || pageHost(8200))}/admin`,
     metrics: `${copiloto}/metricas`,
@@ -37,7 +38,9 @@
     const href = services[link.dataset.service] && resolve(services[link.dataset.service]);
     if (href && /^https?:/.test(href)) link.href = href;
     else if (staticDemo) {
-      // Sin servicio no se abre una pestaña: el enlace lleva a la consola, en la misma pestaña.
+      // Sin servicio no se abre otra pestaña: el enlace lleva a la vista de la consola donde se
+      // explica qué hay y qué no en esta versión (PMS aparte, y la bandeja con sus tiempos).
+      link.href = STATIC_VIEWS[link.dataset.service] || '/demo';
       link.removeAttribute('target');
       link.removeAttribute('rel');
     }

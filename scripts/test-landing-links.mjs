@@ -44,11 +44,13 @@ function run({config, hostname = 'copiloto-recepcion.vercel.app', protocol = 'ht
 
 const STATIC = {chatwootUrl: '', copilotoUrl: '', pmsUrl: '', websiteToken: '', privacyUrl: '', staticDemo: true};
 
-test('publicado sin backend, los enlaces a servicios no apuntan a puertos del stack', () => {
-  const anchors = run({config: STATIC});
-  for (const anchor of anchors) {
-    assert.equal(anchor.href, '/demo', `${anchor.dataset.service} debe quedarse en la consola`);
-    assert.ok(!/:(3000|8100|8200)\b/.test(anchor.href), anchor.href);
+test('publicado sin backend, los enlaces a servicios abren su vista de la consola', () => {
+  const by = Object.fromEntries(run({config: STATIC}).map(anchor => [anchor.dataset.service, anchor]));
+  assert.equal(by.pms.href, '/demo?vista=admin', 'el PMS se explica en Administración');
+  assert.equal(by.metrics.href, '/demo?vista=recepcion', 'las métricas viven en la bandeja');
+  assert.equal(by.inbox.href, '/demo');
+  for (const anchor of Object.values(by)) {
+    assert.ok(!/:(3000|8100|8200)/.test(anchor.href), anchor.href);
     assert.equal(anchor.attrs.target, undefined, 'sin servicio no se abre otra pestaña');
   }
 });
