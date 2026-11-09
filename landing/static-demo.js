@@ -44,6 +44,16 @@
   const LONG_MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre',
     'octubre', 'noviembre', 'diciembre'];
   const MENU = ['Ubicación', 'Consultar fechas', 'Preguntas frecuentes', 'Hablar con recepción'];
+  // Las mismas frases fijas del copiloto: un dato que no está en el catálogo se declara, no se inventa.
+  const MISSING_DATA = 'Ese dato no lo tengo confirmado. Si quieres, lo consulto con recepción.';
+  const IDENTITY = 'Soy el asistente virtual del hotel, una IA: te ayudo con la ubicación, los servicios y las '
+    + 'fechas, y una persona de recepción confirma cada reserva.';
+  const GREETING = /^(hola|holi|buenas|buen dia|buenos dias|buenas tardes|buenas noches|hey|ola|que tal)$/;
+  // Derivar es una acción del huésped (hablar, pasar, atender con una persona), no una pregunta sobre el bot.
+  const WANTS_HUMAN = /(hablar|hablo|pasar|comunicar|contactar|deriva|derivame|atienda|atiendan|atender|necesito|quiero|llama)/;
+  const HUMAN_TARGET = /(persona|humano|recepci|agente|alguien real)/;
+  const ASKS_IDENTITY = /(eres|es usted|sos|es un|es una)\s+(una\s+|un\s+)?(persona|humano|ia|inteligencia artificial|robot|bot|maquina|asistente virtual)/;
+  const IDENTITY_TOPIC = /(eres|sos|es usted).*(ia|robot|bot|maquina|humano|persona)/;
   // Respuestas aprobadas: las mismas de data/hotel.yaml que usa el copiloto.
   const FAQ = [
     [/donde|ubicaci|direcci|como llego|llegar/, `Ubicación: ${LOCATION}`, 'ubicacion'],
@@ -242,7 +252,12 @@
       if (stay && !stay.inverted) Object.assign(conv.data, stay);
       return summary(db, conv);
     }
-    if (/recepcion|persona|humano/.test(plain) && !/horario de recepcion/.test(plain)) return handoff(db, conv, 'human_requested', scenario);
+    if (ASKS_IDENTITY.test(plain) || IDENTITY_TOPIC.test(plain)) return say(db, conv, IDENTITY);
+    if (GREETING.test(plain)) return say(db, conv, 'Hola, bienvenido. ¿Te ayudo con la ubicación, alguna pregunta del hotel o las fechas de tu estadía?', MENU);
+    // Escribir solo «recepción» o pulsar el botón del menú también es pedir a una persona.
+    const humanAsked = ((WANTS_HUMAN.test(plain) && HUMAN_TARGET.test(plain)) || /^(la )?recepcion$/.test(plain)
+      || /hablar con recepcion/.test(plain) || /persona real/.test(plain)) && !/horario de recepcion/.test(plain);
+    if (humanAsked) return handoff(db, conv, 'human_requested', scenario);
     if (plain === 'preguntas frecuentes') { conv.step = 'menu'; return say(db, conv, 'Elige un tema o escríbeme tu pregunta:', ['Piscina', 'Desayuno', 'Horario de check-in', 'Estacionamiento']); }
     if (plain === 'ubicacion') { conv.data.seen_location = true; return say(db, conv, `Ubicación: ${LOCATION}`); }
     if (conv.step === 'ask_dates') return dates(db, conv, text);
@@ -264,7 +279,7 @@
       if (parseStay(text)) return dates(db, conv, text);
       return say(db, conv, '¿Para qué fechas? Escríbeme llegada y salida, por ejemplo «20 al 22 de noviembre» o «20/11 al 22/11».');
     }
-    return say(db, conv, 'No estoy seguro de haberte entendido. Puedes usar los botones de abajo o escribir «recepción».');
+    return say(db, conv, MISSING_DATA, MENU);
   }
 
   // ---------- vistas (mismo contrato que el servidor) ----------

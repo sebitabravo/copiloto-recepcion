@@ -178,3 +178,44 @@ test('the static demo declares itself and never interprets HTML', () => {
   assert.doesNotMatch(shim, /innerHTML/, 'el shim no interpreta HTML');
   assert.doesNotMatch(shim, /963949710|comercial@/i, 'nunca el contacto real del hotel');
 });
+
+// --- El guion guiado de la versión estática responde como el copiloto ---------------------------
+const MISSING = 'Ese dato no lo tengo confirmado. Si quieres, lo consulto con recepción.';
+
+async function guestSays(text, {run} = {}) {
+  const shim = loadShim(run ? {run} : {});
+  await shim.call('/api/demo/chat', {session_id: 'guest', message: text, shift: 'open'});
+  const conversation = (await shim.call('/api/demo/conversation?session_id=guest')).body;
+  return {shim, messages: conversation.messages.filter(message => message.role === 'assistant')};
+}
+
+test('un saludo se responde con un saludo y opciones, no con «no te entendí»', async () => {
+  const {messages} = await guestSays('hola');
+  const last = messages.at(-1).body;
+  assert.match(last, /hola, bienvenido/i);
+  assert.ok(!/no estoy seguro|no te entend/i.test(last), last);
+  assert.ok(messages.at(-1).options.length >= 3, 'ofrece el menú');
+});
+
+test('preguntar si es una IA se responde con la identidad, sin derivar', async () => {
+  const {shim, messages} = await guestSays('¿eres una persona o una IA?');
+  assert.match(messages.at(-1).body, /asistente virtual/i);
+  assert.ok(!/solicitud (enviada|guardada)/i.test(messages.at(-1).body), 'no deriva por preguntar quién es');
+  await shim.call('/api/demo/session', {name: 'Ana', operator_key: 'operador-estatico-0002'});
+  assert.deepEqual((await shim.call('/api/panel/requests')).body.requests, []);
+});
+
+test('un dato fuera del catálogo usa la frase fija, no una invención', async () => {
+  const {messages} = await guestSays('¿tienen helipuerto?');
+  assert.equal(messages.at(-1).body, MISSING);
+});
+
+test('pedir hablar con recepción sí deriva y deja la solicitud con su número', async () => {
+  const {shim, messages} = await guestSays('quiero hablar con recepción');
+  assert.match(messages.at(-1).body, /N\.º BDL-001/);
+  await shim.call('/api/demo/session', {name: 'Ana', operator_key: 'operador-estatico-0003'});
+  const requests = (await shim.call('/api/panel/requests')).body.requests;
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].code, 'BDL-001');
+  assert.equal(requests[0].reason_label, 'Pidió hablar con recepción');
+});
