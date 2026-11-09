@@ -46,6 +46,8 @@
 
 .view-switch {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   padding: 3px;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -53,7 +55,7 @@
 }
 
 .view-switch button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 6px 16px;
   border: 0;
   border-radius: 999px;
@@ -121,7 +123,20 @@
 .demo-page[data-view="recepcion"] .guest-view { display: none; }
 .demo-page[data-view="huesped"] .app-frame { max-width: 460px; margin-inline: auto; }
 .demo-page[data-view="huesped"] .split-stage,
-.demo-page[data-view="recepcion"] .split-stage { grid-template-columns: minmax(0, 1fr); }
+.demo-page[data-view="recepcion"] .split-stage,
+.demo-page[data-view="admin"] .split-stage { grid-template-columns: minmax(0, 1fr); }
+
+.split-stage > [hidden],
+.admin-pane [hidden] { display: none !important; }
+
+/* Administración conserva el marco, la barra y los tokens de las otras perspectivas. */
+.demo-page[data-view="admin"] .split-stage { height: auto; min-height: 360px; }
+.admin-pane { min-width: 0; background: var(--card); }
+.admin-intro { padding: 18px; color: var(--ink-2); overflow-wrap: anywhere; }
+.admin-intro p { max-width: 85ch; margin: 0 0 12px; font-size: .9rem; }
+.admin-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+#admin-status { color: var(--muted); }
+#admin-frame { display: block; width: 100%; height: min(80vh, 900px); min-height: 480px; border: 0; border-top: 1px solid var(--line); }
 
 /* ---------- Mitad huésped: chat tipo WhatsApp con el patrón de puntos del hero ---------- */
 

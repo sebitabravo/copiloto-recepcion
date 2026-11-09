@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {createDocument, addById, flush} from './lib/mini-dom.mjs';
 
 const read = name => readFileSync(new URL(`../landing/${name}`, import.meta.url), 'utf8');
 const html = read('demo.html');
@@ -155,5 +156,145 @@ test('no class of the demo collides with the landing stylesheet', () => {
 });
 
 test('server text is never interpreted as HTML', () => {
-  for (const source of [shared, guest, inbox, page]) assert.doesNotMatch(source, /innerHTML|insertAdjacentHTML/);
+  for (const source of [shared, guest, inbox, page, read('demo-admin.js')]) assert.doesNotMatch(source, /innerHTML|insertAdjacentHTML/);
+});
+
+function bootPage(view, {offline = false} = {}) {
+  const document = createDocument();
+  addById(document, ['shift-scenario', 'shift-status', 'app-addr', 'guest-view', 'inbox-view', 'admin-view']);
+  for (const role of ['ambas', 'huesped', 'recepcion', 'admin']) {
+    const button = document.createElement('button');
+    button.dataset.viewOption = role;
+    document.body.append(button);
+  }
+  const started = {huesped: 0, recepcion: 0, admin: 0};
+  const calls = [];
+  const window = {DemoShared: {store: {get: () => null, set() {}}, setRun() {},
+    el: (tag, cls, text) => { const node = document.createElement(tag); node.textContent = text; return node; },
+    async api(path) {
+      calls.push(path);
+      if (offline) throw new Error('Sin conexión.');
+      if (path === '/api/demo/status') return {shift: {start: '08:00', end: '22:00', in_shift: true}};
+      return {run: 'corrida-de-prueba-123'};
+    }},
+    DemoGuest: {init() { started.huesped++; }}, DemoInbox: {init() { started.recepcion++; }},
+    DemoAdmin: {init() { started.admin++; }}, matchMedia: () => ({matches: false})};
+  const location = {href: `http://localhost:8080/demo?vista=${view}`, search: `?vista=${view}`, pathname: '/demo', hash: ''};
+  vm.runInNewContext(page, {window, document, location, history: {replaceState() {}}, URL, URLSearchParams,
+    setTimeout() {}, encodeURIComponent});
+  return {document, started, calls, button: role => document.querySelector(`[data-view-option="${role}"]`)};
+}
+
+test('Administration is an accessible perspective in the existing selector, not the split view', async () => {
+  assert.match(html, /data-view-option="admin"[^>]*aria-pressed="false"[^>]*aria-controls="admin-view"[^>]*>Administración</);
+  assert.match(html, /id="admin-view"[^>]*aria-labelledby="admin-title"[^>]*hidden/);
+  assert.match(html, /id="admin-status"[^>]*role="status"/);
+  assert.match(html, /id="admin-frame"[^>]*title="PMS simulado de administración"/);
+  assert.match(html, /src="demo-admin\.js\?v=/);
+  const ui = bootPage('admin', {offline: true});
+  await flush();
+  assert.equal(ui.document.body.dataset.view, 'admin');
+  assert.equal(ui.button('admin').getAttribute('aria-pressed'), 'true');
+  assert.equal(ui.document.getElementById('admin-view').hidden, false);
+  assert.equal(ui.document.getElementById('guest-view').hidden, true);
+  assert.equal(ui.document.getElementById('inbox-view').hidden, true);
+  assert.deepEqual(ui.started, {huesped: 0, recepcion: 0, admin: 1}, 'admin no depende de la API de chat ni inicia otros roles');
+});
+
+test('guest, reception, split, shift and separate-window controls keep their previous behavior', async () => {
+  const ui = bootPage('huesped');
+  await flush();
+  assert.deepEqual(ui.started, {huesped: 1, recepcion: 0, admin: 0});
+  await ui.button('recepcion').click();
+  assert.deepEqual(ui.started, {huesped: 1, recepcion: 1, admin: 0});
+  await ui.button('ambas').click();
+  await ui.button('huesped').click();
+  assert.deepEqual(ui.started, {huesped: 1, recepcion: 1, admin: 0}, 'cada rol se inicia una sola vez');
+  assert.equal(ui.button('huesped').getAttribute('aria-pressed'), 'true');
+  await ui.button('admin').click();
+  await ui.button('ambas').click();
+  assert.equal(ui.document.getElementById('guest-view').hidden, false);
+  assert.equal(ui.document.getElementById('inbox-view').hidden, false);
+  assert.equal(ui.document.getElementById('admin-view').hidden, true);
+  assert.deepEqual(ui.started, {huesped: 1, recepcion: 1, admin: 1});
+  for (const id of ['guest-form', 'guest-reset', 'inbox-filter', 'inbox-search', 'inventory-check', 'shift-scenario']) {
+    assert.ok(html.includes(`id="${id}"`), id);
+  }
+  for (const role of ['huesped', 'recepcion']) assert.ok(html.includes(`/demo?vista=${role}`));
+});
+
+function bootAdmin(config, fetchResult = () => Promise.resolve({ok: true, type: 'opaque'})) {
+  const document = createDocument();
+  addById(document, ['admin-status', 'admin-open', 'admin-retry', 'admin-frame']);
+  for (const id of ['admin-open', 'admin-retry', 'admin-frame']) document.getElementById(id).hidden = true;
+  const calls = [];
+  const window = {COPILOTO_CONFIG: config};
+  const location = {href: 'http://localhost:8080/demo', hostname: 'localhost', protocol: 'http:'};
+  const context = {window, document, location, URL, Intl, Date, AbortController, setTimeout, clearTimeout,
+    fetch: (url, options) => { calls.push({url, options}); return fetchResult(); }};
+  vm.runInNewContext(shared + '\n' + read('demo-admin.js'), context);
+  window.DemoAdmin.init();
+  return {window, document, calls, node: id => document.getElementById(`admin-${id}`)};
+}
+
+test('static Administration is explicitly unavailable and makes no service calls or writes', async () => {
+  const ui = bootAdmin({staticDemo: true, pmsUrl: 'http://localhost:8200'});
+  await flush();
+  assert.equal(ui.node('status').textContent,
+    'Administración/PMS no disponible en esta versión estática. No hay servicio de administración: aquí no se crean ni se guardan reservas.');
+  await ui.node('open').click();
+  await ui.node('retry').click();
+  assert.equal(ui.calls.length, 0);
+  assert.equal(ui.node('open').hidden, true);
+  assert.equal(ui.node('retry').hidden, true);
+  assert.equal(ui.node('frame').hidden, true);
+  assert.equal(ui.node('frame').src, undefined);
+});
+
+test('only a configured reachable PMS exposes the existing demo entry, after explicit opening', async () => {
+  const ui = bootAdmin({pmsUrl: 'http://localhost:8200/'});
+  await flush();
+  assert.equal(ui.calls.length, 1);
+  assert.equal(ui.calls[0].url, 'http://localhost:8200/health');
+  assert.equal(ui.calls[0].options.method, 'GET');
+  assert.equal(ui.calls[0].options.redirect, 'follow');
+  assert.equal(ui.calls[0].options.credentials, 'omit');
+  assert.equal(ui.calls[0].options.mode, 'no-cors', 'PMS no expone CORS; una respuesta opaca no certifica modo demo');
+  assert.equal(ui.node('frame').src, undefined, 'la comprobación no crea una sesión de personal');
+  assert.equal(ui.node('open').hidden, false);
+  await ui.node('open').click();
+  assert.equal(ui.node('frame').src, 'http://localhost:8200/admin?demo=1');
+  assert.equal(ui.node('frame').hidden, false);
+  assert.match(ui.node('status').textContent, /PMS valida el modo demo/);
+  await ui.node('open').click();
+  assert.equal(ui.calls.length, 1, 'sin API de escritura ni tokens enviados desde JS');
+});
+
+test('an unreachable PMS stays unavailable and can be checked again without fake writes', async () => {
+  let down = true;
+  const ui = bootAdmin({pmsUrl: 'http://localhost:8200'}, () => down
+    ? Promise.reject(new Error('network')) : Promise.resolve({ok: true, type: 'opaque'}));
+  await flush();
+  assert.equal(ui.node('status').textContent, 'El servicio de Administración/PMS no está disponible. Enciende el PMS de prueba y reintenta. Este panel no simula reservas.');
+  await ui.node('open').click();
+  assert.equal(ui.node('frame').src, undefined);
+  assert.equal(ui.node('open').hidden, true);
+  assert.equal(ui.node('retry').hidden, false);
+  down = false;
+  await ui.node('retry').click();
+  await flush();
+  assert.equal(ui.calls.length, 2);
+  assert.equal(ui.node('open').hidden, false);
+  assert.equal(ui.node('frame').hidden, true);
+});
+
+test('missing or unsafe PMS configuration never offers an automatic admin session', async () => {
+  for (const pmsUrl of [undefined, '', 'javascript:alert(1)', 'https://user:pass@demo.test', 'https://demo.test?token=x', 'https://demo.test#token']) {
+    const ui = bootAdmin({pmsUrl});
+    await flush();
+    assert.equal(ui.calls.length, 0, String(pmsUrl));
+    assert.equal(ui.node('open').hidden, true);
+    assert.equal(ui.node('frame').src, undefined);
+    assert.match(ui.node('status').textContent, /no está configurado/);
+  }
 });

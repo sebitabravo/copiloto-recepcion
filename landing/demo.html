@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Demo en vivo: huésped y recepción · Copiloto de Recepción · Hotel Bordeluz</title>
+<title>Demo en vivo: huésped, recepción y administración · Copiloto de Recepción · Hotel Bordeluz</title>
 <meta name="description" content="Prueba el copiloto de recepción del Hotel Bordeluz como huésped y como recepción: ubicación primero, lectura del PMS simulado con hora y derivación con contexto al mismo hilo. Datos de prueba.">
 <link rel="canonical" href="__PUBLIC_SITE_URL__/demo">
 <meta name="robots" content="index, follow">
@@ -31,7 +31,7 @@
 <link rel="preload" href="fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/inter-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="demo.css?v=20261107a">
-<link rel="stylesheet" href="demo-split.css?v=20261108c">
+<link rel="stylesheet" href="demo-split.css?v=20261109-admin">
 </head>
 <body class="demo-page" data-view="ambas">
 <a class="skip" href="#main">Saltar al contenido</a>
@@ -53,15 +53,16 @@
     <div>
       <p class="eyebrow">Demo en vivo · datos de prueba</p>
       <h1>Pruébalo como huésped <em>y como recepción.</em></h1>
-      <p class="demo-lede">La misma conversación en dos lados: el copiloto muestra la ubicación primero, lee el PMS simulado con hora de lectura y deriva con contexto. Recepción toma la solicitud y responde en el mismo hilo; la reserva la confirma una persona.</p>
+      <p class="demo-lede">La misma conversación en dos lados: el copiloto muestra la ubicación primero, lee el PMS simulado con hora de lectura y deriva con contexto. Recepción toma la solicitud y responde en el mismo hilo; la reserva la confirma una persona. Administración permite explorar el PMS de prueba cuando el servicio está disponible.</p>
     </div>
   </header>
 
   <section class="presenter" aria-label="Controles de la demostración">
     <div class="view-switch" role="group" aria-label="Qué vista mostrar">
-      <button type="button" data-view-option="ambas" aria-pressed="true">Vista partida</button>
-      <button type="button" data-view-option="huesped" aria-pressed="false">Huésped</button>
-      <button type="button" data-view-option="recepcion" aria-pressed="false">Recepción</button>
+      <button type="button" data-view-option="ambas" aria-pressed="true" aria-controls="guest-view inbox-view">Vista partida</button>
+      <button type="button" data-view-option="huesped" aria-pressed="false" aria-controls="guest-view">Huésped</button>
+      <button type="button" data-view-option="recepcion" aria-pressed="false" aria-controls="inbox-view">Recepción</button>
+      <button type="button" data-view-option="admin" aria-pressed="false" aria-controls="admin-view">Administración</button>
     </div>
     <div class="presenter-links">
       <a href="/demo?vista=huesped" target="_blank" rel="noopener">Abrir huésped en otra ventana <span aria-hidden="true">↗</span></a>
@@ -188,6 +189,20 @@
         </aside>
       </div>
     </section>
+    <!-- ======================= Administración ======================= -->
+    <section id="admin-view" class="admin-pane" aria-labelledby="admin-title" data-role="admin" hidden>
+      <header class="inbox-bar"><h2 id="admin-title">Administración · PMS de prueba</h2></header>
+      <div class="admin-intro">
+        <p>Explora habitaciones y reservas en el PMS simulado, sin salir de esta vista. Usa solo datos ficticios.</p>
+        <p>Es un servicio separado: no comparte la corrida ni confirma las solicitudes del chat. Este panel no simula escrituras; cualquier reserva requiere una acción explícita dentro del PMS de prueba.</p>
+        <p id="admin-status" role="status" aria-live="polite">Administración requiere el servicio PMS de prueba. La versión estática no crea ni guarda reservas.</p>
+        <div class="admin-actions">
+          <button id="admin-open" class="button-sm primary" type="button" aria-controls="admin-frame" hidden>Abrir PMS de prueba</button>
+          <button id="admin-retry" class="button-sm" type="button" hidden>Reintentar conexión</button>
+        </div>
+      </div>
+      <iframe id="admin-frame" title="PMS simulado de administración" referrerpolicy="no-referrer" hidden></iframe>
+    </section>
   </div>
   </div>
 
@@ -224,9 +239,10 @@
 </footer>
 
 <script src="config.js?v=20261108c" defer></script>
-<script src="demo-shared.js?v=20261108c" defer></script>
+<script src="demo-shared.js?v=20261109-admin" defer></script>
 <script src="demo-guest.js?v=20261108c" defer></script>
 <script src="demo-inbox.js?v=20261108c" defer></script>
-<script src="demo-page.js?v=20261108c" defer></script>
+<script src="demo-admin.js?v=20261109-admin" defer></script>
+<script src="demo-page.js?v=20261109-admin" defer></script>
 </body>
 </html>

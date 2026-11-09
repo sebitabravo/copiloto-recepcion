@@ -1,4 +1,4 @@
-/* Orquesta /demo: qué vista se ve (partida, huésped o recepción), el escenario de turno y el arranque
+/* Orquesta /demo: qué vista se ve (partida, huésped, recepción o administración), el turno y el arranque
    de cada rol. Con ?vista=huesped o ?vista=recepcion la página carga SOLO ese rol: así se presenta en
    dos ventanas, cada una con su credencial (el huésped nunca abre sesión de recepción). */
 (() => {
@@ -6,8 +6,8 @@
   const S = window.DemoShared;
   const $ = id => document.getElementById(id);
   const SHIFT_KEY = 'copiloto-demo-turno';
-  const VIEWS = ['ambas', 'huesped', 'recepcion'];
-  const started = {huesped: false, recepcion: false};
+  const VIEWS = ['ambas', 'huesped', 'recepcion', 'admin'];
+  const started = {huesped: false, recepcion: false, admin: false};
   let status = null;
   let run = null;
 
@@ -70,6 +70,10 @@
   }
 
   function start(view) {
+    if (view === 'admin' && !started.admin) {
+      started.admin = true;
+      window.DemoAdmin.init();
+    }
     if ((view === 'ambas' || view === 'huesped') && !started.huesped) {
       started.huesped = true;
       window.DemoGuest.init({status, shift: shiftScenario});
@@ -82,10 +86,14 @@
 
   function setView(view) {
     document.body.dataset.view = view;
+    $('guest-view').hidden = view !== 'ambas' && view !== 'huesped';
+    $('inbox-view').hidden = view !== 'ambas' && view !== 'recepcion';
+    $('admin-view').hidden = view !== 'admin';
     document.querySelectorAll('[data-view-option]').forEach(button => {
       button.setAttribute('aria-pressed', String(button.dataset.viewOption === view));
     });
-    if (status) start(view);
+    // Administración no depende de que el servidor del chat esté encendido.
+    if (status || view === 'admin') start(view);
   }
 
   async function loadStatus() {

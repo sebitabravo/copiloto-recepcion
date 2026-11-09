@@ -240,7 +240,7 @@
 
   window.DemoShared = {
     api, ApiError, backoff, newId, store, time, dateTime, stayRange, guests, summary, clock, tone, liveElapsed,
-    waitTone, splitParagraphs, el, messageNodes, base, operatorKey,
+    waitTone, splitParagraphs, el, messageNodes, base, operatorKey, resolveUrl,
     setRun(value) { run = value || null; },
     get run() { return run; }
   };
