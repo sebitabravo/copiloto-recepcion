@@ -78,6 +78,10 @@ for page in out.glob('*'):
     '};\n', encoding='utf-8')
 PY
 
+# La página de privacidad no existe como archivo: se renderiza con el mismo texto legal que la
+# vista dinámica, para que `/privacidad` funcione sin backend y sin enlaces a localhost.
+uv run --project "$ROOT/copiloto" python "$ROOT/scripts/render-privacy.py" "$OUT" "$PUBLIC_SITE_URL"
+
 # static-demo.js tiene que ejecutarse antes que la interfaz (demo-shared.js) para interceptar fetch.
 python - "$OUT" <<'PY'
 import pathlib, sys

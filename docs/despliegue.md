@@ -113,11 +113,25 @@ La demo no necesita servidor propio para la presentación. Tres caminos, de meno
    PMS ni Chatwoot: la propia interfaz lo declara («Flujo guiado · sin IA», «Datos ficticios, sin
    reservas reales») y la sección «Conexiones en vivo» se retira por no poder comprobarse. Se publica gratis:
    ```sh
-   PUBLIC_SITE_URL=https://mi-portfolio.vercel.app ./scripts/build-static-demo.sh
+   PUBLIC_SITE_URL=https://copiloto-recepcion.vercel.app ./scripts/build-static-demo.sh
    npx vercel deploy --prod dist
    ```
-   En Netlify basta arrastrar `dist/` (lleva `_redirects`); en Vercel, `cleanUrls` resuelve `/demo`.
-   Comprobado: en esa versión ninguna petición a `/api` sale a la red.
+   En Netlify basta arrastrar `dist/` (lleva `_redirects`); en Vercel, `cleanUrls` resuelve `/demo` y
+   `/privacidad`. Comprobado: en esa versión ninguna petición a `/api` sale a la red.
+
+   **Publicado:** <https://copiloto-recepcion.vercel.app> (proyecto `copiloto-recepcion` de la cuenta
+   `sebitabravo`). Para volver a publicar hay dos pasos que no están en el repositorio:
+
+   ```sh
+   PUBLIC_SITE_URL=https://copiloto-recepcion.vercel.app ./scripts/build-static-demo.sh
+   cp .vercel/project.json dist/.vercel/project.json   # el build limpia dist/, incluido su enlace
+   cd dist && npx vercel deploy --prod
+   ```
+
+   `dist/` está en `.gitignore` y el enlace `.vercel/` también; nada de eso se versiona.
+   La página `/privacidad` no es un archivo del repositorio: el build la renderiza con el mismo
+   `privacy.render` del copiloto (`scripts/render-privacy.py`), así que el texto legal tiene una sola
+   fuente y `copiloto/tests/test_static_privacy.py` evita que se publique vacía o con enlaces locales.
 
 ## Verificación de las imágenes
 

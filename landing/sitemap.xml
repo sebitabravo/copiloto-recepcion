@@ -9,4 +9,8 @@
     <loc>__PUBLIC_SITE_URL__/demo</loc>
     <lastmod>2026-11-07</lastmod>
   </url>
+  <url>
+    <loc>__PUBLIC_SITE_URL__/privacidad</loc>
+    <lastmod>2026-11-07</lastmod>
+  </url>
 </urlset>

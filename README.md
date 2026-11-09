@@ -6,6 +6,8 @@ lee la disponibilidad del PMS **con sello de hora** y deriva a recepción con co
 3 minutos. Con IA entiende lenguaje libre; en el diseño de los informes **el bot nunca confirma una reserva** y
 la confirma una persona en el PMS (en la demo, el modo `full` reserva en un PMS simulado).
 
+> Versión publicada sin backend (portfolio): <https://copiloto-recepcion.vercel.app>
+
 > Prototipo académico, no es el sitio oficial del hotel. Todos los datos de huéspedes son ficticios; los
 > precios, los cupos y la distribución de las 20 habitaciones del PMS son simulados.
 
