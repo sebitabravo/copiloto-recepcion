@@ -24,3 +24,7 @@ dist/
 .review/
 .vercel/
 .vercel/
+
+.vercel
+.env*
+.env.local
