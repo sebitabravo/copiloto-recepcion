@@ -62,6 +62,26 @@ cupos y envía la **respuesta pertinente** (Respondida). Huésped 1: la respuest
 Se recargan las tres vistas y luego se **reinician los servicios** (`LIMPIO=0`): misma corrida en la URL,
 respuesta ×1 y acuse ×1 en el hilo correcto, ficha «Respondida» y reserva «Pendiente de confirmación».
 
+### Administración añadida a `/demo` (PR #13, T6)
+
+El selector ofrece **Administración** además de las tres opciones anteriores, con botón nativo,
+`aria-pressed`, `aria-controls`, panel rotulado y estado anunciado. La vista funciona aunque el servidor del
+chat esté caído. La portada no cambia.
+
+- **Local/demo:** solo con `pmsUrl` válido y conectividad al servicio se ofrece **Abrir PMS de prueba**.
+  Embebe `/admin?demo=1` al pulsarlo: la cookie y la validación de modo demo corresponden al servidor,
+  sin tokens de personal en JavaScript. Una sonda opaca de `/health` no certifica autenticación.
+- **Estática:** anuncia **Administración/PMS no disponible en esta versión estática**; no contacta el PMS,
+  no abre el iframe ni simula reservas persistentes.
+- **Aislamiento:** el PMS tiene datos de prueba separados, pero no está aislado por la corrida del chat.
+  No vincula ni confirma sus solicitudes. No se certificaron escrituras reales en esta entrega.
+
+[auto] `node --test scripts/test-demo-split.mjs`: **17/17** (RED inicial: 12/17, cinco fallos por
+Administración ausente). Selector, estado estático, servicio ausente, configuración insegura, apertura
+explícita y conservación de huésped/recepción. `node --check landing/demo-page.js` y
+`node --check landing/demo-admin.js`: sin errores.
+Playwright comprobó el panel en escritorio y móvil (390×844), con contenido dentro del viewport y `GET /health` → 200. No se abrió el iframe ni se enviaron reservas. Los errores CORS de `/api/demo/status` se debieron al origen de prueba `127.0.0.1:8765` frente a la API configurada en `localhost:8100`. No es una matriz responsive completa ni una prueba de contraste/lector de pantalla; el `health` tampoco certifica autenticación o `DEMO_MODE`, y no se ensayó el PMS real. Recorrido y límites: [demo-experience.md](../demo-experience.md).
+
 ### No verificado en este entorno
 
 - `make up` / `make up-full` con Docker (el entorno no tiene daemon: `docker info` falla) y la bandeja real de
