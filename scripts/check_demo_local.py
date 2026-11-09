@@ -16,6 +16,7 @@ libres, `make`, `uv` y `ps` (Linux o macOS). Tarda uno o dos minutos (la copia i
 Solo permisos, sin instalar dependencias ni iniciar servicios:
     python scripts/check_demo_local.py --permissions-only
 """
+# ruff: noqa: E501 — los snippets PowerShell y POSIX van en una línea; partirlos cambia su significado.
 
 import json
 import os

@@ -250,7 +250,7 @@ def test_demo_ai_turn_trace_records_request_model_prompt_and_outcome(ai_settings
     chat(client, "¿cómo llego?")
     payload = json.loads(harness.events("ai_reply", 0)[0]["payload"])
     assert payload["outcome"] == "answered"
-    assert payload["request_id"] == f"demo:{SESSION}:1"
+    assert payload["request_id"].startswith("demo:-") and SESSION not in payload["request_id"]
     assert payload["model"] == "qwen2.5-7b-instruct" and payload["prompt_version"] == PROMPT_VERSION
     assert "cómo llego" not in json.dumps(payload), "la traza no guarda texto del huésped"
 
@@ -261,4 +261,6 @@ def test_demo_llm_outage_records_an_ai_fallback_event_with_closed_reason(ai_sett
     fallback = json.loads(harness.events("ai_fallback", 0)[0]["payload"])
     assert fallback["reason"] == "unavailable"
     reply = json.loads(harness.events("ai_reply", 0)[0]["payload"])
-    assert reply["outcome"] == "fallback" and reply["request_id"] == f"demo:{SESSION}:1"
+    assert reply["outcome"] == "fallback"
+    assert reply["request_id"].startswith("demo:-")
+    assert SESSION not in reply["request_id"], "el identificador retenido no puede ser el token de la sesión"

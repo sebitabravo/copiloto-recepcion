@@ -142,6 +142,91 @@ def test_closing_returns_the_thread_to_the_bot_and_a_new_query_is_a_new_request(
     assert statuses == ["cerrada", "pendiente"]
 
 
+def close_snapshot(demo, request_id):
+    """Estado, transcripción, eventos y contadores observables sin consultar tablas internas."""
+    paths = (
+        f"/api/panel/requests?selected={request_id}",
+        "/api/panel/queue",
+        "/api/panel/shift",
+        "/metricas/data.json",
+    )
+    responses = [demo.sofia.get(path) for path in paths]
+    guest = demo.guest.get("/api/demo/conversation", params={"session_id": SESSION})
+    assert all(response.status_code == 200 for response in [*responses, guest])
+    return [response.json() for response in [*responses, guest]]
+
+
+def test_closing_an_unassigned_request_is_rejected_without_changes(demo):
+    demo.say("Hablar con recepción")
+    request_id = demo.inbox()["requests"][0]["id"]
+    before = close_snapshot(demo, request_id)
+    rejected = demo.sofia.post(f"/api/panel/requests/{request_id}/close")
+    assert rejected.status_code == 409
+    assert rejected.json() == {"detail": "Toma la solicitud antes de cerrar"}
+    assert close_snapshot(demo, request_id) == before
+    assert demo.chatwoot.messages == []
+
+
+def test_only_the_assigned_operator_can_close_without_changes_on_rejection(demo):
+    demo.say("Hablar con recepción")
+    request_id = demo.inbox()["requests"][0]["id"]
+    assert demo.sofia.post(f"/api/panel/requests/{request_id}/take").status_code == 200
+    namesake = demo.staff("Sofía", key="operadora-sofia-0002")
+    before = close_snapshot(demo, request_id)
+    rejected = namesake.post(f"/api/panel/requests/{request_id}/close")
+    assert rejected.status_code == 409
+    assert rejected.json() == {"detail": "La atiende Sofía"}
+    assert close_snapshot(demo, request_id) == before
+    assert demo.chatwoot.messages == []
+
+
+def test_close_rechecks_ownership_atomically_after_the_initial_scoped_read(demo, monkeypatch):
+    demo.say("Hablar con recepción")
+    request_id = demo.inbox()["requests"][0]["id"]
+    colleague = demo.staff("Tomás", key="operador-tomas-0001")
+    original_close = store.close_request
+    after_take = []
+
+    def take_before_close(*args, **kwargs):
+        # Otra petición tomó el caso después de la lectura de alcance, antes de la transacción de cierre.
+        assert colleague.post(f"/api/panel/requests/{request_id}/take").status_code == 200
+        after_take.extend(close_snapshot(demo, request_id))
+        return original_close(*args, **kwargs)
+
+    monkeypatch.setattr(store, "close_request", take_before_close)
+    rejected = demo.sofia.post(f"/api/panel/requests/{request_id}/close")
+    assert after_take, "la autorización debe usar la fila leída dentro del cierre, no la lectura anterior"
+    assert rejected.status_code == 409
+    assert rejected.json() == {"detail": "La atiende Tomás"}
+    assert close_snapshot(demo, request_id) == after_take
+    assert demo.chatwoot.messages == []
+
+
+def test_the_owner_can_close_once_without_answering_or_confirming_a_reservation(demo):
+    demo.say("Hablar con recepción")
+    request_id = demo.inbox()["requests"][0]["id"]
+    taken = demo.sofia.post(f"/api/panel/requests/{request_id}/take").json()
+    demo.clock.advance(5)
+    closed = demo.sofia.post(f"/api/panel/requests/{request_id}/close")
+    assert closed.status_code == 200
+    detail = closed.json()
+    assert (detail["status"], detail["status_label"], detail["mine"]) == ("cerrada", "Cerrada", True)
+    assert detail["assignee"] == "Sofía" and detail["taken_at"] == taken["taken_at"]
+    assert detail["commercial_at"] == taken["commercial_at"]
+    assert detail["closed_at"] == detail["updated_at"] == demo.clock()
+    assert detail["first_answer_at"] is None
+    assert detail["reservation_status"] == "pendiente_confirmacion"
+    assert detail["messages"] == taken["messages"]
+    events = [event for event in detail["events"] if event["kind"] == "request_closed"]
+    assert events == [{"kind": "request_closed", "ts": demo.clock(), "payload": {"request_id": request_id}}]
+    assert detail["actions"] == {"take": False, "reply": False, "close": False, "inventory": False}
+    before_retry = close_snapshot(demo, request_id)
+    assert before_retry[-1]["handled_by"] == "asistente"
+    assert demo.sofia.post(f"/api/panel/requests/{request_id}/close").json() == detail
+    assert close_snapshot(demo, request_id) == before_retry
+    assert demo.chatwoot.messages == []
+
+
 def test_a_retried_guest_message_is_processed_once(demo):
     first = demo.say("Hablar con recepción", client_message_id="accion-00000001")
     retry = demo.say("Hablar con recepción", client_message_id="accion-00000001")

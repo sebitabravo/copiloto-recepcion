@@ -684,9 +684,11 @@ def create_app(
         row = scoped_request(request_id, request)
         require_demo(request)
         operator = viewer(request)["operator"]
-        if row["assignee"] and not store.owned_by(row, me, operator):
-            return JSONResponse({"detail": f"La atiende {row['assignee']}"}, status_code=409)
-        return request_detail(store.close_request(db, row["id"], clock()), me, operator)
+        try:
+            closed = store.close_request(db, row["id"], clock(), author=me, author_id=operator)
+        except store.RequestConflict as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=409)
+        return request_detail(closed, me, operator)
 
     @app.post("/api/panel/requests/{request_id}/inventory", dependencies=limited)
     async def panel_inventory(request_id: int, request: Request):
@@ -1034,7 +1036,9 @@ def create_app(
         first_new = saved["id"] - 1
         events: list[dict] = []
         reply, quick, mode, usage = "", [], "guided", {"llm_ms": 0, "tokens": None}
-        request_id = f"demo:{session_id}:{session.msg_count}"
+        # El id conversacional ya es un seudónimo estable de la sesión: los eventos sobreviven a su purga,
+        # por lo que nunca deben retener la llave con la que el huésped accede a su hilo.
+        request_id = f"demo:{conversation_id}:{session.msg_count}"
 
         def trace(outcome: str, latency_ms: int = 0, tools: list | None = None, tokens: int | None = None) -> None:
             """Traza por turno de la demo: sin texto del huésped, siempre etiquetada con su resultado."""

@@ -9,11 +9,16 @@ Reglas que se fijan aquí:
 6. Dos sesiones de demo no se ven entre sí.
 """
 
+import json
 from dataclasses import replace
 
+import pytest
 from conftest import FakeChatwoot, FakeLlm, call, new_run, say
 from copiloto.ai.agent import Agent
+from copiloto.ai.llm import LlmUnavailable
 from copiloto.app import create_app
+from copiloto.events import events_between
+from copiloto.metrics import compute_metrics
 from fastapi.testclient import TestClient
 
 from copiloto import store
@@ -49,6 +54,54 @@ def demo_client(settings, harness, llm=None, run=None):
 
 def chat(client, message, session=SESSION):
     return client.post("/api/demo/chat", json={"session_id": session, "message": message, "run": client.run})
+
+
+@pytest.mark.parametrize("fallback", [False, True], ids=["answered", "fallback"])
+def test_ai_trace_ids_are_private_deterministic_and_survive_demo_purge(ai_settings, harness, fallback):
+    result = LlmUnavailable("http 503") if fallback else say("Estamos en el sector Molco.")
+    client = demo_client(ai_settings, harness, FakeLlm([result] * 4))
+
+    def traces():
+        return [dict(row) for row in events_between(harness.db, 0, harness.clock() + 1, ["ai_reply"])]
+
+    def metrics():
+        return compute_metrics(harness.db, 0, harness.clock() + 1, ai_settings, scope="demo")
+
+    first = chat(client, "¿Dónde queda el hotel?")
+    second = chat(client, "¿Tienen piscina?")
+    other = chat(client, "¿Dónde queda el hotel?", session=OTHER)
+    assert [response.status_code for response in (first, second, other)] == [200, 200, 200]
+    assert first.json()["conversation_id"] == second.json()["conversation_id"] != other.json()["conversation_id"]
+    assert [response.json()["usage"]["messages_left"] for response in (first, second, other)] == [29, 28, 29]
+    rows = traces()
+    payloads = [json.loads(row["payload"]) for row in rows]
+    ids = [payload["request_id"] for payload in payloads]
+    assert len(set(ids)) == 3, "cada conversación y turno tiene su propia agrupación"
+    assert all(isinstance(request_id, str) and request_id for request_id in ids)
+    assert all(session not in json.dumps(rows) for session in (SESSION, OTHER)), "no retener la llave del huésped"
+    assert all(payload["outcome"] == ("fallback" if fallback else "answered") for payload in payloads)
+    assert all(row["source"] == "demo" for row in rows)
+    assert all("¿Dónde queda" not in row["payload"] and "¿Tienen piscina" not in row["payload"] for row in rows)
+    before = metrics()
+    assert before["ai_replies"] == 3 and before["ai_fallbacks"] == (3 if fallback else 0)
+    assert before["ai_tokens"] == (0 if fallback else 300)
+
+    assert store.purge_demo(harness.db, harness.clock() + 1) == 2
+    for session in (SESSION, OTHER):
+        gone = client.get("/api/demo/conversation", params={"session_id": session})
+        assert gone.status_code == 200
+        assert gone.json()["conversation_id"] is None and gone.json()["messages"] == []
+    assert traces() == rows, "la purga conserva las trazas sin reintroducir identificadores de sesión"
+    assert metrics() == before, "los contadores y agrupaciones retenidos siguen siendo reproducibles"
+
+    # Reiniciar y repetir la misma conversación/turno conserva su id determinista, no uno aleatorio.
+    reset = client.post("/api/demo/reset", json={"session_id": SESSION})
+    assert reset.status_code == 200 and reset.json() == {"status": "ok"}
+    client.run = new_run(client)
+    repeated = chat(client, "¿Dónde queda el hotel?")
+    assert repeated.status_code == 200 and repeated.json()["usage"]["messages_left"] == 29
+    assert repeated.json()["conversation_id"] == first.json()["conversation_id"]
+    assert json.loads(traces()[-1]["payload"])["request_id"] == ids[0]
 
 
 def seed_operational(harness):

@@ -918,12 +918,20 @@ def guest_wrote_to_reception(db: sqlite3.Connection, conversation_id: int, now: 
     return get_request_row(db, row["id"])
 
 
-def close_request(db: sqlite3.Connection, request_id: int, now: float) -> sqlite3.Row:
-    """Cierra la atención: el hilo vuelve al asistente y una consulta nueva crea otra solicitud."""
+def close_request(
+    db: sqlite3.Connection, request_id: int, now: float, *, author: str | None = None, author_id: str | None = None,
+) -> sqlite3.Row:
+    """Cierra la atención y devuelve el hilo al asistente. Con autor, exige que sea su responsable.
+
+    La autorización y el cierre comparten transacción; las llamadas internas sin autor conservan su uso previo.
+    """
     with transaction(db):
         row = get_request_row(db, request_id)
         if row is None:
             raise LookupError(request_id)
+        if author is not None and not owned_by(row, author, author_id):
+            raise RequestConflict("Toma la solicitud antes de cerrar" if not row["assignee"]
+                                  else f"La atiende {row['assignee']}")
         if row["status"] != "cerrada":
             db.execute(
                 "UPDATE requests SET status = 'cerrada', closed_at = ?, updated_at = ? WHERE id = ?",
