@@ -19,3 +19,6 @@ dist/
 
 # Demo local sin Docker (scripts/demo-local.sh)
 .demo-local/
+
+# Artefactos locales de revisión (copias de candidatos; no versionar)
+.review/
