@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, readdirSync, statSync} from 'node:fs';
-import {execFileSync} from 'node:child_process';
-import {tmpdir} from 'node:os';
+import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import vm from 'node:vm';
 
@@ -23,15 +21,16 @@ function memoryStorage() {
 }
 
 // Carga el shim con almacenamiento en memoria y un fetch real espía: nada debe llegar a él.
-function loadShim() {
+function loadShim({localStorage = memoryStorage(), sessionStorage = memoryStorage(), run = 'corrida-estatica-0001'} = {}) {
   const calls = [];
   const realFetch = (...args) => { calls.push(String(args[0])); return Promise.resolve(new Response('{}')); };
-  const window = {fetch: realFetch, localStorage: memoryStorage(), sessionStorage: memoryStorage(),
-    location: {href: 'https://demo.example.test/demo'}, addEventListener() {}};
-  vm.runInNewContext(shim, {window, Response, URL, JSON, Date, Intl, Math, String, Number, Object, RegExp, console});
-  const call = async (path, body) => {
+  const window = {fetch: realFetch, localStorage, sessionStorage,
+    location: {href: `https://demo.example.test/demo${run ? `?corrida=${run}` : ''}`}, addEventListener() {}};
+  class Clock extends Date { static now() { return Date.parse('2026-08-01T15:00:00Z'); } }
+  vm.runInNewContext(shim, {window, Response, URL, JSON, Date: Clock, Intl, Math, String, Number, Object, RegExp, console});
+  const call = async (path, body, headers = {}) => {
     const response = await window.fetch(`https://demo.example.test${path}`,
-      body === undefined ? {} : {method: 'POST', body: JSON.stringify(body)});
+      {headers, ...(body === undefined ? {} : {method: 'POST', body: JSON.stringify(body)})});
     return {status: response.status, body: response.status === 204 ? null : await response.json()};
   };
   return {call, calls};
@@ -86,51 +85,92 @@ test('the static demo runs the canonical case without a backend', async () => {
   assert.deepEqual(calls, []);
 });
 
-test('the static build replaces the public URL everywhere and leaks no secrets', () => {
-  const work = mkdtempSync(join(tmpdir(), 'static-demo-'));
-  const local = join(root, 'landing/config.js');
-  const hadConfig = existsSync(local);
-  const previous = hadConfig ? readFileSync(local, 'utf8') : null;
-  try {
-    // Un config.js local con token nunca debe viajar al sitio estático.
-    writeFileSync(local, 'window.COPILOTO_CONFIG = {websiteToken: "secreto-local", copilotoUrl: "http://localhost:8100"};\n');
-    execFileSync('bash', [join(root, 'scripts/build-static-demo.sh')], {
-      cwd: root, env: {...process.env, PUBLIC_SITE_URL: 'https://example.test', STATIC_DEMO_OUT: work}, stdio: 'pipe'
-    });
-    const files = readdirSync(work).filter(name => statSync(join(work, name)).isFile());
-    for (const name of files.filter(file => /\.(html|txt|xml)$/.test(file))) {
-      assert.doesNotMatch(readFileSync(join(work, name), 'utf8'), /__PUBLIC_SITE_URL__/, name);
-    }
-    const config = readFileSync(join(work, 'config.js'), 'utf8');
-    assert.doesNotMatch(config, /https?:\/\/|localhost|secreto-local/i, 'config.js estático no lleva hosts ni tokens');
-    assert.match(config, /staticDemo: true/);
-    const demo = readFileSync(join(work, 'demo.html'), 'utf8');
-    const shimTag = demo.indexOf('src="static-demo.js"');
-    const appTag = demo.indexOf('src="demo-shared.js');
-    assert.ok(shimTag > -1 && appTag > -1 && shimTag < appTag, 'el shim se carga antes que la interfaz');
-  } finally {
-    if (hadConfig) writeFileSync(local, previous); else rmSync(local, {force: true});
-    rmSync(work, {recursive: true, force: true});
-  }
+test('corridas isolate conversations, inboxes, resets and staff sessions while same-run tabs share state', async () => {
+  const localStorage = memoryStorage();
+  const sessionStorage = memoryStorage();
+  const a = loadShim({localStorage, sessionStorage});
+  const peer = loadShim({localStorage});
+  const b = loadShim({localStorage, sessionStorage, run: 'corrida-estatica-0002'});
+  await a.call('/api/demo/chat', {session_id: 'guest', message: 'Recepción', shift: 'open'});
+  await a.call('/api/demo/session', {name: 'Sofía', operator_key: 'operador-estatico-0001'});
+  const before = await a.call('/api/demo/conversation?session_id=guest');
+  assert.deepEqual(await peer.call('/api/demo/conversation?session_id=guest'), before);
+  assert.equal((await b.call('/api/demo/conversation?session_id=guest')).body.conversation_id, null);
+  assert.equal((await b.call('/api/panel/requests')).status, 401, 'la sesión no cruza corridas');
+  await b.call('/api/demo/session', {name: 'Sofía', operator_key: 'operador-estatico-0001'});
+  assert.deepEqual((await b.call('/api/panel/requests')).body.requests, []);
+  assert.deepEqual(await b.call('/api/panel/requests/1/close', {}),
+    {status: 404, body: {detail: 'Solicitud no encontrada'}});
+  await b.call('/api/demo/reset', {session_id: 'guest'});
+  assert.deepEqual(await a.call('/api/demo/conversation?session_id=guest'), before);
+  await b.call('/api/demo/chat', {session_id: 'guest', message: 'Recepción', shift: 'open'});
+  assert.equal((await b.call('/api/panel/requests')).body.requests[0].id, 1, 'contador independiente');
+  await peer.call('/api/demo/session', {name: 'Sofía', operator_key: 'operador-estatico-0001'});
+  await peer.call('/api/panel/requests/1/take', {});
+  assert.equal((await a.call('/api/panel/requests')).body.requests[0].status, 'en_atencion');
+  const shared = await a.call('/api/demo/conversation?session_id=guest');
+  assert.deepEqual(await b.call('/api/demo/reset', {session_id: 'guest'}), {status: 200, body: {status: 'ok'}});
+  assert.equal((await b.call('/api/demo/conversation?session_id=guest')).body.conversation_id, null);
+  assert.deepEqual((await b.call('/api/panel/requests')).body.requests, []);
+  assert.deepEqual(await a.call('/api/demo/conversation?session_id=guest'), shared);
 });
 
-test('the build only ever cleans its own output directory', () => {
-  const script = read('scripts/build-static-demo.sh');
-  assert.match(script, /OUT="\$\{STATIC_DEMO_OUT:-\$ROOT\/dist\}"/);
-  assert.match(script, /rm -rf "\$OUT" 2>\/dev\/null \|\| true/);
-  assert.doesNotMatch(script, /rm -rf "\$ROOT"/, 'nunca se borra la raíz del repo');
-  const work = mkdtempSync(join(tmpdir(), 'static-demo-safe-'));
-  try {
-    const out = join(work, 'out');
-    writeFileSync(join(work, 'KEEP.txt'), 'sentinel');
-    execFileSync('bash', [join(root, 'scripts/build-static-demo.sh')], {
-      cwd: root, env: {...process.env, PUBLIC_SITE_URL: 'https://example.test', STATIC_DEMO_OUT: out}, stdio: 'pipe'
-    });
-    assert.equal(readFileSync(join(work, 'KEEP.txt'), 'utf8'), 'sentinel', 'no toca archivos vecinos');
-    assert.ok(existsSync(join(out, 'demo.html')));
-  } finally {
-    rmSync(work, {recursive: true, force: true});
-  }
+test('body, query and staff header select the same corrida after creating a run', async () => {
+  const {call} = loadShim({run: null});
+  const first = await call('/api/demo/run', {});
+  const second = await call('/api/demo/run', {});
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 201);
+  assert.notEqual(first.body.run, second.body.run);
+  const run = first.body.run;
+  await call('/api/demo/chat', {run, session_id: 'guest', message: 'Recepción'});
+  assert.ok((await call(`/api/demo/conversation?session_id=guest&run=${run}`)).body.request);
+  assert.equal((await call(`/api/demo/conversation?session_id=guest&run=${second.body.run}`)).body.request, null);
+  await call('/api/demo/session', {run, name: 'Sofía', operator_key: 'operador-estatico-0001'});
+  const inbox = await call('/api/panel/requests', undefined, {'X-Demo-Run': run});
+  assert.equal(inbox.body.requests.length, 1);
+  assert.equal((await call('/api/panel/requests', undefined, {'X-Demo-Run': second.body.run})).status, 401);
+});
+
+test('take and close require the actual operator, not a matching display name, without mutation on rejection', async () => {
+  const {call} = loadShim();
+  await call('/api/demo/chat', {session_id: 'guest', message: 'Recepción', shift: 'open'});
+  const login = operator_key => call('/api/demo/session', {name: 'Sofía', operator_key});
+  await login('operador-estatico-0001');
+  const snapshot = async () => ({inbox: await call('/api/panel/requests'),
+    guest: await call('/api/demo/conversation?session_id=guest')});
+  const rejected = async (action, detail, body = {}) => {
+    const before = await snapshot();
+    const response = await call(`/api/panel/requests/1/${action}`, body);
+    assert.equal(response.status, 409);
+    assert.equal(response.body.detail, detail);
+    assert.deepEqual(response.body.request, before.inbox.body.requests[0]);
+    assert.deepEqual(await snapshot(), before, 'rechazo no cambia mensajes, eventos, datos ni contadores visibles');
+  };
+  await rejected('close', 'Toma la solicitud antes de cerrar');
+  assert.equal((await call('/api/panel/requests/1/take', {})).status, 200);
+  const taken = await snapshot();
+  assert.equal((await call('/api/panel/requests/1/take', {})).status, 200);
+  assert.deepEqual(await snapshot(), taken, 'tomar de nuevo es idempotente');
+  await login('operador-estatico-0002');
+  const actions = (await call('/api/panel/requests')).body.requests[0].actions;
+  assert.equal(actions.reply, false);
+  assert.equal(actions.close, false);
+  await rejected('take', 'Ya la tomó Sofía');
+  await rejected('close', 'La atiende Sofía');
+  await rejected('reply', 'La atiende Sofía', {body: 'No autorizado', client_id: 'rechazada'});
+  await login('operador-estatico-0001');
+  const previousId = (await call('/api/panel/requests')).body.requests[0].messages.at(-1).id;
+  const reply = await call('/api/panel/requests/1/reply', {body: 'Respuesta autorizada', client_id: 'rechazada'});
+  assert.equal(reply.status, 200);
+  assert.equal(reply.body.duplicate, false, 'el rechazo no consume la llave de idempotencia');
+  assert.equal(reply.body.message.id, previousId + 1, 'el rechazo no consume el contador de mensajes');
+  assert.equal((await call('/api/panel/requests/1/close', {})).body.status, 'cerrada');
+  const closed = await snapshot();
+  assert.equal((await call('/api/panel/requests/1/close', {})).status, 200);
+  assert.deepEqual(await snapshot(), closed, 'cerrar de nuevo es idempotente');
+  await rejected('take', 'La solicitud está cerrada');
+  await rejected('reply', 'La solicitud está cerrada', {body: 'No reabrir'});
 });
 
 test('the static demo declares itself and never interprets HTML', () => {

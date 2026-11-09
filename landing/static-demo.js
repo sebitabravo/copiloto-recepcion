@@ -3,13 +3,25 @@
  * Sustituye window.fetch SOLO para /api/*: la interfaz real (demo-shared/guest/inbox) corre igual contra
  * un servidor simulado en el navegador con el MISMO contrato que copiloto (solicitudes, tomar, responder,
  * cerrar, lectura del PMS simulado). El estado vive en localStorage, así que el chat en una pestaña y la
- * bandeja en otra del mismo sitio comparten el caso. No hay IA, ni PMS, ni Chatwoot, ni datos de nadie:
+ * bandeja en otra de la misma corrida (?corrida=) comparten el caso; otras corridas quedan aisladas.
+ * No hay IA, ni PMS, ni Chatwoot, ni datos de nadie:
  * el canal se rotula «WhatsApp simulado · versión estática» y el flujo es guiado, con textos preparados.
  */
 (() => {
   'use strict';
   if (window.__STATIC_DEMO__) return;
-  const KEY = 'copiloto-static-demo-v2';
+  const KEY = 'copiloto-static-demo-v3';
+  function newId() {
+    if (window.DemoShared) return window.DemoShared.newId();
+    const bytes = new Uint8Array(16);
+    if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
+    else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  }
+  let activeRun = newId();
+  const currentRun = () => new URL(window.location.href).searchParams.get('corrida') || activeRun;
+  const stateKey = run => `${KEY}:${run}`;
+  const staffKey = run => `${stateKey(run)}:staff`;
   const HOTEL = 'Hotel Boutique Bordeluz';
   const LOCATION = 'Estamos en el sector Molco, camino Villarrica-Pucón Km 12.5, frente a la playa Calfurray. Quedamos entre Villarrica y Pucón (12,5 km a cada una), a pocos metros de la playa.';
   // Parte del catálogo del PMS simulado (data/hotel.yaml) con cupos y tarifas ficticias.
@@ -45,17 +57,14 @@
   const LABELS = {pendiente: 'Pendiente de recepción', en_atencion: 'En atención', respondida: 'Respondida', cerrada: 'Cerrada'};
   const REASONS = {commercial: 'Consulta de fechas', human_requested: 'Pidió hablar con recepción'};
   const realFetch = window.fetch.bind(window);
-  window.__STATIC_DEMO__ = {key: KEY};
+  window.__STATIC_DEMO__ = {get key() { return stateKey(currentRun()); }};
 
-  // ---------- estado compartido entre pestañas ----------
+  // ---------- estado compartido solo entre pestañas de la misma corrida ----------
   const empty = () => ({conversations: {}, requests: [], events: [], seq: {msg: 0, req: 0}});
-  function load() {
-    try { return JSON.parse(window.localStorage.getItem(KEY)) || empty(); } catch (_) { return empty(); }
+  function load(key) {
+    try { return JSON.parse(window.localStorage.getItem(key)) || empty(); } catch (_) { return empty(); }
   }
-  function save(db) { try { window.localStorage.setItem(KEY, JSON.stringify(db)); } catch (_) { /* memoria */ } }
-  let memory = null;
-  const read = () => (memory = load());
-  const write = () => save(memory);
+  function save(key, db) { try { window.localStorage.setItem(key, JSON.stringify(db)); } catch (_) { /* */ } }
 
   const now = () => Date.now() / 1000;
   const norm = text => String(text).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -290,7 +299,8 @@
     return s >= 180 ? {state: 'vencida', elapsed_s: s, target_s: 180, label: `Sin respuesta pertinente tras ${clock(s)}: meta vencida`}
       : {state: 'en_curso', elapsed_s: s, target_s: 180, label: `Esperando primera respuesta · ${clock(s)}`};
   }
-  function requestView(db, r, me) {
+  const owned = (r, operator) => Boolean(operator && r.assignee_id === operator);
+  function requestView(db, r, operator) {
     const conv = Object.values(db.conversations).find(c => c.id === r.conversation_id);
     const nights = r.checkin ? Math.round((new Date(r.checkout) - new Date(r.checkin)) / 86400000) : null;
     const open = r.status !== 'cerrada';
@@ -300,31 +310,43 @@
       events: db.events.filter(e => e.conversation_id === r.conversation_id && e.ts >= r.commercial_at - 0.001),
       faq: db.events.filter(e => e.conversation_id === r.conversation_id && e.kind === 'faq_answered')
         .map(e => ({faq_id: e.payload.faq_id, latency_s: 0, met: true})),
-      actions: {take: open && !r.assignee, reply: open && r.assignee === me, close: open && r.assignee === me,
+      actions: {take: open && !r.assignee, reply: open && owned(r, operator), close: open && owned(r, operator),
         inventory: open && Boolean(r.checkin)}};
   }
 
   // ---------- rutas ----------
   const json = (body, status = 200) => Promise.resolve(new Response(JSON.stringify(body), {status, headers: {'content-type': 'application/json'}}));
-  const staffName = () => { try { return window.sessionStorage.getItem('copiloto-static-staff'); } catch (_) { return null; } };
+  const staffSession = run => {
+    try { return JSON.parse(window.sessionStorage.getItem(staffKey(run))); } catch (_) { return null; }
+  };
   const order = {pendiente: 0, en_atencion: 1, respondida: 2, cerrada: 3};
 
-  function route(method, path, query, body) {
-    const db = read();
-    const me = staffName();
+  function route(method, path, query, body, headers) {
+    const headerRun = headers && (typeof headers.get === 'function' ? headers.get('X-Demo-Run')
+      : Object.entries(headers).find(([name]) => name.toLowerCase() === 'x-demo-run')?.[1]);
+    const run = body.run || query.get('run') || headerRun || currentRun();
+    const key = stateKey(run);
+    // Leer cada vez permite ver cambios de otra pestaña sin mantener una caché global entre corridas.
+    const db = load(key);
+    const write = () => save(key, db);
+    const staff = staffSession(run);
+    const me = staff && staff.name;
+    const operator = staff && staff.operator;
+    const view = r => requestView(db, r, operator);
     if (path === '/api/demo/status') {
       return json({engine: 'static', hotel: {name: HOTEL, channel_label: 'WhatsApp simulado · versión estática'}, menu: MENU,
         shift: {start: SHIFT.start, end: SHIFT.end, timezone: TZ, in_shift: inShift(''), override: null, next_opening: nextOpening()},
         privacy_url: '', ai_enabled: false, mode: 'off', model: null, max_message_chars: 400, messages_per_session: 30});
     }
-    // Corrida: en la versión estática todo vive en este navegador, así que basta con emitir una y aceptarla.
+    // La corrida también es el namespace del almacenamiento, no solo una etiqueta para la URL.
     if (path === '/api/demo/run' && method === 'POST') {
-      const bytes = new Uint8Array(12);
-      (window.crypto && window.crypto.getRandomValues ? window.crypto.getRandomValues(bytes) : bytes);
-      return json({run: `estatica-${Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').slice(0, 16)}`,
-        ttl_s: 86400}, 201);
+      activeRun = `estatica-${newId().replace(/-/g, '').slice(0, 16)}`;
+      return json({run: activeRun, ttl_s: 86400}, 201);
     }
-    if (path.startsWith('/api/demo/run/')) return json({run: decodeURIComponent(path.slice('/api/demo/run/'.length))});
+    if (path.startsWith('/api/demo/run/')) {
+      activeRun = decodeURIComponent(path.slice('/api/demo/run/'.length));
+      return json({run: activeRun});
+    }
     if (path === '/api/demo/conversation') {
       return json(snapshot(db, conversation(db, query.get('session_id'), false), +(query.get('after') || 0)));
     }
@@ -358,12 +380,16 @@
       return json({status: 'ok'});
     }
     if (path === '/api/demo/session' && method === 'POST') {
-      try { window.sessionStorage.setItem('copiloto-static-staff', (body && body.name) || 'Recepción (demo)'); } catch (_) { /* */ }
+      const identity = body.operator_key || (window.DemoShared && window.DemoShared.operatorKey())
+        || operator || newId();
+      try {
+        window.sessionStorage.setItem(staffKey(run), JSON.stringify({name: body.name || 'Recepción (demo)', operator: identity}));
+      } catch (_) { /* */ }
       return Promise.resolve(new Response(null, {status: 204}));
     }
     if (path.startsWith('/api/panel/') && !me) return json({detail: 'Sesión del panel requerida'}, 401);
     if (path === '/api/panel/requests') {
-      const items = db.requests.map(r => requestView(db, r, me))
+      const items = db.requests.map(view)
         // Mismo orden que el servidor: abiertas por espera (empate: la que llegó antes), cerradas al final.
         .sort((a, b) => order[a.status] - order[b.status]
           || (a.status === 'cerrada' ? b.id - a.id : a.commercial_at - b.commercial_at || a.id - b.id));
@@ -377,16 +403,18 @@
       if (!r) return json({detail: 'Solicitud no encontrada'}, 404);
       const conv = Object.values(db.conversations).find(c => c.id === r.conversation_id);
       const action = match[2];
-      const conflict = detail => json({detail, request: requestView(db, r, me)}, 409);
+      const conflict = detail => json({detail, request: view(r)}, 409);
       if (action === 'take') {
-        if (r.assignee && r.assignee !== me) return conflict(`Ya la tomó ${r.assignee}`);
-        if (!r.assignee) { Object.assign(r, {assignee: me, taken_at: now(), status: r.status === 'pendiente' ? 'en_atencion' : r.status}); event(db, conv, 'request_taken', {assignee: me}); }
+        if (r.status === 'cerrada') return conflict('La solicitud está cerrada');
+        if (r.assignee && !owned(r, operator)) return conflict(`Ya la tomó ${r.assignee}`);
+        if (!r.assignee) { Object.assign(r, {assignee: me, assignee_id: operator, taken_at: now(), status: r.status === 'pendiente' ? 'en_atencion' : r.status}); event(db, conv, 'request_taken', {assignee: me}); }
       } else if (action === 'reply') {
-        if (r.assignee !== me) return conflict(r.assignee ? `La atiende ${r.assignee}` : 'Toma la solicitud antes de responder');
+        if (r.status === 'cerrada') return conflict('La solicitud está cerrada');
+        if (!owned(r, operator)) return conflict(r.assignee ? `La atiende ${r.assignee}` : 'Toma la solicitud antes de responder');
         const text = String(body.body || '').trim().slice(0, 1000);
         if (!text) return json({detail: 'La respuesta debe tener entre 1 y 1000 caracteres'}, 400);
         conv.done = conv.done || [];
-        if (body.client_id && conv.done.includes(`staff:${body.client_id}`)) return json({duplicate: true, message: null, request: requestView(db, r, me)});
+        if (body.client_id && conv.done.includes(`staff:${body.client_id}`)) return json({duplicate: true, message: null, request: view(r)});
         if (body.client_id) conv.done.push(`staff:${body.client_id}`);
         const message = add(db, conv, 'staff', text, {author: me, kind: body.kind === 'ack' ? 'ack' : 'answer'});
         if (body.kind === 'ack') event(db, conv, 'human_ack', {author: me});
@@ -395,8 +423,10 @@
           r.status = 'respondida';
         }
         write();
-        return json({duplicate: false, message, request: requestView(db, r, me)});
+        return json({duplicate: false, message, request: view(r)});
       } else if (action === 'close') {
+        if (!owned(r, operator)) return conflict(r.assignee ? `La atiende ${r.assignee}` : 'Toma la solicitud antes de cerrar');
+        if (r.status === 'cerrada') return json(view(r));
         Object.assign(r, {status: 'cerrada', closed_at: now()});
         conv.step = 'start';
         conv.data = {};
@@ -415,10 +445,10 @@
           ? `PMS simulado · lectura ${result.read_at.slice(11, 16)}: ${offersText}. Preliminar: no bloquea cupos.`
           : `Disponibilidad por verificar: PMS sin lectura (${result.reason}). No informar cupos al huésped.`, {author: me});
         write();
-        return json({...result, request: requestView(db, r, me)});
+        return json({...result, request: view(r)});
       }
       write();
-      return json(requestView(db, r, me));
+      return json(view(r));
     }
     return json({detail: 'No disponible en la versión estática'}, 404);
   }
@@ -428,9 +458,6 @@
     if (!url.pathname.startsWith('/api/')) return realFetch(input, init);
     let body = {};
     try { body = init.body ? JSON.parse(init.body) : {}; } catch (_) { body = {}; }
-    return route((init.method || 'GET').toUpperCase(), url.pathname, url.searchParams, body);
+    return route((init.method || 'GET').toUpperCase(), url.pathname, url.searchParams, body, init.headers);
   };
-
-  // Sincroniza las pestañas: la bandeja de otra pestaña ve el mensaje nuevo en su próximo sondeo.
-  window.addEventListener('storage', event => { if (event.key === KEY) memory = null; });
 })();
