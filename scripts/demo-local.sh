@@ -14,6 +14,8 @@
 # servicios respondan y recién ahí imprime «listo». Si uno falla, dice cuál, muestra el final de su log y
 # detiene solo los procesos que lanzó este script. Ctrl+C detiene la demo y conserva los datos.
 set -euo pipefail
+# Heredada por tokens, SQLite (incluidos WAL/SHM), redirecciones de logs y procesos hijos.
+umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE="$ROOT/.demo-local"
@@ -92,7 +94,70 @@ if [ -n "$busy" ]; then
   exit 1
 fi
 
-mkdir -p "$STATE" "$LOGS"
+protect_windows_state() {
+  local powershell
+  powershell="$(command -v powershell.exe || true)"
+  if [ -z "$powershell" ]; then
+    echo "Error: falta Windows PowerShell (powershell.exe); no se inició ningún servicio." >&2
+    return 1
+  fi
+  # SID, no nombres localizados. No se leen archivos ni se imprimen identidades o ACL.
+  if ! DEMO_PRIVATE_STATE="$(cygpath -w "$STATE")" MSYS2_ARG_CONV_EXCL='*' \
+    "$powershell" -NoLogo -NoProfile -NonInteractive -Command '
+$ErrorActionPreference = "Stop"
+try {
+    $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    $principals = @($me.Value, "S-1-5-18", "S-1-5-32-544")
+    $items = New-Object "System.Collections.Generic.List[System.IO.FileSystemInfo]"
+    $pending = New-Object "System.Collections.Generic.Stack[string]"
+    $pending.Push($env:DEMO_PRIVATE_STATE)
+    while ($pending.Count -gt 0) {
+        $directory = New-Object System.IO.DirectoryInfo($pending.Pop())
+        if ($directory.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { throw "Enlace no permitido" }
+        $items.Add($directory)
+        foreach ($child in $directory.EnumerateFileSystemInfos()) {
+            if ($child.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { throw "Enlace no permitido" }
+            if ($child.Attributes -band [System.IO.FileAttributes]::Directory) { $pending.Push($child.FullName) }
+            else { $items.Add($child) }
+        }
+    }
+    foreach ($item in $items) {
+        $directory = $item -is [System.IO.DirectoryInfo]
+        if ($directory) {
+            $acl = New-Object System.Security.AccessControl.DirectorySecurity
+            $inheritance = [System.Security.AccessControl.InheritanceFlags] "ContainerInherit,ObjectInherit"
+        } else {
+            $acl = New-Object System.Security.AccessControl.FileSecurity
+            $inheritance = [System.Security.AccessControl.InheritanceFlags]::None
+        }
+        # DACL nueva: elimina también concesiones/denegaciones explícitas de ejecuciones anteriores.
+        $acl.SetAccessRuleProtection($true, $false)
+        $acl.SetOwner($me)
+        foreach ($principal in $principals) {
+            $sid = New-Object System.Security.Principal.SecurityIdentifier($principal)
+            $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, "FullControl", $inheritance, "None", "Allow")
+            $acl.AddAccessRule($rule)
+        }
+        if ($directory) { [System.IO.Directory]::SetAccessControl($item.FullName, $acl) }
+        else { [System.IO.File]::SetAccessControl($item.FullName, $acl) }
+    }
+    exit 0
+} catch { exit 1 }
+' >/dev/null 2>&1; then
+    echo "Error: no se pudieron proteger los permisos de .demo-local con Windows PowerShell; no se inició ningún servicio." >&2
+    return 1
+  fi
+}
+
+mkdir -p "$STATE"
+case "${OS:-}:$(uname -s)" in
+  Windows_NT:*|*:MINGW*|*:MSYS*|*:CYGWIN*) protect_windows_state ;;
+esac
+# Los directorios y archivos nuevos heredan la DACL privada de STATE en Windows.
+mkdir -p "$LOGS"
+# La umask no corrige archivos de ejecuciones anteriores. No se siguen enlaces simbólicos.
+find "$STATE" -type d -exec chmod 700 {} +
+find "$STATE" -type f -exec chmod 600 {} +
 if [ "$clean" = 1 ]; then
   for file in "$DB" "$DB-wal" "$DB-shm" "$PMS_DB" "$PMS_DB-wal" "$PMS_DB-shm"; do
     if [ -f "$file" ]; then rm -- "$file"; fi

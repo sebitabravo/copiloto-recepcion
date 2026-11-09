@@ -8,14 +8,44 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# STATIC_DEMO_OUT permite construir en un directorio temporal (pruebas) sin tocar dist/.
+# STATIC_DEMO_OUT: dist/ o un directorio externo vacío/creado por este script.
+# Una salida externa lleva un marcador; nunca se limpia un directorio ajeno ni código fuente.
 OUT="${STATIC_DEMO_OUT:-$ROOT/dist}"
 PUBLIC_SITE_URL="${PUBLIC_SITE_URL:-https://demo.example.com}"
 
-# En Windows una carpeta abierta (visor, antivirus) impide borrarla: se limpia su contenido.
-rm -rf "$OUT" 2>/dev/null || true
-mkdir -p "$OUT"
-find "$OUT" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+# Validar ANTES de crear o borrar nada. Se resuelven también alias y enlaces a fuentes.
+OUT="$(python - "$ROOT" "$OUT" <<'PY'
+import pathlib
+import shutil
+import sys
+
+# La shell y los tests reciben el mismo UTF-8/LF también con Python nativo de Windows.
+sys.stdout.reconfigure(encoding='utf-8', newline='\n')
+sys.stderr.reconfigure(encoding='utf-8', newline='\n')
+root = pathlib.Path(sys.argv[1]).resolve()
+asked = pathlib.Path(sys.argv[2])
+out = asked.resolve()
+marker = out / '.static-demo-output'
+managed = (marker.is_file() and not marker.is_symlink()
+           and marker.read_text(encoding='utf-8') == 'copiloto-static-demo-v1\n')
+unsafe = (asked.is_symlink() or out == root or out in root.parents
+          or (root in out.parents and out != root / 'dist')
+          or (out.exists() and not out.is_dir())
+          or (out != root / 'dist' and out.exists() and any(out.iterdir()) and not managed))
+if unsafe:
+    print('Error: STATIC_DEMO_OUT debe ser dist/ o una salida externa vacía o creada por este script.', file=sys.stderr)
+    sys.exit(2)
+out.mkdir(parents=True, exist_ok=True)
+# Se conserva el directorio (Windows puede tenerlo abierto); no se siguen enlaces interiores.
+for entry in out.iterdir():
+    if entry.is_symlink() or not entry.is_dir():
+        entry.unlink()
+    else:
+        shutil.rmtree(entry)
+marker.write_text('copiloto-static-demo-v1\n', encoding='utf-8')
+print(out.as_posix())
+PY
+)"
 
 # Solo lo que el sitio necesita: HTML, CSS, JS, tipografías e imágenes. Nada de pruebas ni configs.
 # config.js local (con hosts y tokens) nunca viaja: el build escribe uno propio más abajo.
