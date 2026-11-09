@@ -68,3 +68,25 @@ L17 (decisión de entrega): eligió “Un único PR (menos recomendado)”, `del
 L18 (bloqueo de T8): el verificador independiente, tras corregir el parent hash entregado por el orquestador, cubrió T1/S1 y T1/S3 en `1ba7a03` contra `fa41613dc896dd32616f3bfe999e24469c2eda98`: guardas `scripts/build-static-demo.sh:16–45`, pruebas de sentinel y fuente `scripts/test-build-static-demo.mjs:36–55`; la prueba filtrada terminó 0 con 8 aprobadas, 0 fallidas y 0 omitidas. T3 conserva la evidencia independiente de L8. ASSESS del rango comprometido no pudo materializar candidato (`nativeRisk=unassessable`, archivos sin declaración); la escalación item 1 produjo `risk=high` e indicó verificador independiente, que sí terminó. El primer START fue rechazado antes de autoridad por un `baseRef` mal copiado (`lineage_created=false`, sin mutación); `HEAD^` confirmó el parent correcto. El flujo nativo fue inspeccionado con `untrackedScope=exclude`; dos START del rango `baseRef=fa41613...`, `committedOnly=true`, respondieron `native-start-retained-selection-candidate-mismatch`, ambos sin lineage ni mutación, incluso después del inspect prescrito. Un inspect con `select` vacío fue rechazado porque `select` requiere al menos una ruta; no se eligieron archivos untracked ni se usó otro alcance. No queda una transición nativa segura para revisar ese commit aislado, por lo que no se hará otro START ni se creará el próximo commit hasta que exista una ruta soportada para ese candidato. El verificador creó `/tmp/pr13-t1-verify.fzMYWc`; se deja intacto, sin inspección ni borrado. No se publicó ni se tocó el remoto.
 
 L19 (inventario de pausa): `HEAD=1ba7a0321b89253ace87a28b05d624ace4ad15d5`; quedan 13 archivos rastreados modificados (529 inserciones, 112 eliminaciones) y tres archivos nuevos: `docs/demo-experience.md`, `landing/demo-admin.js`, `odd/tasks/pr13-hardening.md`. Son los slices T2/T4, T5, T6 y documentación/tracking, todavía sin commit. `git diff --check` pasó y no hay cambios staged. La ref de respaldo y `origin/refactor/ux-logic-cleanup` siguen en `98a14a19e1ea54b16b794f30ce303d06acf5997c`. No aparece `landing/index.html` entre los cambios; `.review/pr13/` y `dist/` se excluyeron del inventario.
+
+## Cierre (2026-11-09)
+
+L14 (T8 cerrado, árbol publicado): los cuatro slices que estaban sin commit quedaron como
+    `26a6e84` (cierre con responsable y eventos sin token), `f3c6da6` (estado por corrida en la
+    demo estática), `dadca81` (Administración como tercera perspectiva) y `00183a6` (bitácora),
+    más `chore(git)` para `.review/` y `.vercel/`. Antes de commitear se corrigieron los nueve
+    errores de `ruff` que quedaban (uno de un test, ocho de líneas inevitables en los snippets
+    PowerShell/POSIX del checker, resueltos con `# ruff: noqa: E501` a nivel de archivo).
+    Verificación: `copiloto` 486 pruebas, `pms_mock` 47, `node --test` 23 (split + estática) y
+    9 aprobados con 1 omitido en el build, `ruff` limpio en los cinco paquetes.
+    `main` quedó en fast-forward y publicado en `origin` (`4fc83aa`).
+
+L15 (publicación): el proyecto de Vercel está conectado al repo, así que cada push a `main`
+    disparaba un build del repo completo que no generaba salida y reemplazaba el despliegue bueno.
+    Se agregó `vercel.json` con `buildCommand` + `outputDirectory: dist` y se convirtió
+    `landing/privacidad.html` en archivo generado y commiteado (con marcador de URL pública),
+    porque el build de Vercel no tiene `uv` ni PyYAML: `scripts/render-privacy.py --check` y
+    `copiloto/tests/test_static_privacy.py` impiden publicarlo viejo.
+    Sitio publicado: https://copiloto-recepcion.vercel.app — `/`, `/demo`, `/privacidad`,
+    `/robots.txt`, `/sitemap.xml` y `/og-image.png` responden 200; el build sale del repositorio,
+    no de un `dist/` local.

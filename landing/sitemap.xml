@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Nginx reemplaza el marcador de URL pública al servir (PUBLIC_SITE_URL en infra/docker-compose.yml). -->
+<!-- El build reemplaza el marcador de URL pública con PUBLIC_SITE_URL (nginx en local, build estático al publicar). -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>__PUBLIC_SITE_URL__/</loc>
