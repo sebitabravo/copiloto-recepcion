@@ -1,20 +1,55 @@
 {
   "builds": [
-    {"src": "api/**/*.mjs", "use": "@vercel/node"},
-    {"src": "package.json", "use": "@vercel/static-build", "config": {"distDir": "dist"}}
+    {
+      "src": "api/**/*.mjs",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
   ],
   "routes": [
-    {"src": "/privacidad", "dest": "/privacidad.html"},
-    {"src": "/demo", "dest": "/demo.html"},
-    {"src": "/(.*)", "dest": "/$1"}
+    {
+      "src": "/api/demo/chat",
+      "dest": "/api/demo/chat.mjs"
+    },
+    {
+      "src": "/api/demo/tts",
+      "dest": "/api/demo/tts.mjs"
+    },
+    {
+      "src": "/privacidad",
+      "dest": "/privacidad.html"
+    },
+    {
+      "src": "/demo",
+      "dest": "/demo.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        {"key": "X-Content-Type-Options", "value": "nosniff"},
-        {"key": "Referrer-Policy", "value": "strict-origin-when-cross-origin"},
-        {"key": "Permissions-Policy", "value": "microphone=(self), camera=(), geolocation=()"}
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "microphone=(self), camera=(), geolocation=()"
+        }
       ]
     }
   ]
