@@ -189,9 +189,12 @@
     if (thread && 'MutationObserver' in window) {
       const observer = new MutationObserver(() => {
         if (!active) return;
-        const bubbles = thread.querySelectorAll('.chat-bubble.assistant:not(.cont) p');
+        // Se lee la última respuesta completa: las burbujas «cont» son continuación de la anterior.
+        const bubbles = thread.querySelectorAll('.chat-bubble.assistant');
         const last = bubbles[bubbles.length - 1];
-        const text = last ? last.textContent.trim() : '';
+        const text = last
+          ? [...last.querySelectorAll('p')].map(p => p.textContent.trim()).filter(Boolean).join(' ')
+          : '';
         if (!text || text === say.last) return;
         say.last = text;
         pushLine('assistant', text);
