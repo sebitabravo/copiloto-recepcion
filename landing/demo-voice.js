@@ -132,13 +132,17 @@
     active = true;
     startedAt = Date.now();
     log().replaceChildren();
+    const composer = $('guest-call-form');
+    if (composer) composer.hidden = true;
+    const keyboard = $('guest-call-keyboard');
+    if (keyboard) keyboard.textContent = 'Escribir en vez de hablar';
     panel().hidden = false;
     panel().setAttribute('aria-hidden', 'false');
     $('guest-call-toggle').setAttribute('aria-expanded', 'true');
     setState(recognitionSupported ? 'Toca el micrófono y habla' : 'Este navegador no reconoce voz: escribe abajo');
     timer = setInterval(tick, 1000);
     tick();
-    say('Hola, soy el asistente virtual del hotel. Puedo ayudarte con información y disponibilidad; una persona de recepción confirma cada reserva.');
+    say('Hola, soy el asistente virtual del hotel. ¿En qué te ayudo?');
   }
 
   function close() {
@@ -160,6 +164,15 @@
     if (!toggle) return;
     toggle.addEventListener('click', () => (active ? close() : open()));
     $('guest-call-hangup')?.addEventListener('click', close);
+    // «Escribir en vez de hablar»: el compositor aparece solo cuando hace falta, sin cargar la pantalla.
+    const keyboard = $('guest-call-keyboard');
+    const composer = $('guest-call-form');
+    keyboard?.addEventListener('click', () => {
+      const open = composer.hidden;
+      composer.hidden = !open;
+      keyboard.textContent = open ? 'Ocultar el teclado' : 'Escribir en vez de hablar';
+      if (open) $('guest-call-input')?.focus();
+    });
     $('guest-call-talk')?.addEventListener('click', () => (listening ? stopListening() : listen()));
     $('guest-call-form')?.addEventListener('submit', event => {
       event.preventDefault();
@@ -181,6 +194,7 @@
         const text = last ? last.textContent.trim() : '';
         if (!text || text === say.last) return;
         say.last = text;
+        pushLine('assistant', text);
         say(text);
       });
       observer.observe(thread, {childList: true, subtree: true});
