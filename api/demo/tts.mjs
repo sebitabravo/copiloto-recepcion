@@ -11,7 +11,8 @@ export async function speak(text, {
   key = process.env.ELEVENLABS_API_KEY,
   voice = process.env.ELEVENLABS_VOICE_ID,
   voiceEn = process.env.ELEVENLABS_VOICE_ID_EN,
-  model = process.env.ELEVENLABS_MODEL || 'eleven_flash_v2_5',
+  // Multilingual v2 es el modelo más natural en español; flash v2.5 es más rápido y algo más plano.
+  model = process.env.ELEVENLABS_MODEL || 'eleven_multilingual_v2',
   language = 'es',
   fetchImpl = fetch,
 } = {}) {
@@ -28,7 +29,8 @@ export async function speak(text, {
         method: 'POST',
         headers: {'content-type': 'application/json', 'xi-api-key': key},
         body: JSON.stringify({text: clean, model_id: model,
-          voice_settings: {stability: 0.4, similarity_boost: 0.75}}),
+          // Voz natural y estable, con refuerzo del hablante para que suene clara en el teléfono.
+          voice_settings: {stability: 0.45, similarity_boost: 0.8, style: 0.15, use_speaker_boost: true}}),
         signal: controller.signal,
       },
     );

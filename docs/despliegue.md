@@ -150,6 +150,10 @@ texto plano).
 Sin clave, `/api/demo/chat` responde 503 con el motivo y la página usa el guion estático: nunca se
 queda muda. Si el modelo falla, el shim no deja mensajes a medias y cae al guion.
 
+La voz por defecto es **Ignacio** (`NDx3GTwfaeouBvRv4NrB`), una voz chilena de ritmo pausado de la
+Voice Library, y el modelo `eleven_multilingual_v2` (el más natural en español; `eleven_flash_v2_5`
+es más rápido si importa la latencia). Se cambian con `ELEVENLABS_VOICE_ID` y `ELEVENLABS_MODEL`.
+
 La llamada de prueba usa la misma idea: `api/demo/tts.mjs` convierte el texto en audio con ElevenLabs
 (`ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID` en el proyecto) y el botón de llamada del handset
 reconoce la voz del navegador por turnos. Sin esas claves la llamada funciona con la voz del
