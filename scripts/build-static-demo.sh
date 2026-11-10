@@ -70,18 +70,14 @@ for page in out.glob('*'):
     if page.is_file() and page.suffix.lower() in {'.html', '.txt', '.xml', '.json'}:
         text = page.read_text(encoding='utf-8')
         page.write_text(text.replace('__PUBLIC_SITE_URL__', public), encoding='utf-8')
-# En estático la API es el propio sitio: mismo origen, sin CORS ni cookies.
-(out / 'config.js').write_text(
-    'window.COPILOTO_CONFIG = {\n'
-    '  chatwootUrl: "",\n'
-    '  copilotoUrl: "",\n'
-    '  pmsUrl: "",\n'
-    '  websiteToken: "",\n'
-    '  privacyUrl: "",\n'
-    '  staticDemo: true,\n'
-    '};\n', encoding='utf-8')
 PY
 
+# config.js: modo estático o backend real, según COPILOTO_URL.
+"$PYTHON_BIN" "$ROOT/scripts/write-static-config.py" "$OUT" "${COPILOTO_URL:-}"
+
+# static-demo.js intercepta /api/* en el navegador: solo tiene sentido sin backend. Con COPILOTO_URL
+# la página habla con el copiloto real por el proxy api/[...path].mjs.
+if [ -z "${COPILOTO_URL:-}" ]; then
 # static-demo.js tiene que ejecutarse antes que la interfaz (demo-shared.js) para interceptar fetch.
 "$PYTHON_BIN" - "$OUT" <<'PY'
 import pathlib, sys
@@ -93,6 +89,7 @@ for page in out.glob('*.html'):
     text = text.replace('<script src="config.js', '<script src="static-demo.js" defer></script>\n<script src="config.js', 1)
     page.write_text(text, encoding='utf-8')
 PY
+fi
 
 # Rutas limpias: /demo sirve demo.html sin backend ni reescrituras propias.
 # /demo tiene que resolver en cualquier host: copia en carpeta (sirve /demo/ sin cleanUrls),
@@ -122,3 +119,10 @@ echo "Listo: dist/ con ${FILES} archivos · URL pública: ${PUBLIC_SITE_URL}"
 echo "Publicar:  npx vercel deploy --prod dist    (o arrastra dist/ a Netlify)"
 echo "Probar:    cd dist && python -m http.server 8099   → http://localhost:8099/demo.html"
 echo "En Vercel/Netlify la ruta es /demo (cleanUrls o _redirects)"
+
+# El modo elegido se informa al final, sin desplazar el resumen del build.
+if [ -n "${COPILOTO_URL:-}" ]; then
+  echo "Backend real: ${COPILOTO_URL} vía proxy /api/* (IA y voz activas)"
+else
+  echo "Sin backend: el guion estático responde /api/* en el navegador"
+fi

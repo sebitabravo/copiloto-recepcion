@@ -15,6 +15,7 @@ function fixture(t) {
   mkdirSync(join(repo, 'scripts'), {recursive: true});
   mkdirSync(join(repo, 'landing', 'fonts'), {recursive: true});
   copyFileSync(join(root, 'scripts/build-static-demo.sh'), join(repo, 'scripts/build-static-demo.sh'));
+  copyFileSync(join(root, 'scripts/write-static-config.py'), join(repo, 'scripts/write-static-config.py'));
   // Solo assets públicos: nunca se abre el config.js local ni se copia el árbol de trabajo completo.
   for (const name of readdirSync(join(root, 'landing'))) {
     if (/\.(html|css|js|svg|png|txt|xml)$/.test(name) && name !== 'config.js') {
@@ -112,4 +113,24 @@ test('local demo permissions acceptance is isolated and installs nothing', () =>
     assert.match(result.stdout, /principales=current-user\/SYSTEM\/Administrators, acceso amplio=0/);
     assert.match(result.stdout, /PASA fallo previo a servicios: PowerShell ausente\/error ACL/);
   }
+});
+
+test('el build elige el modo: guion en el navegador o backend real por el proxy', t => {
+  const {build, work} = fixture(t);
+  const plain = join(work, 'plain');
+  successful(build(plain));
+  assert.match(readFileSync(join(plain, 'config.js'), 'utf8'), /staticDemo: true/);
+  assert.match(readFileSync(join(plain, 'demo.html'), 'utf8'), /static-demo\.js/, 'sin backend, el guion intercepta');
+
+  const proxied = join(work, 'proxied');
+  const result = spawnSync('bash', ['scripts/build-static-demo.sh'], {
+    cwd: join(work, 'repo'), encoding: 'utf8',
+    env: {...process.env, PUBLIC_SITE_URL: 'https://example.test', STATIC_DEMO_OUT: proxied,
+      COPILOTO_URL: 'https://copiloto.example.test'},
+  });
+  successful(result);
+  assert.match(readFileSync(join(proxied, 'config.js'), 'utf8'), /staticDemo: false/);
+  assert.doesNotMatch(readFileSync(join(proxied, 'demo.html'), 'utf8'), /static-demo\.js/,
+    'con backend real el guion no debe interceptar /api/*');
+  assert.match(result.stdout, /Backend real:/);
 });

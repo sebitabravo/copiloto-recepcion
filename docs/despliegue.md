@@ -133,6 +133,24 @@ La demo no necesita servidor propio para la presentación. Tres caminos, de meno
    `privacy.render` del copiloto (`scripts/render-privacy.py`), así que el texto legal tiene una sola
    fuente y `copiloto/tests/test_static_privacy.py` evita que se publique vacía o con enlaces locales.
 
+### La demo con IA real en la URL publicada
+
+La versión de Vercel es estática: no puede llamar a DeepSeek ni a ElevenLabs, porque no hay servidor
+donde guardar las claves. Para que la página publicada converse con la IA de verdad, el servicio
+`copiloto` (docker) se levanta en otro host o se expone con un túnel, y Vercel enruta `/api/*` hacia él:
+
+1. Backend accesible por HTTPS (VPS, Fly.io, Render, Railway o `cloudflared tunnel`/`ngrok` para una
+   presentación) con las claves en su `.env`: `LLM_API_KEY` (DeepSeek), `ELEVENLABS_API_KEY` y
+   `ELEVENLABS_VOICE_ID`. Comprobación: `curl https://<backend>/api/demo/status` con
+   `"ai_enabled":true` y `"tts":"elevenlabs"`.
+2. En el proyecto de Vercel, variable de entorno `COPILOTO_URL=https://<backend>` (Build & Runtime).
+3. Volver a desplegar. El build detecta la variable, escribe `staticDemo: false`, deja de inyectar
+   `static-demo.js` y `api/[...path].mjs` reenvía `/api/*` al backend en el mismo origen: sin CORS,
+   sin claves en el navegador y con las cookies del panel funcionando igual que en local.
+
+Sin `COPILOTO_URL` todo sigue como hoy: el guion estático responde desde el navegador y `/api/*`
+devuelve 503 con el motivo. El proxy también sirve en local (`vercel dev`).
+
 ## Verificación de las imágenes
 
 `make smoke` valida el compose (`docker compose config`), construye las imágenes de `copiloto` y `pms_mock` y
