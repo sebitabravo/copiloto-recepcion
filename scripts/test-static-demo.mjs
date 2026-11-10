@@ -261,3 +261,14 @@ test('lo comercial no pasa por la IA: fechas, disponibilidad y derivación sigue
   assert.equal(called, 0, 'la IA no se llama para el flujo comercial');
   assert.notEqual(response.body.mode, 'ai');
 });
+
+test('la voz no se simula: /api/demo/tts viaja a la red', async () => {
+  const shim = loadShim({
+    config: {staticDemo: true, aiChat: true, voice: true},
+    fetchImpl: async (url) => new Response(new Uint8Array([1, 2, 3]), {status: 200, headers: {'content-type': 'audio/mpeg'}}),
+  });
+  // La respuesta es audio, no JSON: el helper de pruebas no puede parsearla, pero lo que importa es
+  // que la petición haya salido hacia la función en vez de quedar simulada en el navegador.
+  await assert.rejects(() => shim.call('/api/demo/tts', {text: 'hola'}));
+  assert.ok(shim.calls.some(url => String(url).includes('/api/demo/tts')), 'sale del shim hacia la función');
+});

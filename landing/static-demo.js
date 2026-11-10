@@ -512,9 +512,14 @@
     return json({detail: 'No disponible en la versión estática'}, 404);
   }
 
+  // La voz no se simula: `/api/demo/tts` siempre viaja a la función de Vercel (ElevenLabs). Si no está
+  // configurada responde 503 y la llamada usa la voz del navegador.
+  const PASS_THROUGH = new Set(['/api/demo/tts']);
+
   window.fetch = (input, init = {}) => {
     const url = new URL(typeof input === 'string' ? input : input.url, window.location.href);
     if (!url.pathname.startsWith('/api/')) return realFetch(input, init);
+    if (PASS_THROUGH.has(url.pathname)) return realFetch(input, init);
     let body = {};
     try { body = init.body ? JSON.parse(init.body) : {}; } catch (_) { body = {}; }
     return route((init.method || 'GET').toUpperCase(), url.pathname, url.searchParams, body, init.headers);
