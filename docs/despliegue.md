@@ -150,9 +150,16 @@ texto plano).
 Sin clave, `/api/demo/chat` responde 503 con el motivo y la página usa el guion estático: nunca se
 queda muda. Si el modelo falla, el shim no deja mensajes a medias y cae al guion.
 
-La voz por defecto es **Ignacio** (`NDx3GTwfaeouBvRv4NrB`), una voz chilena de ritmo pausado de la
+La voz por defecto es **Fabián Del Villar** (`a627BaX3vmzrmqtXY78i`), una voz chilena **clonada de una
+persona real** de la cuenta del proyecto: es lo que más se parece a hablar con un humano. Alternativas de
+la misma cuenta: *Sebastián Bravo* (voz propia clonada) e *Ignacio* (`NDx3GTwfaeouBvRv4NrB`, chileno de
+ritmo pausado).
 Voice Library, y el modelo `eleven_multilingual_v2` (el más natural en español; `eleven_flash_v2_5`
 es más rápido si importa la latencia). Se cambian con `ELEVENLABS_VOICE_ID` y `ELEVENLABS_MODEL`.
+
+El chat del sitio publicado es **híbrido**: primero responden las reglas (menú, respuestas aprobadas y
+el tramo comercial de fechas y disponibilidad) y, si ninguna cubre la pregunta, responde DeepSeek con los
+datos aprobados; si el modelo no está configurado o falla, cae en la frase de dato ausente.
 
 La llamada de prueba usa la misma idea: `api/demo/tts.mjs` convierte el texto en audio con ElevenLabs
 (`ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID` en el proyecto) y el botón de llamada del handset
