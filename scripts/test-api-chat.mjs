@@ -66,3 +66,13 @@ test('el modelo se llama con la temperatura baja y el tope de tokens del copilot
   assert.equal(payload.temperature, 0.2);
   assert.ok(payload.max_tokens <= 300);
 });
+
+test('el tope por IP frena un bucle antes de gastar saldo', async () => {
+  const {allow} = await import('../api/demo/chat.mjs');
+  const now = Date.parse('2026-11-10T12:00:00Z');
+  const results = Array.from({length: 21}, () => allow('203.0.113.7', now));
+  assert.equal(results.filter(Boolean).length, 20, 'veinte pasan');
+  assert.equal(results.at(-1), false, 'la vigésima primera se rechaza');
+  assert.equal(allow('203.0.113.7', now + 61_000), true, 'al minuto siguiente vuelve a pasar');
+  assert.equal(allow('198.51.100.9', now), true, 'otra IP no se ve afectada');
+});

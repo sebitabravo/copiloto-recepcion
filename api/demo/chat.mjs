@@ -30,6 +30,25 @@ ${JSON.stringify({ubicacion: hotel.location, politicas: hotel.policies, servicio
 
 export const config = {maxDuration: 30};
 
+// La clave la paga el dueño del sitio: un tope por IP evita que un bucle o un curioso queme saldo.
+// En serverless la memoria es por instancia, así que es un freno, no una cuota garantizada.
+const WINDOW_MS = 60_000;
+const PER_WINDOW = 20;
+const hits = new Map();
+
+export function allow(ip, now = Date.now()) {
+  const key = ip || 'desconocido';
+  const recent = (hits.get(key) || []).filter(at => now - at < WINDOW_MS);
+  if (recent.length >= PER_WINDOW) {
+    hits.set(key, recent);
+    return false;
+  }
+  recent.push(now);
+  hits.set(key, recent);
+  if (hits.size > 500) hits.delete(hits.keys().next().value);
+  return true;
+}
+
 function plain(text) {
   return String(text)
     .replace(/\*\*(.+?)\*\*/g, '$1')
@@ -83,6 +102,11 @@ export async function ask(message, history, {key = process.env.LLM_API_KEY, base
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({detail: 'Método no permitido'});
+    return;
+  }
+  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress;
+  if (!allow(ip)) {
+    res.status(429).json({detail: 'Demasiadas consultas seguidas: espera un momento.'});
     return;
   }
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
