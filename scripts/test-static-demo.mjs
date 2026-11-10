@@ -299,3 +299,20 @@ test('la voz no se simula: /api/demo/tts viaja a la red', async () => {
   await assert.rejects(() => shim.call('/api/demo/tts', {text: 'hola'}));
   assert.ok(shim.calls.some(url => String(url).includes('/api/demo/tts')), 'sale del shim hacia la función');
 });
+
+test('cuando el modelo deriva, la solicitud se crea con su número', async () => {
+  const shim = loadShim({
+    config: AI_CONFIG,
+    fetchImpl: async () => new Response(JSON.stringify({
+      reply: 'Listo, Camila: aviso a recepción.',
+      stay: {checkin: '2026-11-13', checkout: '2026-11-15', adults: 2, children: 1},
+      handoff: {name: 'Camila', reason: 'consulta de fechas'},
+    }), {status: 200}),
+  });
+  await shim.call('/api/demo/chat', {session_id: 'guest', message: 'envíalo a recepción, soy Camila', shift: 'open'});
+  await shim.call('/api/demo/session', {name: 'Ana', operator_key: 'operador-estatico-0011'});
+  const requests = (await shim.call('/api/panel/requests')).body.requests;
+  assert.equal(requests.length, 1, 'la derivación del modelo crea la solicitud');
+  assert.equal(requests[0].code, 'BDL-001');
+  assert.equal(requests[0].checkin, '2026-11-13');
+});

@@ -131,3 +131,23 @@ test('una estadía imposible no se acepta', async () => {
   });
   assert.equal(result.body.stay, undefined, 'la salida antes de la llegada no se registra');
 });
+
+test('pasar a recepción pide el nombre cuando falta y devuelve la derivación', async () => {
+  let round = 0;
+  const result = await ask('envíalo a recepción, soy Camila', [], {
+    key: KEY,
+    fetchImpl: async () => {
+      round += 1;
+      if (round === 1) {
+        return new Response(JSON.stringify({choices: [{message: {tool_calls: [{
+          id: 'call-h', type: 'function',
+          function: {name: 'pasar_a_recepcion', arguments: JSON.stringify({nombre: 'Camila', motivo: 'consulta de fechas'})},
+        }]}}]}), {status: 200});
+      }
+      return new Response(JSON.stringify({choices: [{message: {content: 'Listo, Camila: aviso a recepción.'}}]}), {status: 200});
+    },
+  });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body.handoff, {name: 'Camila', reason: 'consulta de fechas'});
+  assert.match(result.body.reply, /aviso a recepción/);
+});

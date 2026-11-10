@@ -23,6 +23,9 @@ CÓMO HABLAS
   «como asistente», «no dudes en preguntar». Saluda como saludaría una persona y sigue la charla.
 - Una idea por mensaje y como máximo una pregunta por turno. No repitas lo que el huésped acaba de decir.
 - Si el huésped escribe corto, responde corto. Si cuenta algo, acompáñalo sin exagerar.
+- El huésped puede escribir como habla, con faltas de ortografía o sin tildes («piesa», «onde kedan»,
+  «cuanto sale pa dos»). Entiende la intención, responde simple y nunca lo corrijas ni le pidas que
+  escriba mejor.
 
 FECHAS
 - Hoy es ${TODAY()} en Chile. Interpreta tú las fechas naturales: «el próximo viernes», «este fin de
@@ -39,13 +42,31 @@ DATOS Y LÍMITES
 - Nunca confirmas una reserva: reúnes los datos y una persona de recepción confirma cupo y precio.
 - No des precios ni cupos: la página los muestra después de registrar la estadía.
 - No pides RUT, tarjeta, teléfono ni correo. Basta el nombre.
-- Si piden hablar con una persona, dilo y ofrece pasar la solicitud a recepción.
+- Para pasar la solicitud a recepción necesitas el nombre del huésped: si no lo tienes, pídelo antes.
+  Cuando lo tengas —o si el huésped pide hablar con una persona— llama a pasar_a_recepcion.
+- Si el huésped pulsa «Enviar a recepción» o dice que quiere enviarlo, pide el nombre si falta y llama
+  a pasar_a_recepcion en ese turno.
 - Si preguntan si eres humano o una IA, responde con honestidad que eres el asistente virtual.
 
 DATOS (fuente única, no inventes fuera de aquí)
 ${JSON.stringify({ubicacion: hotel.location, politicas: hotel.policies, servicios: hotel.faqs.map(f => f.answer)}, null, 1)}`;
 
 const TOOLS = [{
+  type: 'function',
+  function: {
+    name: 'pasar_a_recepcion',
+    description: 'Pasa la solicitud a recepción para que una persona confirme. Úsala cuando el huésped '
+      + 'quiera cerrar el trámite con una persona, pida hablar con recepción o acepte que se envíe.',
+    parameters: {
+      type: 'object',
+      properties: {
+        nombre: {type: 'string', description: 'Nombre del huésped, si ya lo dijo'},
+        motivo: {type: 'string', description: 'Motivo breve: consulta de fechas, reclamo, otro'},
+      },
+      required: [],
+    },
+  },
+}, {
   type: 'function',
   function: {
     name: 'registrar_estadia',
@@ -146,6 +167,7 @@ export async function ask(message, history, {
   try {
     const messages = buildMessages(message, history);
     let stay = null;
+    let handoff = null;
     let reply = '';
     for (let round = 0; round < 2; round += 1) {
       const {payload, error} = await callModel(messages, {key, base, model, fetchImpl, signal: controller.signal});
@@ -155,17 +177,23 @@ export async function ask(message, history, {
       if (calls.length) {
         messages.push({role: 'assistant', content: choice.content || '', tool_calls: calls});
         for (const call of calls) {
-          if (call.function?.name !== 'registrar_estadia') {
-            messages.push({role: 'tool', tool_call_id: call.id, content: JSON.stringify({ok: false, error: 'herramienta desconocida'})});
-            continue;
-          }
           let args = {};
           try { args = JSON.parse(call.function.arguments || '{}'); } catch (_) { args = {}; }
-          const normalized = normalizeStay(args);
-          stay = normalized || stay;
-          messages.push({role: 'tool', tool_call_id: call.id, content: JSON.stringify(normalized
-            ? {ok: true, ...normalized}
-            : {ok: false, error: 'fechas inválidas o en el pasado: pide de nuevo llegada y salida'})});
+          const name = call.function?.name;
+          if (name === 'registrar_estadia') {
+            const normalized = normalizeStay(args);
+            stay = normalized || stay;
+            messages.push({role: 'tool', tool_call_id: call.id, content: JSON.stringify(normalized
+              ? {ok: true, ...normalized}
+              : {ok: false, error: 'fechas inválidas o en el pasado: pide de nuevo llegada y salida'})});
+            continue;
+          }
+          if (name === 'pasar_a_recepcion') {
+            handoff = {name: String(args.nombre || '').trim().slice(0, 60), reason: String(args.motivo || '').slice(0, 80)};
+            messages.push({role: 'tool', tool_call_id: call.id, content: JSON.stringify({ok: true, pasa: 'recepción'})});
+            continue;
+          }
+          messages.push({role: 'tool', tool_call_id: call.id, content: JSON.stringify({ok: false, error: 'herramienta desconocida'})});
         }
         continue;
       }
@@ -173,7 +201,10 @@ export async function ask(message, history, {
       break;
     }
     if (!reply) return {status: 502, body: 'El modelo no devolvió texto.'};
-    return {status: 200, body: stay ? {reply, stay} : {reply}};
+    const body = {reply};
+    if (stay) body.stay = stay;
+    if (handoff) body.handoff = handoff;
+    return {status: 200, body};
   } catch (error) {
     return {status: error.name === 'AbortError' ? 504 : 502, body: `La IA no respondió a tiempo (${error.name}).`};
   } finally {

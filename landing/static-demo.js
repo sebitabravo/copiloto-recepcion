@@ -365,7 +365,7 @@
       if (!response.ok) return null;
       const data = await response.json();
       if (typeof data.reply !== 'string' || !data.reply.trim()) return null;
-      return {reply: data.reply.trim(), stay: data.stay || null};
+      return {reply: data.reply.trim(), stay: data.stay || null, handoff: data.handoff || null};
     } catch (_) {
       return null;
     }
@@ -426,6 +426,11 @@
             // La estadía que interpretó el modelo se muestra con la disponibilidad y los botones de siempre.
             Object.assign(conv.data, answer.stay);
             summary(db, conv);
+          }
+          if (answer.handoff) {
+            // El modelo pidió pasar la solicitud: la crea el flujo local, con su número y su nota.
+            if (answer.handoff.name) conv.data.name = answer.handoff.name;
+            handoff(db, conv, 'human_requested', body.shift);
           }
           write();
           const snap = snapshot(db, conv, before);
