@@ -1,9 +1,10 @@
 {
   "builds": [
-    {"src": "api/*.mjs", "use": "@vercel/node"},
+    {"src": "api/**/*.mjs", "use": "@vercel/node"},
     {"src": "package.json", "use": "@vercel/static-build", "config": {"distDir": "dist"}}
   ],
   "routes": [
+    {"src": "/api/demo/chat", "dest": "/api/demo/chat.mjs"},
     {"src": "/api/(.*)", "dest": "/api/[...path].mjs"},
     {"src": "/privacidad", "dest": "/privacidad.html"},
     {"src": "/demo", "dest": "/demo.html"},
