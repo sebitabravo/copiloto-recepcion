@@ -1,0 +1,245 @@
+{
+  "faqs": [
+    {
+      "answer": "Tenemos piscina temperada, disponible durante todo el año y incluida en tu estadía.",
+      "id": "piscina",
+      "label": "Piscina",
+      "source": "https://www.hotelbordeluz.cl/servicios",
+      "status": "verificado"
+    },
+    {
+      "answer": "Contamos con tinajas de agua caliente, para usar de día o de noche. Tienen un valor adicional que te confirma recepción.",
+      "id": "tinajas",
+      "label": "Tinajas calientes",
+      "source": "https://www.hotelbordeluz.cl/servicios",
+      "status": "verificado"
+    },
+    {
+      "answer": "Todas las habitaciones incluyen desayuno continental (buffet en temporada alta), en un comedor con vista al lago.",
+      "id": "desayuno",
+      "label": "Desayuno",
+      "source": "https://www.hotelbordeluz.cl/servicios",
+      "status": "verificado"
+    },
+    {
+      "answer": "El check-in es desde las 15:00 y el check-out hasta las 12:00. Early check-in o late check-out dependen de disponibilidad y tienen costo.",
+      "id": "checkin",
+      "label": "Horarios de check-in y check-out",
+      "source": "términos y condiciones (PDF del sitio)",
+      "status": "verificado"
+    },
+    {
+      "answer": "En temporada baja no hay penalidad si cancelas con 7 días o más; en temporada alta (15 dic - 1 mar), con 15 días o más. Después se cobran noches de penalidad. Recepción te detalla tu caso.",
+      "id": "cancelacion",
+      "label": "Cancelación",
+      "source": "términos y condiciones (PDF del sitio)",
+      "status": "verificado"
+    },
+    {
+      "answer": "Menores de 2 años se alojan gratis en cuna y menores de 6 años gratis en las camas existentes, con desayuno. Un niño mayor o adulto extra en cama adicional cuesta $25.000 por noche. Las camas adicionales se piden y las confirma el hotel.",
+      "id": "ninos",
+      "label": "Niños y camas adicionales",
+      "source": "términos y condiciones (PDF del sitio)",
+      "status": "verificado"
+    },
+    {
+      "answer": "La reserva se confirma con un abono del 50% y los datos de una tarjeta de crédito en garantía. Aceptamos American Express, Visa y Mastercard.",
+      "id": "pago",
+      "label": "Pago y garantía",
+      "source": "términos y condiciones (PDF del sitio)",
+      "status": "verificado"
+    },
+    {
+      "answer": "En temporada alta (segunda quincena de diciembre, enero, febrero y mitad de marzo) la estadía mínima es de 3 noches.",
+      "id": "estadia_minima",
+      "label": "Estadía mínima",
+      "source": "términos y condiciones (PDF del sitio)",
+      "status": "verificado"
+    },
+    {
+      "answer": "Las habitaciones cuentan con estacionamiento.",
+      "id": "estacionamiento",
+      "label": "Estacionamiento",
+      "source": "https://www.hotelbordeluz.cl/habitaciones",
+      "status": "verificado"
+    },
+    {
+      "answer": "Las habitaciones tienen WiFi, aire acondicionado y calefacción, baño privado en suite y televisor.",
+      "id": "wifi",
+      "label": "WiFi y climatización",
+      "source": "https://www.hotelbordeluz.cl/habitaciones",
+      "status": "verificado"
+    },
+    {
+      "answer": "Hoy publicamos: 3 días 2 noches para dos + 1 día de Termas Trancura ($99.500), con Termas Montevivo ($94.500) y la Escapada Romántica ($140.000, hasta el 30-dic-2026). Recepción confirma vigencia y cupos.",
+      "id": "promociones",
+      "label": "Promociones",
+      "source": "https://www.hotelbordeluz.cl/promociones",
+      "status": "verificado"
+    },
+    {
+      "answer": "Hay restaurante a pasos del hotel. Los días y horarios de atención los confirma recepción.",
+      "id": "restaurante",
+      "label": "Restaurante",
+      "source": "https://www.hotelbordeluz.cl/contacto",
+      "status": "pendiente_validar"
+    },
+    {
+      "answer": "La política de mascotas no está publicada en nuestro sitio. Recepción te confirma si es posible.",
+      "id": "mascotas",
+      "label": "Mascotas",
+      "source": "No publicado en el sitio ni en los términos",
+      "status": "pendiente_validar"
+    },
+    {
+      "answer": "El equipo de recepción responde mensajes en su horario de turno. Si escribes fuera de horario, dejamos tu consulta registrada para que la vean al comenzar.",
+      "id": "recepcion_horario",
+      "label": "Horario de recepción",
+      "source": "Conflicto: agregadores dicen recepción 24 h; entrevista E1 indica consultas nocturnas sin respuesta",
+      "status": "pendiente_validar"
+    }
+  ],
+  "location": {
+    "detail": "Quedamos entre Villarrica y Pucón (12,5 km a cada una), a pocos metros de la playa.",
+    "distances": [
+      {
+        "distance": "35 a 50 m",
+        "place": "Playa Calfuray"
+      },
+      {
+        "distance": "12,5 km",
+        "place": "Villarrica"
+      },
+      {
+        "distance": "12,5 km",
+        "place": "Pucón"
+      },
+      {
+        "distance": "1,5 km",
+        "place": "Supermercado La Sureña"
+      },
+      {
+        "distance": "33 km",
+        "place": "Caburgua"
+      },
+      {
+        "distance": "40 km",
+        "place": "Centro de Ski Pillán"
+      },
+      {
+        "distance": "50 km",
+        "place": "Base Volcán Villarrica"
+      },
+      {
+        "distance": "98 km",
+        "place": "Aeropuerto"
+      }
+    ],
+    "headline": "Estamos en el sector Molco, camino Villarrica-Pucón Km 12.5, frente a la playa Calfurray.",
+    "revisar_antes_de": "2027-06-30",
+    "source": "https://www.hotelbordeluz.cl/contacto",
+    "status": "verificado"
+  },
+  "name": "Hotel Boutique Bordeluz",
+  "policies": {
+    "cancellation_high": "Temporada alta (15 dic - 1 mar): sin penalidad con 15 días o más; 1 noche con 7 días o más; 2 noches con 2 días; 3 noches el mismo día.",
+    "cancellation_low": "Temporada baja (mar - 14 dic): sin penalidad con 7 días o más; 1 noche con 2 días; la estadía completa el mismo día.",
+    "checkin": "15:00",
+    "checkout": "12:00",
+    "children": "Menores de 2 años gratis en cuna; menores de 6 años gratis en camas existentes con desayuno; niño mayor o adulto extra en cama adicional $25.000 por noche.",
+    "deposit": "La reserva se confirma con un abono del 50% y los datos de una tarjeta de crédito en garantía.",
+    "early_checkin": "Ingresos antes de las 11:00 tienen un costo de 50% de una noche, sujeto a disponibilidad.",
+    "late_checkout": "Salidas después de las 12:00 tienen el costo de una noche, sujeto a disponibilidad.",
+    "min_stay_high": "Segunda quincena de diciembre, enero, febrero y mitad de marzo: mínimo 3 noches.",
+    "payment_cards": "American Express, Visa y Mastercard.",
+    "revisar_antes_de": "2027-06-30",
+    "source": "https://files-public-web.s3-us-west-2.amazonaws.com/24678/pos/117cc77f899be528dca9d6571de64472c9f0be20.pdf",
+    "status": "verificado"
+  },
+  "rooms": [
+    {
+      "code": "single_doble_vista_jardin",
+      "m2": 18,
+      "max_adults": 2,
+      "max_children": 0,
+      "name": "Habitación Single Doble Vista Jardín"
+    },
+    {
+      "code": "doble_terraza_vista_lago",
+      "m2": 26,
+      "max_adults": 1,
+      "max_children": 1,
+      "name": "Habitación Doble Terraza Vista Lago"
+    },
+    {
+      "code": "doble_vista_piscina",
+      "m2": 15,
+      "max_adults": 2,
+      "max_children": 1,
+      "name": "Habitación Doble Vista Piscina"
+    },
+    {
+      "code": "doble_con_jacuzzi",
+      "m2": 32,
+      "max_adults": 2,
+      "max_children": 1,
+      "name": "Habitación Doble con Jacuzzi"
+    },
+    {
+      "code": "triple_vista_interior_estacionamiento",
+      "m2": 24,
+      "max_adults": 3,
+      "max_children": 2,
+      "name": "Habitación Triple Vista Interior Estacionamiento"
+    },
+    {
+      "code": "triple_vista_parcial_lago",
+      "m2": 24,
+      "max_adults": 3,
+      "max_children": 2,
+      "name": "Habitación Triple Vista Parcial Lago"
+    },
+    {
+      "code": "triple_con_terraza_vista_al_lago",
+      "m2": 32,
+      "max_adults": 3,
+      "max_children": 2,
+      "name": "Habitación Triple con terraza Vista al Lago"
+    },
+    {
+      "code": "cuadruple_terraza_vista_al_lago",
+      "m2": 36,
+      "max_adults": 4,
+      "max_children": 3,
+      "name": "Habitación Cuádruple Terraza Vista al Lago"
+    },
+    {
+      "code": "cuadruple_vista_interior_estacionamiento",
+      "m2": 36,
+      "max_adults": 4,
+      "max_children": 3,
+      "name": "Habitación Cuádruple Vista Interior Estacionamiento"
+    },
+    {
+      "code": "cuadruple_vista_parcial_lago",
+      "m2": 36,
+      "max_adults": 4,
+      "max_children": 3,
+      "name": "Habitación Cuádruple Vista Parcial Lago"
+    },
+    {
+      "code": "triple_con_vista_estacionamiento_entrada",
+      "m2": 18,
+      "max_adults": 3,
+      "max_children": 1,
+      "name": "Habitación Triple Con Vista Estacionamiento Entrada Exterior"
+    },
+    {
+      "code": "doble_sin_vista",
+      "m2": 12,
+      "max_adults": 2,
+      "max_children": 1,
+      "name": "Habitación Doble Sin Vista"
+    }
+  ]
+}

@@ -21,10 +21,10 @@ function memoryStorage() {
 }
 
 // Carga el shim con almacenamiento en memoria y un fetch real espía: nada debe llegar a él.
-function loadShim({localStorage = memoryStorage(), sessionStorage = memoryStorage(), run = 'corrida-estatica-0001'} = {}) {
+function loadShim({localStorage = memoryStorage(), sessionStorage = memoryStorage(), run = 'corrida-estatica-0001', config, fetchImpl} = {}) {
   const calls = [];
-  const realFetch = (...args) => { calls.push(String(args[0])); return Promise.resolve(new Response('{}')); };
-  const window = {fetch: realFetch, localStorage, sessionStorage,
+  const realFetch = fetchImpl ? (...args) => fetchImpl(...args, calls) : (...args) => { calls.push(String(args[0])); return Promise.resolve(new Response('{}')); };
+  const window = {fetch: realFetch, localStorage, sessionStorage, COPILOTO_CONFIG: config || {},
     location: {href: `https://demo.example.test/demo${run ? `?corrida=${run}` : ''}`}, addEventListener() {}};
   class Clock extends Date { static now() { return Date.parse('2026-08-01T15:00:00Z'); } }
   vm.runInNewContext(shim, {window, Response, URL, JSON, Date: Clock, Intl, Math, String, Number, Object, RegExp, console});
@@ -218,4 +218,46 @@ test('pedir hablar con recepción sí deriva y deja la solicitud con su número'
   assert.equal(requests.length, 1);
   assert.equal(requests[0].code, 'BDL-001');
   assert.equal(requests[0].reason_label, 'Pidió hablar con recepción');
+});
+
+// --- Con IA configurada, la respuesta conversacional la da la función de Vercel -------------------
+const AI_CONFIG = {staticDemo: true, aiChat: true};
+
+test('con aiChat la charla la responde el modelo y queda en el hilo', async () => {
+  const shim = loadShim({
+    config: AI_CONFIG,
+    fetchImpl: async () => new Response(JSON.stringify({reply: 'Hola, soy el asistente del hotel. ¿En qué te ayudo?'}), {status: 200}),
+  });
+  const response = await shim.call('/api/demo/chat', {session_id: 'guest', message: 'buenas tardes', shift: 'open'});
+  assert.equal(response.status, 200);
+  assert.equal(response.body.mode, 'ai');
+  assert.match(response.body.reply, /asistente del hotel/);
+  const conversation = (await shim.call('/api/demo/conversation?session_id=guest')).body;
+  assert.equal(conversation.messages.at(-1).body, 'Hola, soy el asistente del hotel. ¿En qué te ayudo?');
+});
+
+test('si la IA no responde, sigue el guion sin dejar mensajes a medias', async () => {
+  const shim = loadShim({
+    config: AI_CONFIG,
+    fetchImpl: async () => new Response('{"detail":"sin ia"}', {status: 503}),
+  });
+  const response = await shim.call('/api/demo/chat', {session_id: 'guest', message: 'buenas tardes', shift: 'open'});
+  assert.equal(response.body.mode, 'guided');
+  const conversation = (await shim.call('/api/demo/conversation?session_id=guest')).body;
+  const guests = conversation.messages.filter(message => message.role === 'guest');
+  assert.equal(guests.length, 1, 'un solo turno del huésped, sin duplicados');
+  const answers = conversation.messages.filter(message => message.role === 'assistant');
+  assert.ok(answers.length >= 1, 'el guion responde');
+  assert.match(answers.at(-1).body, /hola, bienvenido/i, 'y la última respuesta es la del guion');
+});
+
+test('lo comercial no pasa por la IA: fechas, disponibilidad y derivación siguen locales', async () => {
+  let called = 0;
+  const shim = loadShim({
+    config: AI_CONFIG,
+    fetchImpl: async () => { called += 1; return new Response(JSON.stringify({reply: 'no debería usarse'}), {status: 200}); },
+  });
+  const response = await shim.call('/api/demo/chat', {session_id: 'guest', message: 'quiero reservar del 12 al 14 de noviembre', shift: 'open'});
+  assert.equal(called, 0, 'la IA no se llama para el flujo comercial');
+  assert.notEqual(response.body.mode, 'ai');
 });

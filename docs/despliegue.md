@@ -151,6 +151,25 @@ donde guardar las claves. Para que la página publicada converse con la IA de ve
 Sin `COPILOTO_URL` todo sigue como hoy: el guion estático responde desde el navegador y `/api/*`
 devuelve 503 con el motivo. El proxy también sirve en local (`vercel dev`).
 
+### La IA del chat en la misma URL publicada (función de Vercel)
+
+`api/demo/chat.mjs` es el asistente del sitio publicado: una función serverless que llama a DeepSeek
+con los hechos aprobados del hotel (`api/_hotel.json`, generado desde `data/hotel.yaml`) y las mismas
+reglas del copiloto (primera persona, no inventa datos, no confirma reservas, una pregunta por turno,
+texto plano).
+
+1. En el proyecto de Vercel, variable `LLM_API_KEY` con tu clave de DeepSeek. Opcional:
+   `LLM_MODEL` (por defecto `deepseek-chat`) y `LLM_BASE_URL`.
+2. Volver a desplegar. El build escribe `aiChat: true` en `config.js` cuando encuentra la clave.
+3. Con `aiChat`, el chat del huésped pide la respuesta a la función y el resto del flujo —fechas,
+   disponibilidad, propuesta, bandeja y cronómetro— sigue siendo determinista y local.
+
+Sin clave, `/api/demo/chat` responde 503 con el motivo y la página usa el guion estático: nunca se
+queda muda. Si el modelo falla, el shim no deja mensajes a medias y cae al guion.
+
+Alcance: la función atiende la conversación. La voz de ElevenLabs sigue viviendo en el servicio
+`copiloto` (`POST /api/demo/voice`), porque la demo publicada todavía no tiene pantalla de llamada.
+
 ## Verificación de las imágenes
 
 `make smoke` valida el compose (`docker compose config`), construye las imágenes de `copiloto` y `pms_mock` y

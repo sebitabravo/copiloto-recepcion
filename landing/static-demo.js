@@ -66,6 +66,10 @@
   ];
   const LABELS = {pendiente: 'Pendiente de recepción', en_atencion: 'En atención', respondida: 'Respondida', cerrada: 'Cerrada'};
   const REASONS = {commercial: 'Consulta de fechas', human_requested: 'Pidió hablar con recepción'};
+  // Con `aiChat` (lo escribe el build cuando hay LLM_API_KEY) la respuesta conversacional la da
+  // la función de Vercel; el resto del flujo sigue siendo determinista y local.
+  const SITE = window.COPILOTO_CONFIG || {};
+  const AI_CHAT = SITE.aiChat === true;
   const realFetch = window.fetch.bind(window);
   window.__STATIC_DEMO__ = {get key() { return stateKey(currentRun()); }};
 
@@ -336,7 +340,32 @@
   };
   const order = {pendiente: 0, en_atencion: 1, respondida: 2, cerrada: 3};
 
-  function route(method, path, query, body, headers) {
+  // El guion local manda en lo comercial (fechas, disponibilidad, propuesta, derivación): ahí la IA
+  // no debe improvisar. Para el resto (saludo, FAQ, charla) responde el modelo.
+  const COMMERCIAL = /consultar fechas|reserv|disponib|fechas|recepcion|persona real|habitaci|precio|tarifa|\d/;
+  function handledLocally(conv, text) {
+    const plain = norm(text);
+    if (conv.step !== 'start' && conv.step !== 'menu' && conv.step !== 'idle') return true;
+    return COMMERCIAL.test(plain);
+  }
+
+  async function aiReply(conv, text) {
+    const history = conv.messages.slice(-8).map(m => ({role: m.role === 'guest' ? 'guest' : 'assistant', text: m.body}));
+    try {
+      const response = await realFetch('/api/demo/chat', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({message: text, history}),
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return typeof data.reply === 'string' && data.reply.trim() ? data.reply.trim() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function route(method, path, query, body, headers) {
     const headerRun = headers && (typeof headers.get === 'function' ? headers.get('X-Demo-Run')
       : Object.entries(headers).find(([name]) => name.toLowerCase() === 'x-demo-run')?.[1]);
     const run = body.run || query.get('run') || headerRun || currentRun();
@@ -367,6 +396,21 @@
     }
     if (path === '/api/demo/chat' && method === 'POST') {
       const conv = conversation(db, body.session_id, true);
+      const firstText = String(body.message || '').slice(0, 400);
+      if (AI_CHAT && !handledLocally(conv, body.message) && !openRequest(db, conv)) {
+        // Camino con IA: primero se pide la respuesta y, si llega, se guardan ambos turnos de una vez.
+        // Si el modelo no responde, no queda nada escrito y sigue el guion de siempre.
+        const answer = await aiReply(conv, firstText);
+        if (answer) {
+          const before = db.seq.msg;
+          add(db, conv, 'guest', firstText);
+          add(db, conv, 'assistant', answer, {options: MENU});
+          write();
+          const snap = snapshot(db, conv, before);
+          return json({...snap, reply: answer, mode: 'ai', events: [{type: 'ai'}], duplicate: false,
+            usage: {messages_left: null}});
+        }
+      }
       conv.done = conv.done || [];
       if (body.client_message_id && conv.done.includes(body.client_message_id)) {
         return json({...snapshot(db, conv), reply: '', mode: 'duplicate', events: [], duplicate: true});
