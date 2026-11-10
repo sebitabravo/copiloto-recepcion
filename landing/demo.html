@@ -98,6 +98,11 @@
             <strong id="guest-hotel">Hotel Boutique Bordeluz</strong>
             <span class="wa-status"><i class="online" aria-hidden="true"></i><span id="guest-channel">WhatsApp simulado</span> · copiloto en línea</span>
           </div>
+          <button id="guest-call-toggle" class="wa-call" type="button" aria-label="Llamar al copiloto"
+                  aria-controls="guest-call" aria-expanded="false" hidden>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.7 2z"/></svg>
+          </button>
           <span class="wa-menu" aria-hidden="true">⋮</span>
         </header>
         <p id="guest-request" class="guest-request" role="status" aria-live="polite" hidden></p>
@@ -112,6 +117,27 @@
           <button type="button" data-say="Preguntas frecuentes">Preguntas frecuentes</button>
           <button type="button" data-say="Hablar con recepción">Hablar con recepción</button>
         </div>
+        <section id="guest-call" class="call-panel" aria-label="Llamada de prueba" aria-hidden="true" hidden>
+          <header class="call-head">
+            <span class="call-avatar" aria-hidden="true">B</span>
+            <div>
+              <strong>Copiloto de recepción</strong>
+              <span class="call-meta"><span id="call-state" role="status" aria-live="polite"></span></span>
+            </div>
+            <span id="call-clock" class="call-clock" aria-label="Duración">00:00</span>
+          </header>
+          <div id="call-log" class="call-log" role="log" aria-live="polite" aria-label="Transcripción de la llamada"></div>
+          <form id="guest-call-form" class="call-composer">
+            <label class="sr-only" for="guest-call-input">Responde por escrito</label>
+            <input id="guest-call-input" type="text" maxlength="400" autocomplete="off" placeholder="Escribe y el asistente te responde en voz">
+            <button type="submit" class="send" aria-label="Enviar en la llamada">Enviar</button>
+          </form>
+          <div class="call-controls">
+            <button id="guest-call-talk" class="call-mic" type="button" aria-label="Hablar">Tocar para hablar</button>
+            <button id="guest-call-hangup" class="call-hangup" type="button" aria-label="Colgar">Colgar</button>
+          </div>
+          <p class="call-note">El navegador envía tu voz a su servicio de reconocimiento. No guardamos audio.</p>
+        </section>
         <form id="guest-form" class="chat-composer">
           <label class="sr-only" for="guest-input">Mensaje para el hotel</label>
           <span class="composer-icon" aria-hidden="true">☺</span>
@@ -241,6 +267,7 @@
 <script src="config.js?v=20261108c" defer></script>
 <script src="demo-shared.js?v=20261109-admin" defer></script>
 <script src="demo-guest.js?v=20261108c" defer></script>
+<script src="demo-voice.js?v=20261110-voice" defer></script>
 <script src="demo-inbox.js?v=20261108c" defer></script>
 <script src="demo-admin.js?v=20261109-admin" defer></script>
 <script src="demo-page.js?v=20261109-admin" defer></script>

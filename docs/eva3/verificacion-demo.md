@@ -87,7 +87,7 @@ Playwright comprobó el panel en escritorio y móvil (390×844), con contenido d
 - `make up` / `make up-full` con Docker (el entorno no tiene daemon: `docker info` falla) y la bandeja real de
   **Chatwoot**. El perfil liviano se verificó arrancando el copiloto con el entorno exacto de compose.
 - Modo con IA (`DEMO_AI=1`): sin `LLM_API_KEY`. Sus pruebas con modelo guionado siguen en verde.
-- Voz y micrófono: la nueva `/demo` no expone la llamada; los endpoints `/api/demo/voice*` siguen con sus pruebas.
+- Voz y micrófono: `/demo` tiene llamada de prueba (`guest-call-toggle`), usa la voz del navegador y, con `ELEVENLABS_*` configurado, `api/demo/tts` o `/api/demo/voice*` según dónde corra.
 - Confirmar la reserva en el PMS desde la bandeja de la demo: el panel del PMS no enlaza conversaciones de demo
   (ids negativos). Fase siguiente si se quiere mostrar en vivo.
 

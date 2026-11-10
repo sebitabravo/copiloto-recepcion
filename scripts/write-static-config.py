@@ -1,34 +1,34 @@
 """Escribe el config.js del sitio publicado.
 
-Tres cosas se deciden aquí, según el entorno del build (las variables del proyecto de Vercel):
+Dos cosas se deciden con el entorno del build (las variables del proyecto de Vercel):
 
-- `staticDemo`: `true` cuando no hay backend y las respuestas las simula `static-demo.js` en el
-  navegador; `false` cuando `COPILOTO_URL` está definido y todo `/api/*` viaja al copiloto real.
-- `aiChat`: `true` si hay `LLM_API_KEY`, así el chat pide sus respuestas a la función `api/demo/chat`
-  (DeepSeek) en vez de usar el guion.
-La voz de ElevenLabs no se decide aquí: el frontend de /demo hoy no tiene pantalla de llamada, así
-que su función (`/api/demo/voice`) vive en el backend completo, no en el sitio estático.
+- `aiChat`: hay `LLM_API_KEY`, así el chat pide sus respuestas a la función `api/demo/chat` (DeepSeek)
+  en vez de usar el guion del navegador.
+- `voice`: hay `ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID`, así la llamada usa `api/demo/tts`
+  (ElevenLabs) en vez de la voz del navegador.
 
-Uso: write-static-config.py <salida> [url-del-backend]
+`staticDemo` queda siempre en `true`: la página no necesita backend propio, el estado de la demo
+(conversación, bandeja, cronómetro) vive en el navegador y solo la conversación viaja a la función.
+
+Uso: write-static-config.py <salida>
 """
 import os
 import pathlib
 import sys
 
 
-def ai_chat_enabled() -> bool:
-    """La IA del chat se activa con la clave del modelo en el entorno del build."""
-    return bool(os.environ.get("LLM_API_KEY", "").strip())
+def truth(value: bool) -> str:
+    return "true" if value else "false"
 
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("Uso: write-static-config.py <salida> [url-del-backend]", file=sys.stderr)
+        print("Uso: write-static-config.py <salida>", file=sys.stderr)
         return 2
     out = pathlib.Path(sys.argv[1])
-    backend = (sys.argv[2] if len(sys.argv) > 2 else "").strip()
-    chat = ai_chat_enabled()
-    truth = lambda value: "true" if value else "false"  # noqa: E731
+    chat = bool(os.environ.get("LLM_API_KEY", "").strip())
+    voice = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip()
+                 and os.environ.get("ELEVENLABS_VOICE_ID", "").strip())
     config = "".join([
         "window.COPILOTO_CONFIG = {\n",
         '  chatwootUrl: "",\n',
@@ -36,8 +36,9 @@ def main() -> int:
         '  pmsUrl: "",\n',
         '  websiteToken: "",\n',
         '  privacyUrl: "",\n',
-        f"  staticDemo: {truth(not backend)},\n",
+        "  staticDemo: true,\n",
         f"  aiChat: {truth(chat)},\n",
+        f"  voice: {truth(voice)},\n",
         "};\n",
     ])
     (out / "config.js").write_text(config, encoding="utf-8", newline=chr(10))

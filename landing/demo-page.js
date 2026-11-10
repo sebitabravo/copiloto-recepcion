@@ -77,6 +77,7 @@
     if ((view === 'ambas' || view === 'huesped') && !started.huesped) {
       started.huesped = true;
       window.DemoGuest.init({status, shift: shiftScenario});
+      window.DemoVoice?.init();
     }
     if ((view === 'ambas' || view === 'recepcion') && !started.recepcion) {
       started.recepcion = true;

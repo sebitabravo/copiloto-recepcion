@@ -72,13 +72,11 @@ for page in out.glob('*'):
         page.write_text(text.replace('__PUBLIC_SITE_URL__', public), encoding='utf-8')
 PY
 
-# config.js: modo estático o backend real, según COPILOTO_URL.
-"$PYTHON_BIN" "$ROOT/scripts/write-static-config.py" "$OUT" "${COPILOTO_URL:-}"
+# config.js: si el proyecto tiene claves, el chat y la llamada usan las funciones de Vercel.
+"$PYTHON_BIN" "$ROOT/scripts/write-static-config.py" "$OUT"
 
-# static-demo.js intercepta /api/* en el navegador: solo tiene sentido sin backend. Con COPILOTO_URL
-# la página habla con el copiloto real por el proxy api/[...path].mjs.
-if [ -z "${COPILOTO_URL:-}" ]; then
 # static-demo.js tiene que ejecutarse antes que la interfaz (demo-shared.js) para interceptar fetch.
+# El estado de la demo vive en el navegador; solo la conversación viaja a /api/demo/chat.
 "$PYTHON_BIN" - "$OUT" <<'PY'
 import pathlib, sys
 out = pathlib.Path(sys.argv[1])
@@ -89,6 +87,11 @@ for page in out.glob('*.html'):
     text = text.replace('<script src="config.js', '<script src="static-demo.js" defer></script>\n<script src="config.js', 1)
     page.write_text(text, encoding='utf-8')
 PY
+
+# La página de privacidad usa los tokens del sistema de diseño: sin este archivo llegaría sin estilos.
+if [ -f "$ROOT/copiloto/src/copiloto/static/theme.css" ]; then
+  mkdir -p "$OUT/static"
+  cp "$ROOT/copiloto/src/copiloto/static/theme.css" "$OUT/static/theme.css"
 fi
 
 # Rutas limpias: /demo sirve demo.html sin backend ni reescrituras propias.
@@ -120,9 +123,14 @@ echo "Publicar:  npx vercel deploy --prod dist    (o arrastra dist/ a Netlify)"
 echo "Probar:    cd dist && python -m http.server 8099   → http://localhost:8099/demo.html"
 echo "En Vercel/Netlify la ruta es /demo (cleanUrls o _redirects)"
 
-# El modo elegido se informa al final, sin desplazar el resumen del build.
-if [ -n "${COPILOTO_URL:-}" ]; then
-  echo "Backend real: ${COPILOTO_URL} vía proxy /api/* (IA y voz activas)"
+# Con qué responde la demo: funciones de Vercel si hay claves en el proyecto, guion si no.
+if grep -q "aiChat: true" "$OUT/config.js"; then
+  echo "IA activa: el chat responde con DeepSeek (api/demo/chat)"
 else
-  echo "Sin backend: el guion estático responde /api/* en el navegador"
+  echo "Sin clave de IA: el guion del navegador responde /api/*"
+fi
+if grep -q "voice: true" "$OUT/config.js"; then
+  echo "Voz activa: la llamada usa ElevenLabs (api/demo/tts)"
+else
+  echo "Sin voz configurada: la llamada usa la voz del navegador"
 fi

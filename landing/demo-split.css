@@ -682,3 +682,50 @@
   .case-messages { max-height: 60vh; }
   .facts { display: block; }
 }
+
+/* ---- Llamada de prueba dentro del handset: mismos tokens que el resto de la demo ---- */
+.wa-call {
+  display: inline-flex; align-items: center; justify-content: center; margin-left: auto;
+  min-width: 36px; min-height: 36px; padding: 0 6px; border: 0; border-radius: 999px;
+  background: rgb(0 0 0 / 4%); color: var(--wa-link); cursor: pointer;
+}
+.wa-call:hover { background: rgb(0 0 0 / 8%); }
+.wa-call:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.call-panel {
+  display: grid; gap: 12px; padding: 16px 14px; background: var(--ink); color: var(--card);
+  border-bottom: 1px solid var(--line-soft);
+}
+.call-panel[hidden] { display: none; }
+.call-head { display: flex; align-items: center; gap: 10px; }
+.call-avatar {
+  display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px;
+  background: var(--wa-link); color: var(--card); font-weight: 700;
+}
+.call-head strong { display: block; font-size: 15px; }
+.call-meta { display: block; font-size: 12px; color: var(--line); min-height: 16px; }
+.call-meta [data-tone="live"] { color: var(--wa-out); }
+.call-clock { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--line); }
+
+.call-log { display: grid; gap: 6px; max-height: 180px; overflow-y: auto; font-size: 13px; line-height: 1.4; }
+.call-line { margin: 0; padding: 8px 10px; border-radius: 12px; max-width: 92%; }
+.call-line.assistant { background: rgb(255 255 255 / 10%); border-top-left-radius: 4px; }
+.call-line.guest { background: var(--wa-out); color: var(--wa-ink); justify-self: end; border-top-right-radius: 4px; }
+
+.call-composer { display: flex; gap: 8px; }
+.call-composer input {
+  flex: 1; min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid rgb(255 255 255 / 20%);
+  background: rgb(255 255 255 / 8%); color: var(--card); font: inherit; font-size: 13px;
+}
+.call-composer input::placeholder { color: var(--line); }
+.call-composer .send {
+  min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px;
+  background: var(--wa-link); color: var(--card); font: inherit; font-size: 13px; cursor: pointer;
+}
+.call-controls { display: flex; gap: 10px; }
+.call-mic, .call-hangup {
+  flex: 1; min-height: 44px; border: 0; border-radius: 999px; font: inherit; font-size: 13px; cursor: pointer;
+}
+.call-mic { background: var(--wa-out); color: var(--wa-ink); }
+.call-hangup { background: var(--error); color: var(--card); }
+.call-note { margin: 0; font-size: 11px; color: var(--line); }

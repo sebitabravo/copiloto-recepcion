@@ -115,22 +115,26 @@ test('local demo permissions acceptance is isolated and installs nothing', () =>
   }
 });
 
-test('el build elige el modo: guion en el navegador o backend real por el proxy', t => {
-  const {build, work} = fixture(t);
-  const plain = join(work, 'plain');
-  successful(build(plain));
-  assert.match(readFileSync(join(plain, 'config.js'), 'utf8'), /staticDemo: true/);
-  assert.match(readFileSync(join(plain, 'demo.html'), 'utf8'), /static-demo\.js/, 'sin backend, el guion intercepta');
 
-  const proxied = join(work, 'proxied');
+
+test('el build decide la IA y la voz por las claves del entorno', t => {
+  const {build, work, repo} = fixture(t);
+  const plain = join(work, 'sin-claves');
+  successful(build(plain));
+  assert.match(readFileSync(join(plain, 'config.js'), 'utf8'), /aiChat: false/);
+  assert.match(readFileSync(join(plain, 'config.js'), 'utf8'), /voice: false/);
+  assert.match(readFileSync(join(plain, 'demo.html'), 'utf8'), /static-demo\.js/);
+
+  const withKeys = join(work, 'con-claves');
   const result = spawnSync('bash', ['scripts/build-static-demo.sh'], {
-    cwd: join(work, 'repo'), encoding: 'utf8',
-    env: {...process.env, PUBLIC_SITE_URL: 'https://example.test', STATIC_DEMO_OUT: proxied,
-      COPILOTO_URL: 'https://copiloto.example.test'},
+    cwd: repo, encoding: 'utf8',
+    env: {...process.env, PUBLIC_SITE_URL: 'https://example.test', STATIC_DEMO_OUT: withKeys,
+      LLM_API_KEY: 'sk-prueba', ELEVENLABS_API_KEY: 'el-prueba', ELEVENLABS_VOICE_ID: 'voz-prueba'},
   });
   successful(result);
-  assert.match(readFileSync(join(proxied, 'config.js'), 'utf8'), /staticDemo: false/);
-  assert.doesNotMatch(readFileSync(join(proxied, 'demo.html'), 'utf8'), /static-demo\.js/,
-    'con backend real el guion no debe interceptar /api/*');
-  assert.match(result.stdout, /Backend real:/);
+  const config = readFileSync(join(withKeys, 'config.js'), 'utf8');
+  assert.match(config, /aiChat: true/);
+  assert.match(config, /voice: true/);
+  assert.match(result.stdout, /IA activa/);
+  assert.match(result.stdout, /Voz activa/);
 });

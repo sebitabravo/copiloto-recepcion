@@ -1,5 +1,5 @@
 /* Chrome de la landing de marketing (/): revelado de secciones, barra fija y progreso de lectura.
-   El simulador vive en /demo y sigue cargando demo.js + voice.js; esta página no los necesita.
+   El simulador vive en /demo (demo-guest, demo-inbox, demo-admin, demo-voice); esta página no los necesita.
    Sin dependencias: usa solo lo que ya estaba en la página. */
 (() => {
   'use strict';

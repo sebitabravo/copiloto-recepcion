@@ -108,10 +108,11 @@ La demo no necesita servidor propio para la presentación. Tres caminos, de meno
    procedimiento es el mismo (`ngrok http 8080`). La URL cambia en cada arranque gratuito.
    Límite: la pestaña Administración embebe el PMS en `http://localhost:8200`, que no existe para la
    audiencia remota; para mostrarla completa hay que presentar en local.
-3. **Portfolio público, sin servidor.** `make static-demo` genera `dist/`: la landing y `/demo` con
-   `static-demo.js`, que responde `/api/*` desde el navegador con guiones preparados. No hay backend, IA,
-   PMS ni Chatwoot: la propia interfaz lo declara («Flujo guiado · sin IA», «Datos ficticios, sin
-   reservas reales») y la sección «Conexiones en vivo» se retira por no poder comprobarse. Se publica gratis:
+3. **Portfolio público, sin servidor propio.** `make static-demo` genera `dist/`: la landing y `/demo`
+   con `static-demo.js`, que mantiene el estado de la demo en el navegador (conversación, bandeja,
+   cronómetro). El chat y la llamada pueden usar IA real —DeepSeek y ElevenLabs— a través de las
+   funciones de Vercel, con las claves como variables del proyecto; sin claves, la página responde con
+   los guiones y la voz del navegador, y lo declara. No hay PMS ni Chatwoot. Se publica gratis:
    ```sh
    PUBLIC_SITE_URL=https://copiloto-recepcion.vercel.app ./scripts/build-static-demo.sh
    npx vercel deploy --prod dist
@@ -133,24 +134,6 @@ La demo no necesita servidor propio para la presentación. Tres caminos, de meno
    `privacy.render` del copiloto (`scripts/render-privacy.py`), así que el texto legal tiene una sola
    fuente y `copiloto/tests/test_static_privacy.py` evita que se publique vacía o con enlaces locales.
 
-### La demo con IA real en la URL publicada
-
-La versión de Vercel es estática: no puede llamar a DeepSeek ni a ElevenLabs, porque no hay servidor
-donde guardar las claves. Para que la página publicada converse con la IA de verdad, el servicio
-`copiloto` (docker) se levanta en otro host o se expone con un túnel, y Vercel enruta `/api/*` hacia él:
-
-1. Backend accesible por HTTPS (VPS, Fly.io, Render, Railway o `cloudflared tunnel`/`ngrok` para una
-   presentación) con las claves en su `.env`: `LLM_API_KEY` (DeepSeek), `ELEVENLABS_API_KEY` y
-   `ELEVENLABS_VOICE_ID`. Comprobación: `curl https://<backend>/api/demo/status` con
-   `"ai_enabled":true` y `"tts":"elevenlabs"`.
-2. En el proyecto de Vercel, variable de entorno `COPILOTO_URL=https://<backend>` (Build & Runtime).
-3. Volver a desplegar. El build detecta la variable, escribe `staticDemo: false`, deja de inyectar
-   `static-demo.js` y `api/[...path].mjs` reenvía `/api/*` al backend en el mismo origen: sin CORS,
-   sin claves en el navegador y con las cookies del panel funcionando igual que en local.
-
-Sin `COPILOTO_URL` todo sigue como hoy: el guion estático responde desde el navegador y `/api/*`
-devuelve 503 con el motivo. El proxy también sirve en local (`vercel dev`).
-
 ### La IA del chat en la misma URL publicada (función de Vercel)
 
 `api/demo/chat.mjs` es el asistente del sitio publicado: una función serverless que llama a DeepSeek
@@ -167,8 +150,11 @@ texto plano).
 Sin clave, `/api/demo/chat` responde 503 con el motivo y la página usa el guion estático: nunca se
 queda muda. Si el modelo falla, el shim no deja mensajes a medias y cae al guion.
 
-Alcance: la función atiende la conversación. La voz de ElevenLabs sigue viviendo en el servicio
-`copiloto` (`POST /api/demo/voice`), porque la demo publicada todavía no tiene pantalla de llamada.
+La llamada de prueba usa la misma idea: `api/demo/tts.mjs` convierte el texto en audio con ElevenLabs
+(`ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID` en el proyecto) y el botón de llamada del handset
+reconoce la voz del navegador por turnos. Sin esas claves la llamada funciona con la voz del
+navegador y no cuesta nada. El servicio `copiloto` conserva `POST /api/demo/voice` para la demo
+completa con backend.
 
 ## Verificación de las imágenes
 
