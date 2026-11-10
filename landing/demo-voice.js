@@ -176,7 +176,7 @@
     if (thread && 'MutationObserver' in window) {
       const observer = new MutationObserver(() => {
         if (!active) return;
-        const bubbles = thread.querySelectorAll('.bubble.assistant .bubble-text, .bubble.assistant p');
+        const bubbles = thread.querySelectorAll('.chat-bubble.assistant:not(.cont) p');
         const last = bubbles[bubbles.length - 1];
         const text = last ? last.textContent.trim() : '';
         if (!text || text === say.last) return;
