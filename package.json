@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "scripts": {
+    "vercel-build": "PUBLIC_SITE_URL=\"https://${VERCEL_PROJECT_PRODUCTION_URL}\" bash scripts/build-static-demo.sh"
+  }
+}

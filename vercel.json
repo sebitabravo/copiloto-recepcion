@@ -1,8 +1,14 @@
 {
-  "buildCommand": "PUBLIC_SITE_URL=\"https://${VERCEL_PROJECT_PRODUCTION_URL}\" bash scripts/build-static-demo.sh",
-  "outputDirectory": "dist",
-  "cleanUrls": true,
-  "trailingSlash": false,
+  "builds": [
+    {"src": "api/*.mjs", "use": "@vercel/node"},
+    {"src": "package.json", "use": "@vercel/static-build", "config": {"distDir": "dist"}}
+  ],
+  "routes": [
+    {"src": "/api/(.*)", "dest": "/api/[...path].mjs"},
+    {"src": "/privacidad", "dest": "/privacidad.html"},
+    {"src": "/demo", "dest": "/demo.html"},
+    {"src": "/(.*)", "dest": "/$1"}
+  ],
   "headers": [
     {
       "source": "/(.*)",
