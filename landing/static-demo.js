@@ -66,10 +66,10 @@
   ];
   const LABELS = {pendiente: 'Pendiente de recepción', en_atencion: 'En atención', respondida: 'Respondida', cerrada: 'Cerrada'};
   const REASONS = {commercial: 'Consulta de fechas', human_requested: 'Pidió hablar con recepción'};
-  // Con `aiChat` (lo escribe el build cuando hay LLM_API_KEY) la respuesta conversacional la da
-  // la función de Vercel; el resto del flujo sigue siendo determinista y local.
-  const SITE = window.COPILOTO_CONFIG || {};
-  const AI_CHAT = SITE.aiChat === true;
+  // Con `aiChat` (lo escribe el build cuando hay LLM_API_KEY) la respuesta conversacional la da la
+  // función de Vercel; el resto del flujo sigue siendo determinista y local. Se lee en cada turno
+  // porque `config.js` se carga después de este archivo.
+  const aiChatEnabled = () => (window.COPILOTO_CONFIG || {}).aiChat === true;
   const realFetch = window.fetch.bind(window);
   window.__STATIC_DEMO__ = {get key() { return stateKey(currentRun()); }};
 
@@ -340,12 +340,17 @@
   };
   const order = {pendiente: 0, en_atencion: 1, respondida: 2, cerrada: 3};
 
-  // El guion local manda en lo comercial (fechas, disponibilidad, propuesta, derivación): ahí la IA
-  // no debe improvisar. Para el resto (saludo, FAQ, charla) responde el modelo.
-  const COMMERCIAL = /consultar fechas|reserv|disponib|fechas|recepcion|persona real|habitaci|precio|tarifa|\d/;
+  // Híbrido: las reglas mandan. Primero el menú y las respuestas aprobadas (FAQ); después el tramo
+  // comercial (fechas, disponibilidad, propuesta, derivación), que tiene que ser determinista. Lo que
+  // ninguna regla cubre lo responde el modelo, y si el modelo no está, cae en la frase de dato ausente.
+  const MENU_COMMANDS = /^(ubicacion|consultar fechas|preguntas frecuentes|hablar con recepcion)$/;
+  const COMMERCIAL = /consultar fechas|reserv|disponib|\bfechas\b|habitaci|recepcion|persona real/;
+  const STEP_BUSY = new Set(['ask_dates', 'ask_adults', 'ask_children', 'confirm', 'handed_off']);
   function handledLocally(conv, text) {
     const plain = norm(text);
-    if (conv.step !== 'start' && conv.step !== 'menu' && conv.step !== 'idle') return true;
+    if (STEP_BUSY.has(conv.step)) return true;
+    if (MENU_COMMANDS.test(plain)) return true;
+    if (FAQ.some(([pattern]) => pattern.test(plain))) return true;
     return COMMERCIAL.test(plain);
   }
 
@@ -397,12 +402,17 @@
     if (path === '/api/demo/chat' && method === 'POST') {
       const conv = conversation(db, body.session_id, true);
       const firstText = String(body.message || '').slice(0, 400);
-      if (AI_CHAT && !handledLocally(conv, body.message) && !openRequest(db, conv)) {
+      if (aiChatEnabled() && !handledLocally(conv, body.message) && !openRequest(db, conv)) {
         // Camino con IA: primero se pide la respuesta y, si llega, se guardan ambos turnos de una vez.
         // Si el modelo no responde, no queda nada escrito y sigue el guion de siempre.
         const answer = await aiReply(conv, firstText);
         if (answer) {
           const before = db.seq.msg;
+          if (conv.step === 'start') {
+            // Primer turno: la bienvenida y el aviso de privacidad salen igual que en el guion.
+            say(db, conv, `Hola, soy el asistente virtual de ${HOTEL}. Te oriento con la ubicación, preguntas frecuentes y fechas; una persona de recepción revisa los cupos y confirma cada reserva. Es un chat de prueba: no escribas datos personales reales.`);
+            conv.step = 'menu';
+          }
           add(db, conv, 'guest', firstText);
           add(db, conv, 'assistant', answer, {options: MENU});
           write();
