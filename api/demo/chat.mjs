@@ -218,7 +218,7 @@ export async function ask(message, history, {
     let offers_ = null;
     let handoff = null;
     let reply = '';
-    for (let round = 0; round < 2; round += 1) {
+    for (let round = 0; round < 4; round += 1) {
       const {payload, error} = await callModel(messages, {key, base, model, fetchImpl, signal: controller.signal});
       if (error) return {status: 502, body: error};
       const choice = payload?.choices?.[0]?.message || {};
@@ -265,7 +265,20 @@ export async function ask(message, history, {
       reply = plain(choice.content || '').slice(0, MAX_REPLY);
       break;
     }
-    if (!reply) return {status: 502, body: 'El modelo no devolvió texto.'};
+    if (!reply) {
+      // El modelo puede encadenar herramientas y quedarse sin texto. Si ya tenemos datos, se arma una
+      // respuesta natural con lo consultado en vez de devolver un error.
+      if (offers_ && offers_.length) {
+        const lista = offers_.map(o => `${o.name} a $${o.nightly_price_clp.toLocaleString('es-CL')} la noche`).join(', ');
+        reply = `Tenemos ${lista}. Los precios son por noche y recepción confirma el cupo. ¿Te paso con recepción?`;
+      } else if (stay) {
+        reply = 'Listo, quedaron anotadas esas fechas. ¿Quieres que lo pase a recepción para que te confirmen?';
+      } else if (handoff) {
+        reply = 'Listo, paso tu solicitud a recepción.';
+      } else {
+        return {status: 502, body: 'El modelo no devolvió texto.'};
+      }
+    }
     const body = {reply};
     if (stay) body.stay = stay;
     if (offers_) body.offers = offers_;
