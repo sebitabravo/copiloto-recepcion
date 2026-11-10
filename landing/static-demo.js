@@ -363,6 +363,10 @@
         body: JSON.stringify({message: text, history}),
       });
       if (response.status === 429) return {busy: true};
+      // 503 es «la IA no está configurada»: ahí manda el guion de siempre. 502/504 son del proveedor o
+      // del tiempo: se avisa y se invita a repetir, nunca se dice que falta el dato.
+      if (response.status === 503) return null;
+      if (response.status >= 500) return {busy: true, retry: true};
       if (!response.ok) return null;
       const data = await response.json();
       if (typeof data.reply !== 'string' || !data.reply.trim()) return null;
@@ -424,12 +428,15 @@
         // Primero se pide la respuesta; si llega, se guardan los turnos de una vez. Si no, sigue el guion.
         const answer = await aiReply(conv, firstText);
         if (answer && answer.busy) {
-          // El modelo está limitado por ráfaga: se dice con naturalidad y no se pierde el turno.
+          // El modelo no contestó (ráfaga o caída): se dice con naturalidad y no se pierde el turno.
           const before = db.seq.msg;
+          const line = answer.retry
+            ? 'Uy, se me cortó la conexión un segundo. ¿Me lo repites?'
+            : 'Uy, estoy viendo varias consultas a la vez. ¿Me lo repites en un momento?';
           add(db, conv, 'guest', firstText);
-          add(db, conv, 'assistant', 'Uy, estoy viendo varias consultas a la vez. ¿Me lo repites en un momento?', {options: MENU});
+          add(db, conv, 'assistant', line, {options: MENU});
           write();
-          return json({...snapshot(db, conv, before), reply: 'Uy, estoy viendo varias consultas a la vez.',
+          return json({...snapshot(db, conv, before), reply: line,
             mode: 'busy', events: [{type: 'ai'}], duplicate: false, usage: {messages_left: null}});
         }
         if (answer) {
