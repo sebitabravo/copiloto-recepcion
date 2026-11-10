@@ -455,7 +455,11 @@
           }
           // Con disponibilidad, el modelo ya contó las opciones y el precio: solo faltan los botones para
           // confirmar o corregir. Sin disponibilidad, el turno queda abierto con el menú.
-          const confirmar = answer.offers ? ['Enviar a recepción', 'Corregir fechas', 'Corregir huéspedes'] : MENU;
+          // Si ya hay una estadía registrada, los botones de confirmar siguen a mano aunque el turno
+          // conteste otra cosa (una mascota, una duda): el huésped no pierde el «Enviar a recepción».
+          const confirmar = (answer.offers || conv.step === 'confirm')
+            ? ['Enviar a recepción', 'Corregir fechas', 'Corregir huéspedes']
+            : MENU;
           add(db, conv, 'assistant', answer.reply, {options: confirmar});
           if (answer.stay) {
             Object.assign(conv.data, answer.stay);

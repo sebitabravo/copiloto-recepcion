@@ -316,3 +316,22 @@ test('cuando el modelo deriva, la solicitud se crea con su número', async () =>
   assert.equal(requests[0].code, 'BDL-001');
   assert.equal(requests[0].checkin, '2026-11-13');
 });
+
+test('los botones de confirmar siguen ahí después de otra pregunta', async () => {
+  let round = 0;
+  const shim = loadShim({
+    config: AI_CONFIG,
+    fetchImpl: async () => {
+      round += 1;
+      if (round === 1) {
+        return new Response(JSON.stringify({reply: 'Tenemos opciones para esas fechas.', stay: {
+          checkin: '2026-11-20', checkout: '2026-11-22', adults: 2, children: 1}}, ), {status: 200});
+      }
+      return new Response(JSON.stringify({reply: 'La política de mascotas no está publicada; recepción te confirma.'}), {status: 200});
+    },
+  });
+  await shim.call('/api/demo/chat', {session_id: 'guest', message: 'del 20 al 22 para dos y un niño', shift: 'open'});
+  const segunda = await shim.call('/api/demo/chat', {session_id: 'guest', message: 'y llevo a mi perro', shift: 'open'});
+  const opciones = segunda.body.messages.at(-1).options || [];
+  assert.ok(opciones.includes('Enviar a recepción'), `opciones: ${opciones}`);
+});
