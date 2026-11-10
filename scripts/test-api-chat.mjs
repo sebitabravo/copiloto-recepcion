@@ -151,3 +151,28 @@ test('pasar a recepción pide el nombre cuando falta y devuelve la derivación',
   assert.deepEqual(result.body.handoff, {name: 'Camila', reason: 'consulta de fechas'});
   assert.match(result.body.reply, /aviso a recepción/);
 });
+
+test('la disponibilidad se consulta con la herramienta y vuelve con precios', async () => {
+  let round = 0;
+  let seenTool = '';
+  const result = await ask('¿tienen algo para el 12 al 14 de noviembre, dos adultos?', [], {
+    key: KEY,
+    fetchImpl: async (_url, init) => {
+      round += 1;
+      const messages = JSON.parse(init.body).messages;
+      if (round === 1) {
+        return new Response(JSON.stringify({choices: [{message: {tool_calls: [{
+          id: 'call-d', type: 'function',
+          function: {name: 'consultar_disponibilidad', arguments: JSON.stringify({checkin: '2026-11-12', checkout: '2026-11-14', adults: 2, children: 0})},
+        }]}}]}), {status: 200});
+      }
+      seenTool = messages.find(m => m.role === 'tool')?.content || '';
+      return new Response(JSON.stringify({choices: [{message: {content: 'Tenemos dos opciones para esas noches: Doble Vista Piscina a $75.000 y Doble con Jacuzzi a $80.000.'}}]}), {status: 200});
+    },
+  });
+  assert.equal(result.status, 200);
+  assert.ok(result.body.offers && result.body.offers.length >= 2, 'la respuesta trae las opciones');
+  assert.equal(result.body.stay.checkin, '2026-11-12');
+  assert.match(seenTool, /75\.000|75000/, 'el modelo recibe los precios reales');
+  assert.match(result.body.reply, /Doble/);
+});

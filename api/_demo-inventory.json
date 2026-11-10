@@ -1,0 +1,9 @@
+{
+  "rooms": [
+    {"code": "single_doble_vista_jardin", "name": "Habitación Single Doble Vista Jardín", "adults": 2, "children": 0, "price": 65000, "units": 3},
+    {"code": "doble_vista_piscina", "name": "Habitación Doble Vista Piscina", "adults": 2, "children": 1, "price": 75000, "units": 2},
+    {"code": "doble_con_jacuzzi", "name": "Habitación Doble con Jacuzzi", "adults": 2, "children": 1, "price": 80000, "units": 2},
+    {"code": "triple_vista_parcial_lago", "name": "Habitación Triple Vista Parcial Lago", "adults": 3, "children": 2, "price": 90000, "units": 2},
+    {"code": "cuadruple_terraza_vista_al_lago", "name": "Habitación Cuádruple Terraza Vista al Lago", "adults": 4, "children": 3, "price": 100000, "units": 1}
+  ]
+}

@@ -4,6 +4,7 @@
 // El modelo entiende lenguaje natural —«el próximo fin de semana», «en dos semanas», «del 12 al 14»— y
 // deja las fechas normalizadas con la herramienta; la página después muestra la disponibilidad real.
 import hotel from '../_hotel.json' with {type: 'json'};
+import inventory from '../_demo-inventory.json' with {type: 'json'};
 
 const MAX_MESSAGE = 400;
 const MAX_REPLY = 700;
@@ -13,6 +14,7 @@ const ZONE = 'America/Santiago';
 const TODAY = () => new Intl.DateTimeFormat('es-CL', {
   timeZone: ZONE, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
 }).format(new Date());
+const TODAY_ISO = () => new Intl.DateTimeFormat('en-CA', {timeZone: ZONE}).format(new Date());
 
 const SYSTEM = () => `Eres el asistente de recepción de ${hotel.name}, en Chile. Atiendes por chat y por voz.
 
@@ -28,8 +30,10 @@ CÓMO HABLAS
   escriba mejor.
 
 FECHAS
-- Hoy es ${TODAY()} en Chile. Interpreta tú las fechas naturales: «el próximo viernes», «este fin de
-  semana», «en dos semanas», «del 12 al 14», «el 20 y vuelvo el 22». No le pidas al huésped un formato.
+- Hoy es ${TODAY()} (${TODAY_ISO()} en formato AAAA-MM-DD) en Chile. Interpreta tú las fechas naturales:
+  «la siguiente semana», «el próximo viernes», «este fin de semana», «en dos semanas», «del 12 al 14».
+  Si el huésped es vago («la siguiente semana»), propone tú fechas concretas y pide un «sí».
+  No le pidas que escriba un formato ni le devuelvas la pregunta que acaba de responder.
 - Si falta la salida o la cantidad de personas, pregunta lo mínimo necesario, de a una cosa.
 - En cuanto tengas llegada, salida y cantidad de adultos, llama a registrar_estadia en ese mismo turno.
   No esperes el nombre, la edad de los niños ni la habitación: eso viene después o no hace falta.
@@ -40,18 +44,42 @@ FECHAS
 DATOS Y LÍMITES
 - Solo afirmas lo que está en DATOS. Si no está, lo dices con naturalidad y ofreces consultarlo con recepción.
 - Nunca confirmas una reserva: reúnes los datos y una persona de recepción confirma cupo y precio.
-- No des precios ni cupos: la página los muestra después de registrar la estadía.
+- La disponibilidad sí la puedes ver: usa consultar_disponibilidad con fechas y personas y responde con
+  las opciones reales, el precio por noche y el total. Nunca digas que «recepción revisa la
+  disponibilidad»: tú la consultas. Los cupos y precios son de un PMS simulado y la reserva la
+  confirma una persona, eso sí se lo dices.
 - No pides RUT, tarjeta, teléfono ni correo. Basta el nombre.
 - Para pasar la solicitud a recepción necesitas el nombre del huésped: si no lo tienes, pídelo antes.
   Cuando lo tengas —o si el huésped pide hablar con una persona— llama a pasar_a_recepcion.
 - Si el huésped pulsa «Enviar a recepción» o dice que quiere enviarlo, pide el nombre si falta y llama
   a pasar_a_recepcion en ese turno.
 - Si preguntan si eres humano o una IA, responde con honestidad que eres el asistente virtual.
+- Si la solicitud ya quedó con recepción, responde dudas simples («te contestan por acá», «el turno es
+  de 08:00 a 22:00») y aclara que recepción sigue la conversación. No prometas llamadas, WhatsApp ni
+  correos que este canal no puede hacer.
+- Si mencionan una mascota, di que la política no está publicada y que recepción lo confirma.
 
 DATOS (fuente única, no inventes fuera de aquí)
 ${JSON.stringify({ubicacion: hotel.location, politicas: hotel.policies, servicios: hotel.faqs.map(f => f.answer)}, null, 1)}`;
 
 const TOOLS = [{
+  type: 'function',
+  function: {
+    name: 'consultar_disponibilidad',
+    description: 'Consulta la disponibilidad del PMS simulado para unas fechas y personas. Devuelve las '
+      + 'habitaciones que caben, con precio por noche, total de la estadía y cupos.',
+    parameters: {
+      type: 'object',
+      properties: {
+        checkin: {type: 'string', description: 'Llegada en formato AAAA-MM-DD'},
+        checkout: {type: 'string', description: 'Salida en formato AAAA-MM-DD'},
+        adults: {type: 'integer', minimum: 1, maximum: 6},
+        children: {type: 'integer', minimum: 0, maximum: 6},
+      },
+      required: ['checkin', 'checkout', 'adults'],
+    },
+  },
+}, {
   type: 'function',
   function: {
     name: 'pasar_a_recepcion',
@@ -84,6 +112,26 @@ const TOOLS = [{
     },
   },
 }];
+
+/** Las mismas 5 habitaciones que muestra la página: capacidad, precio y cupos del PMS simulado. */
+export function offersFor({checkin, checkout, adults, children}, today = TODAY_ISO()) {
+  const rooms = inventory.rooms || [];
+  // El fin de semana del 20 al 22 de noviembre está ocupado en el guion de la demo (una unidad menos).
+  const busy = checkin <= '2026-11-21' && checkout > '2026-11-20';
+  const nights = Math.max(1, Math.round((Date.parse(`${checkout}T12:00:00Z`) - Date.parse(`${checkin}T12:00:00Z`)) / 86400000));
+  return rooms
+    .filter(room => room.adults >= adults && room.children >= (children || 0))
+    .map(room => ({
+      code: room.code,
+      name: room.name.replace(/^Habitación /, ''),
+      available_units: Math.max(0, room.units - (busy ? 1 : 0)),
+      nightly_price_clp: room.price,
+      total_clp: room.price * nights,
+      nights,
+    }))
+    .filter(offer => offer.available_units > 0)
+    .slice(0, 3);
+}
 
 export const config = {maxDuration: 30};
 
@@ -167,6 +215,7 @@ export async function ask(message, history, {
   try {
     const messages = buildMessages(message, history);
     let stay = null;
+    let offers_ = null;
     let handoff = null;
     let reply = '';
     for (let round = 0; round < 2; round += 1) {
@@ -180,6 +229,22 @@ export async function ask(message, history, {
           let args = {};
           try { args = JSON.parse(call.function.arguments || '{}'); } catch (_) { args = {}; }
           const name = call.function?.name;
+          if (name === 'consultar_disponibilidad') {
+            const normalized = normalizeStay({...args, children: args.children ?? 0});
+            if (!normalized) {
+              messages.push({role: 'tool', tool_call_id: call.id, content: JSON.stringify({
+                ok: false, error: 'fechas inválidas o en el pasado: interpreta de nuevo lo que dijo el huésped'})});
+              continue;
+            }
+            stay = normalized;
+            const offers = offersFor(normalized);
+            offers_ = offers;
+            const resumen = offers.length
+              ? offers.map(o => `${o.name}: $${o.nightly_price_clp.toLocaleString('es-CL')} por noche, $${o.total_clp.toLocaleString('es-CL')} las ${o.nights} noches (quedan ${o.available_units})`).join('; ')
+              : 'sin cupo para esa capacidad en esas fechas';
+            messages.push({role: 'tool', tool_call_id: call.id, content: JSON.stringify({ok: true, ...normalized, offers, resumen})});
+            continue;
+          }
           if (name === 'registrar_estadia') {
             const normalized = normalizeStay(args);
             stay = normalized || stay;
@@ -203,6 +268,7 @@ export async function ask(message, history, {
     if (!reply) return {status: 502, body: 'El modelo no devolvió texto.'};
     const body = {reply};
     if (stay) body.stay = stay;
+    if (offers_) body.offers = offers_;
     if (handoff) body.handoff = handoff;
     return {status: 200, body};
   } catch (error) {

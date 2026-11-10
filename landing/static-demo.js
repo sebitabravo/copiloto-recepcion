@@ -365,7 +365,8 @@
       if (!response.ok) return null;
       const data = await response.json();
       if (typeof data.reply !== 'string' || !data.reply.trim()) return null;
-      return {reply: data.reply.trim(), stay: data.stay || null, handoff: data.handoff || null};
+      return {reply: data.reply.trim(), stay: data.stay || null, offers: data.offers || null,
+        handoff: data.handoff || null};
     } catch (_) {
       return null;
     }
@@ -416,7 +417,9 @@
         || (/^(la )?recepcion$/.test(plainText) || /hablar con recepcion/.test(plainText)
           || /persona real/.test(plainText)
           || (WANTS_HUMAN.test(plainText) && HUMAN_TARGET.test(plainText))) && !/horario de recepcion/.test(plainText);
-      if (aiChatEnabled() && !openRequest(db, conv) && !wantsHuman) {
+      // Con la solicitud en recepción, el modelo igual responde dudas simples (sin tocarla); la derivación
+      // explícita sigue siendo local.
+      if (aiChatEnabled() && !wantsHuman) {
         // Primero se pide la respuesta; si llega, se guardan los turnos de una vez. Si no, sigue el guion.
         const answer = await aiReply(conv, firstText);
         if (answer) {
@@ -427,11 +430,24 @@
             conv.step = 'menu';
           }
           add(db, conv, 'guest', firstText);
-          add(db, conv, 'assistant', answer.reply, {options: MENU});
+          const abierta = openRequest(db, conv);
+          if (abierta) {
+            // Si recepción tiene la solicitud, el mensaje igual queda en el hilo que ella ve.
+            abierta.last_guest_at = now();
+            if (abierta.status === 'respondida') abierta.status = 'en_atencion';
+          }
+          // Con disponibilidad, el modelo ya contó las opciones y el precio: solo faltan los botones para
+          // confirmar o corregir. Sin disponibilidad, el turno queda abierto con el menú.
+          const confirmar = answer.offers ? ['Enviar a recepción', 'Corregir fechas', 'Corregir huéspedes'] : MENU;
+          add(db, conv, 'assistant', answer.reply, {options: confirmar});
           if (answer.stay) {
-            // La estadía que interpretó el modelo se muestra con la disponibilidad y los botones de siempre.
             Object.assign(conv.data, answer.stay);
-            summary(db, conv);
+            if (answer.offers) {
+              conv.data.offers = answer.offers;
+              conv.step = 'confirm';
+            } else {
+              summary(db, conv);
+            }
           }
           if (answer.handoff) {
             // El modelo pidió pasar la solicitud: la crea el flujo local, con su número y su nota.
