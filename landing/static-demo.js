@@ -407,9 +407,15 @@
       // persona («el próximo fin de semana», «en dos semanas») y devuelve la estadía normalizada.
       // Solo la derivación explícita se resuelve en local, porque crea la solicitud en la bandeja.
       const plainText = norm(body.message);
-      const wantsHuman = (/^(la )?recepcion$/.test(plainText) || /hablar con recepcion/.test(plainText)
-        || /persona real/.test(plainText)
-        || (WANTS_HUMAN.test(plainText) && HUMAN_TARGET.test(plainText))) && !/horario de recepcion/.test(plainText);
+      // Crear la solicitud es una acción de estado: la hace el flujo local, no el modelo. Se dispara con
+      // el botón «Enviar a recepción», con un «sí» cuando ya hay una estadía lista, o cuando el huésped
+      // pide hablar con una persona.
+      const sending = /^enviar a recepcion$/.test(plainText)
+        || (conv.step === 'confirm' && /^(si|dale|ya|ok|okey|listo|enviar|enviar a recepcion|confirmo|perfecto)/.test(plainText));
+      const wantsHuman = sending
+        || (/^(la )?recepcion$/.test(plainText) || /hablar con recepcion/.test(plainText)
+          || /persona real/.test(plainText)
+          || (WANTS_HUMAN.test(plainText) && HUMAN_TARGET.test(plainText))) && !/horario de recepcion/.test(plainText);
       if (aiChatEnabled() && !openRequest(db, conv) && !wantsHuman) {
         // Primero se pide la respuesta; si llega, se guardan los turnos de una vez. Si no, sigue el guion.
         const answer = await aiReply(conv, firstText);
