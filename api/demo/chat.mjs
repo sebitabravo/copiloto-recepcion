@@ -1,37 +1,67 @@
-// Asistente de la demo publicado en Vercel: llama a DeepSeek con los hechos aprobados del hotel.
+// Asistente de la demo publicado en Vercel: DeepSeek con los hechos del hotel y una herramienta para
+// registrar la estadía. La clave vive del lado servidor (`LLM_API_KEY`), nunca en el navegador.
 //
-// La clave vive del lado servidor (`LLM_API_KEY` en el proyecto de Vercel), nunca en el navegador.
-// Sin clave responde 503 y la página sigue con el guion estático, así la demo nunca queda muda.
-//
-// Guardrails (los mismos del servicio `copiloto`): habla como el hotel en primera persona, no inventa
-// datos, no confirma reservas, una sola pregunta por turno y texto plano sin Markdown.
+// El modelo entiende lenguaje natural —«el próximo fin de semana», «en dos semanas», «del 12 al 14»— y
+// deja las fechas normalizadas con la herramienta; la página después muestra la disponibilidad real.
 import hotel from '../_hotel.json' with {type: 'json'};
 
 const MAX_MESSAGE = 400;
 const MAX_REPLY = 700;
 const TIMEOUT_MS = 9000;
+const ZONE = 'America/Santiago';
 
-const SYSTEM = `Eres el asistente de recepción de ${hotel.name}, en español de Chile, por chat.
-Hablas como el hotel, en primera persona plural: «tenemos piscina», «estamos frente a la playa».
-Nunca digas «tienen» ni «el hotel cuenta con» al hablar del hotel.
+const TODAY = () => new Intl.DateTimeFormat('es-CL', {
+  timeZone: ZONE, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+}).format(new Date());
 
-REGLAS
-1. Responde en 1 a 3 frases cortas. Texto plano, sin Markdown, sin listas numeradas.
-2. Haz como máximo una pregunta por turno y no termines siempre preguntando.
-3. Solo puedes afirmar lo que está en DATOS. Si el dato no está, dilo y ofrece consultarlo con recepción.
-4. Nunca confirmas reservas: reúnes los datos y una persona de recepción confirma cupo y precio.
-5. No pidas RUT, tarjeta, teléfono ni correo: basta el nombre.
-6. Si piden hablar con una persona, dilo y ofrece pasar la solicitud a recepción.
-7. Si preguntan si eres una persona o una IA, responde con honestidad que eres el asistente virtual.
-8. Montos en pesos chilenos con punto de miles: $80.000.
+const SYSTEM = () => `Eres el asistente de recepción de ${hotel.name}, en Chile. Atiendes por chat y por voz.
+
+CÓMO HABLAS
+- Como una recepcionista real: cálida, breve, en primera persona plural («tenemos», «estamos»).
+- Frases cortas y conectadas, sin listas ni viñetas, sin negritas, sin emojis.
+- Nada de muletillas de robot: no digas «¿en qué puedo ayudarte hoy?», «estoy aquí para ayudarte»,
+  «como asistente», «no dudes en preguntar». Saluda como saludaría una persona y sigue la charla.
+- Una idea por mensaje y como máximo una pregunta por turno. No repitas lo que el huésped acaba de decir.
+- Si el huésped escribe corto, responde corto. Si cuenta algo, acompáñalo sin exagerar.
+
+FECHAS
+- Hoy es ${TODAY()} en Chile. Interpreta tú las fechas naturales: «el próximo viernes», «este fin de
+  semana», «en dos semanas», «del 12 al 14», «el 20 y vuelvo el 22». No le pidas al huésped un formato.
+- Si falta la salida o la cantidad de personas, pregunta lo mínimo necesario, de a una cosa.
+- Cuando tengas llegada, salida y huéspedes, usa la herramienta registrar_estadia. No inventes fechas.
+
+DATOS Y LÍMITES
+- Solo afirmas lo que está en DATOS. Si no está, lo dices con naturalidad y ofreces consultarlo con recepción.
+- Nunca confirmas una reserva: reúnes los datos y una persona de recepción confirma cupo y precio.
+- No des precios ni cupos: la página los muestra después de registrar la estadía.
+- No pides RUT, tarjeta, teléfono ni correo. Basta el nombre.
+- Si piden hablar con una persona, dilo y ofrece pasar la solicitud a recepción.
+- Si preguntan si eres humano o una IA, responde con honestidad que eres el asistente virtual.
 
 DATOS (fuente única, no inventes fuera de aquí)
 ${JSON.stringify({ubicacion: hotel.location, politicas: hotel.policies, servicios: hotel.faqs.map(f => f.answer)}, null, 1)}`;
 
+const TOOLS = [{
+  type: 'function',
+  function: {
+    name: 'registrar_estadia',
+    description: 'Registra las fechas y los huéspedes de la estadía, ya interpretados desde el lenguaje natural. '
+      + 'La página usa estos datos para mostrar disponibilidad y precios.',
+    parameters: {
+      type: 'object',
+      properties: {
+        checkin: {type: 'string', description: 'Fecha de llegada en formato AAAA-MM-DD'},
+        checkout: {type: 'string', description: 'Fecha de salida en formato AAAA-MM-DD'},
+        adults: {type: 'integer', description: 'Cantidad de adultos, de 1 a 6', minimum: 1, maximum: 6},
+        children: {type: 'integer', description: 'Cantidad de niños, de 0 a 6', minimum: 0, maximum: 6},
+      },
+      required: ['checkin', 'checkout', 'adults'],
+    },
+  },
+}];
+
 export const config = {maxDuration: 30};
 
-// La clave la paga el dueño del sitio: un tope por IP evita que un bucle o un curioso queme saldo.
-// En serverless la memoria es por instancia, así que es un freno, no una cuota garantizada.
 const WINDOW_MS = 60_000;
 const PER_WINDOW = 20;
 const hits = new Map();
@@ -49,14 +79,24 @@ export function allow(ip, now = Date.now()) {
   return true;
 }
 
-function plain(text) {
-  return String(text)
-    .replace(/\*\*(.+?)\*\*/g, '$1')
-    .replace(/__([^_]+)__/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/^#{1,6}\s*/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+// Valida y normaliza lo que propone el modelo: nunca se acepta una estadía imposible.
+export function normalizeStay(args, today = new Date()) {
+  const checkin = String(args?.checkin || '').trim();
+  const checkout = String(args?.checkout || '').trim();
+  const adults = Number(args?.adults);
+  const children = Number(args?.children ?? 0);
+  if (!ISO.test(checkin) || !ISO.test(checkout)) return null;
+  const start = Date.parse(`${checkin}T12:00:00Z`);
+  const end = Date.parse(`${checkout}T12:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  if (end - start > 60 * 86400000) return null;
+  const days = Math.round((start - Date.parse(`${today.toISOString().slice(0, 10)}T12:00:00Z`)) / 86400000);
+  if (days < -1) return null;
+  if (!Number.isInteger(adults) || adults < 1 || adults > 6) return null;
+  if (!Number.isInteger(children) || children < 0 || children > 6) return null;
+  return {checkin, checkout, adults, children};
 }
 
 export function buildMessages(message, history = []) {
@@ -65,33 +105,71 @@ export function buildMessages(message, history = []) {
       .filter(entry => entry && typeof entry.text === 'string' && entry.text.trim())
       .map(entry => ({role: entry.role === 'guest' ? 'user' : 'assistant', content: String(entry.text).slice(0, MAX_MESSAGE)}))
     : [];
-  return [{role: 'system', content: SYSTEM}, ...turns, {role: 'user', content: String(message).slice(0, MAX_MESSAGE)}];
+  return [{role: 'system', content: SYSTEM()}, ...turns, {role: 'user', content: String(message).slice(0, MAX_MESSAGE)}];
 }
 
-export async function ask(message, history, {key = process.env.LLM_API_KEY, base = process.env.LLM_BASE_URL || 'https://api.deepseek.com', model = process.env.LLM_MODEL || 'deepseek-chat', fetchImpl = fetch} = {}) {
+function plain(text) {
+  return String(text)
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/^[-*]\s+/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+async function callModel(messages, {key, base, model, fetchImpl, signal}) {
+  const response = await fetchImpl(`${base.replace(/\/+$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers: {'content-type': 'application/json', authorization: `Bearer ${key}`},
+    body: JSON.stringify({model, messages, tools: TOOLS, tool_choice: 'auto', max_tokens: 320, temperature: 0.3, stream: false}),
+    signal,
+  });
+  if (!response.ok) return {error: `El modelo respondió ${response.status}.`};
+  return {payload: await response.json()};
+}
+
+export async function ask(message, history, {
+  key = process.env.LLM_API_KEY,
+  base = process.env.LLM_BASE_URL || 'https://api.deepseek.com',
+  model = process.env.LLM_MODEL || 'deepseek-chat',
+  fetchImpl = fetch,
+} = {}) {
   if (!key) return {status: 503, body: 'La IA de esta demo no está configurada (falta LLM_API_KEY).'};
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const response = await fetchImpl(`${base.replace(/\/+$/, '')}/chat/completions`, {
-      method: 'POST',
-      headers: {'content-type': 'application/json', authorization: `Bearer ${key}`},
-      body: JSON.stringify({
-        model,
-        messages: buildMessages(message, history),
-        max_tokens: 300,
-        temperature: 0.2,
-        stream: false,
-      }),
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      return {status: 502, body: `El modelo respondió ${response.status}.`};
+    const messages = buildMessages(message, history);
+    let stay = null;
+    let reply = '';
+    for (let round = 0; round < 2; round += 1) {
+      const {payload, error} = await callModel(messages, {key, base, model, fetchImpl, signal: controller.signal});
+      if (error) return {status: 502, body: error};
+      const choice = payload?.choices?.[0]?.message || {};
+      const calls = choice.tool_calls || [];
+      if (calls.length) {
+        messages.push({role: 'assistant', content: choice.content || '', tool_calls: calls});
+        for (const call of calls) {
+          if (call.function?.name !== 'registrar_estadia') {
+            messages.push({role: 'tool', tool_call_id: call.id, content: JSON.stringify({ok: false, error: 'herramienta desconocida'})});
+            continue;
+          }
+          let args = {};
+          try { args = JSON.parse(call.function.arguments || '{}'); } catch (_) { args = {}; }
+          const normalized = normalizeStay(args);
+          stay = normalized || stay;
+          messages.push({role: 'tool', tool_call_id: call.id, content: JSON.stringify(normalized
+            ? {ok: true, ...normalized}
+            : {ok: false, error: 'fechas inválidas o en el pasado: pide de nuevo llegada y salida'})});
+        }
+        continue;
+      }
+      reply = plain(choice.content || '').slice(0, MAX_REPLY);
+      break;
     }
-    const payload = await response.json();
-    const reply = plain(payload?.choices?.[0]?.message?.content || '').slice(0, MAX_REPLY);
     if (!reply) return {status: 502, body: 'El modelo no devolvió texto.'};
-    return {status: 200, body: {reply}};
+    return {status: 200, body: stay ? {reply, stay} : {reply}};
   } catch (error) {
     return {status: error.name === 'AbortError' ? 504 : 502, body: `La IA no respondió a tiempo (${error.name}).`};
   } finally {

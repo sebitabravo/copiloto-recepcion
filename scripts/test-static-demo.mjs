@@ -251,15 +251,39 @@ test('si la IA no responde, sigue el guion sin dejar mensajes a medias', async (
   assert.match(answers.at(-1).body, /hola, bienvenido/i, 'y la última respuesta es la del guion');
 });
 
-test('lo comercial no pasa por la IA: fechas, disponibilidad y derivación siguen locales', async () => {
+test('una fecha dicha como persona la interpreta el modelo y la disponibilidad aparece después', async () => {
+  let called = 0;
+  const shim = loadShim({
+    config: AI_CONFIG,
+    fetchImpl: async () => {
+      called += 1;
+      return new Response(JSON.stringify({
+        reply: 'Claro, el viernes 13 al domingo 15. Déjame ver qué tenemos.',
+        stay: {checkin: '2026-11-13', checkout: '2026-11-15', adults: 2, children: 1},
+      }), {status: 200});
+    },
+  });
+  const response = await shim.call('/api/demo/chat', {session_id: 'guest', message: 'quería algo para el próximo fin de semana, somos dos y una niña', shift: 'open'});
+  assert.equal(called, 1, 'la fecha natural la entiende el modelo, no un formato rígido');
+  assert.equal(response.body.mode, 'ai');
+  const texto = (await shim.call('/api/demo/conversation?session_id=guest')).body.messages.map(m => m.body).join(String.fromCharCode(10));
+  assert.match(texto, /viernes 13 al domingo 15/, 'la respuesta del modelo queda en el hilo');
+  assert.match(texto, /Revisa tu solicitud antes de enviarla/, 'y la estadía se muestra con la disponibilidad');
+  assert.match(texto, /2 adultos, 1 niño/);
+});
+
+test('pedir recepción no pasa por el modelo: crea la solicitud', async () => {
   let called = 0;
   const shim = loadShim({
     config: AI_CONFIG,
     fetchImpl: async () => { called += 1; return new Response(JSON.stringify({reply: 'no debería usarse'}), {status: 200}); },
   });
-  const response = await shim.call('/api/demo/chat', {session_id: 'guest', message: 'quiero reservar del 12 al 14 de noviembre', shift: 'open'});
-  assert.equal(called, 0, 'la IA no se llama para el flujo comercial');
+  const response = await shim.call('/api/demo/chat', {session_id: 'guest', message: 'quiero hablar con recepción', shift: 'open'});
+  assert.equal(called, 0, 'la derivación se resuelve en local');
   assert.notEqual(response.body.mode, 'ai');
+  await shim.call('/api/demo/session', {name: 'Ana', operator_key: 'operador-estatico-0009'});
+  const requests = (await shim.call('/api/panel/requests')).body.requests;
+  assert.equal(requests.length, 1);
 });
 
 test('la voz no se simula: /api/demo/tts viaja a la red', async () => {

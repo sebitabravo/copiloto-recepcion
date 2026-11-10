@@ -364,7 +364,8 @@
       });
       if (!response.ok) return null;
       const data = await response.json();
-      return typeof data.reply === 'string' && data.reply.trim() ? data.reply.trim() : null;
+      if (typeof data.reply !== 'string' || !data.reply.trim()) return null;
+      return {reply: data.reply.trim(), stay: data.stay || null};
     } catch (_) {
       return null;
     }
@@ -402,9 +403,15 @@
     if (path === '/api/demo/chat' && method === 'POST') {
       const conv = conversation(db, body.session_id, true);
       const firstText = String(body.message || '').slice(0, 400);
-      if (aiChatEnabled() && !handledLocally(conv, body.message) && !openRequest(db, conv)) {
-        // Camino con IA: primero se pide la respuesta y, si llega, se guardan ambos turnos de una vez.
-        // Si el modelo no responde, no queda nada escrito y sigue el guion de siempre.
+      // Con IA configurada, la conversación la lleva el modelo: entiende las fechas como las dice una
+      // persona («el próximo fin de semana», «en dos semanas») y devuelve la estadía normalizada.
+      // Solo la derivación explícita se resuelve en local, porque crea la solicitud en la bandeja.
+      const plainText = norm(body.message);
+      const wantsHuman = (/^(la )?recepcion$/.test(plainText) || /hablar con recepcion/.test(plainText)
+        || /persona real/.test(plainText)
+        || (WANTS_HUMAN.test(plainText) && HUMAN_TARGET.test(plainText))) && !/horario de recepcion/.test(plainText);
+      if (aiChatEnabled() && !openRequest(db, conv) && !wantsHuman) {
+        // Primero se pide la respuesta; si llega, se guardan los turnos de una vez. Si no, sigue el guion.
         const answer = await aiReply(conv, firstText);
         if (answer) {
           const before = db.seq.msg;
@@ -414,10 +421,15 @@
             conv.step = 'menu';
           }
           add(db, conv, 'guest', firstText);
-          add(db, conv, 'assistant', answer, {options: MENU});
+          add(db, conv, 'assistant', answer.reply, {options: MENU});
+          if (answer.stay) {
+            // La estadía que interpretó el modelo se muestra con la disponibilidad y los botones de siempre.
+            Object.assign(conv.data, answer.stay);
+            summary(db, conv);
+          }
           write();
           const snap = snapshot(db, conv, before);
-          return json({...snap, reply: answer, mode: 'ai', events: [{type: 'ai'}], duplicate: false,
+          return json({...snap, reply: answer.reply, mode: 'ai', events: [{type: 'ai'}], duplicate: false,
             usage: {messages_left: null}});
         }
       }
