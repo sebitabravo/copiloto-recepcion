@@ -752,6 +752,11 @@
 }
 .call-mic { background: rgb(255 255 255 / 14%); color: var(--card); }
 .call-mic:hover { background: rgb(255 255 255 / 20%); }
+/* Encendido: el micrófono respira, como el indicador de una llamada en curso. */
+.call-mic[data-state="on"] { background: var(--wa-out); color: var(--wa-ink); animation: call-pulse 2.4s var(--ease) infinite; }
+.call-mic[data-state="off"] { background: rgb(255 255 255 / 8%); color: var(--line); }
+@keyframes call-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgb(255 255 255 / 0%); } 50% { box-shadow: 0 0 0 10px rgb(255 255 255 / 6%); } }
+@media (prefers-reduced-motion: reduce) { .call-mic[data-state="on"] { animation: none; } }
 .call-hangup { background: var(--error); color: var(--card); width: 58px; height: 58px; }
 .call-mic:hover, .call-hangup:hover { transform: translateY(-1px); filter: brightness(1.04); }
 .call-mic:focus-visible, .call-hangup:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
