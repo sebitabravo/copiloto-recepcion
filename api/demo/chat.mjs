@@ -136,7 +136,7 @@ export function offersFor({checkin, checkout, adults, children}, today = TODAY_I
 export const config = {maxDuration: 30};
 
 const WINDOW_MS = 60_000;
-const PER_WINDOW = 20;
+const PER_WINDOW = 30;
 const hits = new Map();
 
 export function allow(ip, now = Date.now()) {

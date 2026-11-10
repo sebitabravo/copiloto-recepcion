@@ -362,6 +362,7 @@
         headers: {'content-type': 'application/json'},
         body: JSON.stringify({message: text, history}),
       });
+      if (response.status === 429) return {busy: true};
       if (!response.ok) return null;
       const data = await response.json();
       if (typeof data.reply !== 'string' || !data.reply.trim()) return null;
@@ -422,6 +423,15 @@
       if (aiChatEnabled() && !wantsHuman) {
         // Primero se pide la respuesta; si llega, se guardan los turnos de una vez. Si no, sigue el guion.
         const answer = await aiReply(conv, firstText);
+        if (answer && answer.busy) {
+          // El modelo está limitado por ráfaga: se dice con naturalidad y no se pierde el turno.
+          const before = db.seq.msg;
+          add(db, conv, 'guest', firstText);
+          add(db, conv, 'assistant', 'Uy, estoy viendo varias consultas a la vez. ¿Me lo repites en un momento?', {options: MENU});
+          write();
+          return json({...snapshot(db, conv, before), reply: 'Uy, estoy viendo varias consultas a la vez.',
+            mode: 'busy', events: [{type: 'ai'}], duplicate: false, usage: {messages_left: null}});
+        }
         if (answer) {
           const before = db.seq.msg;
           if (conv.step === 'start') {
