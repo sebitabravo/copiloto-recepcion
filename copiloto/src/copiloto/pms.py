@@ -55,6 +55,35 @@ class _ReadingPayload(BaseModel):
     room_types: list[_OfferPayload]
 
 
+class _UnitPayload(BaseModel):
+    room_id: int
+    number: str = Field(min_length=1)
+    code: str = Field(min_length=1)
+    short: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    nightly_price_clp: int = Field(ge=0)
+
+
+class _StayPayload(BaseModel):
+    booking_id: int
+    room_id: int
+    guest_name: str
+    checkin: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    checkout: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    adults: int = Field(ge=0)
+    children: int = Field(ge=0)
+    source: str = "personal"
+
+
+class _OccupancyPayload(BaseModel):
+    read_at: str = Field(min_length=16)
+    simulated: bool = False
+    start: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    days: int = Field(ge=1, le=31)
+    units: list[_UnitPayload]
+    bookings: list[_StayPayload]
+
+
 class PmsConflict(Exception):
     """El PMS rechazó la reserva (sin cupo, capacidad o datos inválidos)."""
 
@@ -69,6 +98,10 @@ class PmsAdapter(ABC):
         """Crea una reserva. Solo la usa el modo de IA autónoma de la demo; por defecto no está soportada."""
         raise NotImplementedError("Este adaptador no crea reservas")
 
+    async def occupancy(self, start: date, days: int) -> dict:
+        """Plano de ocupación (unidades y estadías) para el panel. Por defecto el PMS no lo ofrece."""
+        raise PmsUnavailable("Este PMS no entrega el plano de ocupación")
+
 
 class HttpPmsAdapter(PmsAdapter):
     """Conector HTTP contra el contrato del copiloto (ver docs/conector-pms.md).
@@ -79,11 +112,13 @@ class HttpPmsAdapter(PmsAdapter):
 
     def __init__(self, base_url: str, timeout_s: float = 4.0, http: httpx.AsyncClient | None = None,
                  staff_token: str = "", availability_path: str = "/api/v1/availability",
-                 booking_path: str = "/api/v1/bookings", auth_header: str = "X-Staff-Token"):
+                 booking_path: str = "/api/v1/bookings", auth_header: str = "X-Staff-Token",
+                 occupancy_path: str = "/api/v1/occupancy"):
         self._base_url = base_url.rstrip("/")
         self._staff_token = staff_token
         self._availability_path = availability_path
         self._booking_path = booking_path
+        self._occupancy_path = occupancy_path
         self._auth_header = auth_header
         self._http = http or httpx.AsyncClient(timeout=timeout_s)
 
@@ -119,6 +154,17 @@ class HttpPmsAdapter(PmsAdapter):
                     **{key: result[key] for key in ("room_code", "checkin", "checkout")}}
         except (ValueError, KeyError, TypeError) as exc:
             raise PmsUnavailable("Respuesta de reserva inválida") from exc
+
+
+    async def occupancy(self, start: date, days: int) -> dict:
+        params = {"start": start.isoformat(), "days": days}
+        try:
+            response = await self._http.get(f"{self._base_url}{self._occupancy_path}", params=params,
+                                            headers={self._auth_header: self._staff_token})
+            response.raise_for_status()
+            return _OccupancyPayload.model_validate(response.json()).model_dump()
+        except (httpx.HTTPError, ValidationError, ValueError) as exc:
+            raise PmsUnavailable(str(exc)) from exc
 
 
 class UnavailablePmsAdapter(PmsAdapter):
