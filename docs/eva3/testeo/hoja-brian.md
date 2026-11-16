@@ -1,6 +1,6 @@
 # Hoja de una página · testeo con usuarios en el hotel
 
-**Enlace de la demo:** `<enlace publicado>` (abre en el celular o en el computador; no hay que instalar nada).
+**Enlace de la demo:** `https://copiloto-recepcion.vercel.app/demo` (abre en el celular o en el computador; no hay que instalar nada).
 
 La demo publicada usa datos simulados en el navegador. El huésped, el plano de ocupación y el dashboard
 funcionan igual que en la versión local. La bandeja de Chatwoot solo existe en local.

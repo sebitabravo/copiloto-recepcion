@@ -15,7 +15,7 @@ El prototipo funcional del copiloto de recepción, en tres roles:
 | Administración | Vista «Administración» de la demo (`/demo?vista=admin`) | Si lee la ocupación de hoy y las llegadas sin ayuda |
 
 La demo publicada (versión estática, datos simulados en el navegador) sirve para el huésped, el plano y el
-dashboard; la bandeja de Chatwoot solo existe en la versión local. Enlace de la demo: `<enlace publicado>`.
+dashboard; la bandeja de Chatwoot solo existe en la versión local. Enlace de la demo: `https://copiloto-recepcion.vercel.app/demo`.
 
 Se prueba la **propuesta de valor**, no la interfaz sola: ubicación primero, respuesta rápida, disponibilidad
 con sello de hora y confirmación humana.
