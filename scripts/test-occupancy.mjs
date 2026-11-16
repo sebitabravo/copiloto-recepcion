@@ -84,7 +84,7 @@ test('computeKpis counts arrivals, departures and people in house', () => {
   assert.equal(kpis.arrivals, 1);
   assert.equal(kpis.departures, 1);
   assert.equal(kpis.inHouse, 5);
-  assert.deepEqual(plain(kpis.bySource), {ia: 1, personal: 2});
+  assert.deepEqual(plain(kpis.bySource), {ia: 1, personal: 1}, 'la que sale hoy ya no cuenta');
 });
 
 test('computeKpis reports per-day and per-type occupancy', () => {
@@ -96,6 +96,19 @@ test('computeKpis reports per-day and per-type occupancy', () => {
   assert.equal(sdvj.nights, 2);
   assert.equal(sdvj.pct, 50);
   assert.equal(kpis.types.find(type => type.code === 'dvp').pct, 0);
+});
+
+test('computeKpis counts departures today when the range starts yesterday and totals start today', () => {
+  const kpis = computeKpis({...base, start: '2026-11-15', days: 15, bookings: [
+    booking(1, 1, '2026-11-13', '2026-11-16', {source: 'ia'}),
+    booking(2, 2, '2026-11-15', '2026-11-17'),
+    booking(3, 3, '2026-11-12', '2026-11-15')
+  ]}, '2026-11-16');
+  assert.equal(kpis.departures, 1);
+  assert.equal(kpis.occupied, 1);
+  assert.equal(kpis.perDay.length, 14);
+  assert.equal(kpis.perDay[0].iso, '2026-11-16');
+  assert.deepEqual(plain(kpis.bySource), {ia: 0, personal: 1}, 'lo que ya salió no cuenta');
 });
 
 test('computeKpis does not divide by zero without units or days', () => {

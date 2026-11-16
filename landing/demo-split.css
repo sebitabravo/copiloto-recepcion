@@ -802,7 +802,8 @@
 .occ-message { margin: 0; color: var(--muted); font-size: .86rem; }
 .occ-legend { margin: 0; color: var(--muted); font-size: .8rem; }
 
-.occ-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+.occ:not(.occ-dash) { overflow: hidden; }
+.occ-scroll { flex: 1 1 auto; min-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
 .occ-scroll:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .occ-grid { min-width: calc(128px + var(--occ-days, 14) * 46px); }
 
@@ -810,7 +811,7 @@
   display: grid;
   grid-template-columns: 128px repeat(var(--occ-days, 14), minmax(46px, 1fr));
   align-items: stretch;
-  min-height: 44px;
+  min-height: 56px;
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -827,13 +828,14 @@
   border-right: 1px solid var(--line);
   background: var(--card-2);
   font-size: .82rem;
-  line-height: 44px;
+  line-height: 56px;
 }
 
 .occ-label span { color: var(--muted); font-size: .72rem; letter-spacing: .02em; }
 
-.occ-head { background: var(--card-2); }
-.occ-head .occ-corner { color: var(--muted); font-weight: 600; }
+.occ-head { position: sticky; top: 0; z-index: 5; min-height: 48px; background: var(--card-2); }
+.occ-head .occ-label { z-index: 6; }
+.occ-head .occ-corner { color: var(--muted); font-weight: 600; line-height: 48px; }
 
 .occ-day {
   display: flex;

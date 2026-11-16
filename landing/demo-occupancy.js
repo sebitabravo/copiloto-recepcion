@@ -63,9 +63,12 @@
     const bookings = data.bookings || [];
     const total = units.length;
     const now = toDay(today);
+    const ahead = bookings.filter(b => toDay(b.checkout) > now);
     const staying = bookings.filter(b => toDay(b.checkin) <= now && toDay(b.checkout) > now);
-    const start = toDay(data.start);
-    const count = Math.max(0, Number(data.days) || 0);
+    // El rango puede empezar antes de hoy (para ver las salidas de hoy): los totales cuentan desde hoy.
+    const end = toDay(data.start) + Math.max(0, Number(data.days) || 0);
+    const start = Math.max(toDay(data.start), now);
+    const count = Math.max(0, end - start);
     const perDay = [];
     for (let index = 0; index < count; index += 1) {
       const day = start + index;
@@ -96,8 +99,8 @@
       arrivals: bookings.filter(b => b.checkin === today).length,
       departures: bookings.filter(b => b.checkout === today).length,
       inHouse: staying.reduce((sum, b) => sum + people(b), 0),
-      bySource: {ia: bookings.filter(b => b.source === 'ia').length,
-        personal: bookings.filter(b => b.source !== 'ia').length},
+      bySource: {ia: ahead.filter(b => b.source === 'ia').length,
+        personal: ahead.filter(b => b.source !== 'ia').length},
       perDay, types
     };
   }
@@ -299,7 +302,7 @@
         tile(kpis.arrivals, 'llegadas hoy'),
         tile(kpis.departures, 'salidas hoy'),
         tile(kpis.inHouse, 'huéspedes en casa'),
-        tile(`${kpis.bySource.ia} / ${kpis.bySource.personal}`, 'reservas IA / recepción')
+        tile(`${kpis.bySource.ia} / ${kpis.bySource.personal}`, 'reservas IA / recepción (14 días)')
       );
       const byDay = el('section', 'occ-block');
       byDay.append(el('h4', '', `Ocupación por día · próximos ${kpis.perDay.length} días`));
@@ -338,7 +341,7 @@
 
     async function reload() {
       try {
-        render(await load(todayIso(), RANGE_DAYS));
+        render(await load(addDays(todayIso(), -1), RANGE_DAYS + 1));
       } catch (error) {
         root.textContent = '';
         const text = el('p', 'occ-message', error.status === 401 ? 'Identifícate para ver los indicadores.'
