@@ -8,6 +8,7 @@ Materiales para la sesión con usuarios y para los criterios 3.1.2 y 3.1.3 de la
 | 3.1.2.3 Registro | [registro-sesion.md](registro-sesion.md) | Plantilla para tiempos, resultado, dificultad y cambios sugeridos, una fila por tarea |
 | 3.1.2.1 Storyboard | [storyboard.html](storyboard.html) | Seis escenas del recorrido, lado huésped y lado recepción |
 | 3.1.2.2 Mock-up | [mockup.html](mockup.html) | Capturas reales del prototipo, anotadas con lo que aporta cada pantalla |
+| Hoja para el facilitador | [hoja-brian.md](hoja-brian.md) | Enlace, orden de tareas, qué anotar y cuándo hacer la segunda iteración |
 | 3.1.2.4 Matriz CDM (CIM) | [matriz-cim.md](matriz-cim.md) | Cualidades, debilidades y mejoras por prototipo y participante |
 
 ## Orden de uso

@@ -36,14 +36,20 @@
 | P4 | R2 | | | | | | |
 | P4 | R3 | | | | | | |
 | P4 | R4 | | | | | | |
+| P4 | R5 | | | | | | |
+| P4 | A1 | | | | | | |
 | P5 | R1 | | | | | | |
 | P5 | R2 | | | | | | |
 | P5 | R3 | | | | | | |
 | P5 | R4 | | | | | | |
+| P5 | R5 | | | | | | |
+| P5 | A1 | | | | | | |
 | P6 | R1 | | | | | | |
 | P6 | R2 | | | | | | |
 | P6 | R3 | | | | | | |
 | P6 | R4 | | | | | | |
+| P6 | R5 | | | | | | |
+| P6 | A1 | | | | | | |
 
 ## Observaciones textuales
 
@@ -72,6 +78,8 @@
 | Personas que completan H2 sin ayuda | /3 | — | |
 | Personas que completan R1 sin ayuda | /3 | — | |
 | Total sin ayuda (H2 + R1) | /6 | ≥ 5 | |
+| Personas que completan R5 sin ayuda | /3 | — | |
+| Personas que completan A1 sin ayuda | /3 | — | |
 | Dificultad promedio percibida | | ≤ 3 | |
 | Cambios sugeridos repetidos (2 o más personas) | | — | |
 | Flujo que respondió cada tarea (guiado / IA) | | — | |

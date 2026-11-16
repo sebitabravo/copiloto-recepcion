@@ -5,7 +5,7 @@ import os
 import sqlite3
 import time
 from contextlib import asynccontextmanager, closing
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Literal, Self
 from zoneinfo import ZoneInfo
@@ -132,6 +132,80 @@ def available_units(connection: sqlite3.Connection, code: str, checkin: date, ch
     return max(0, units - peak)
 
 
+def nightly_price(index: int) -> int:
+    """Tarifa simulada por noche del tipo `index` (orden del YAML)."""
+    return 65000 + index * 5000
+
+
+def short_code(code: str) -> str:
+    """Iniciales del código del tipo: `single_doble_vista_jardin` -> `SDVJ`."""
+    return "".join(word[0] for word in code.split("_") if word).upper()
+
+
+def assign_units(units: list[dict], bookings: list[dict]) -> dict[int, int]:
+    """Asigna cada reserva a una unidad concreta (`booking_id` -> `room_id`).
+
+    El PMS solo guarda el tipo de habitación; el plano necesita una fila por unidad. Por tipo y en orden
+    (checkin, booking_id) cada reserva toma la primera unidad libre, con intervalos semiabiertos como
+    `available_units`. Si el alta garantizó pico <= unidades, siempre hay una libre; si una base
+    inconsistente rompe esa regla, se reutiliza la unidad que se libera antes en vez de fallar.
+    """
+    by_code: dict[str, list[int]] = {}
+    for unit in sorted(units, key=lambda unit: unit["room_id"]):
+        by_code.setdefault(unit["room_code"], []).append(unit["room_id"])
+    free_from: dict[int, str] = {}
+    assigned: dict[int, int] = {}
+    for booking in sorted(bookings, key=lambda b: (b["checkin"], b["booking_id"])):
+        candidates = by_code.get(booking["room_code"], [])
+        if not candidates:
+            continue
+        chosen = next((room_id for room_id in candidates if free_from.get(room_id, "") <= booking["checkin"]), None)
+        if chosen is None:
+            chosen = min(candidates, key=lambda room_id: free_from[room_id])
+        free_from[chosen] = booking["checkout"]
+        assigned[booking["booking_id"]] = chosen
+    return assigned
+
+
+# (tipo por posición en el YAML, día de ingreso relativo a hoy, noches, huésped, adultos, origen). Solo tipos con
+# dos unidades y sin solaparse dentro del mismo tipo: la siembra nunca deja un tipo lleno en ninguna noche.
+DEMO_STAYS = [
+    (0, -2, 4, "Camila Fuentes", 2, "personal"), (0, 3, 3, "Rodrigo Pizarro", 2, "ia"),
+    (1, 0, 3, "Matías Rojas", 2, "personal"), (1, 5, 4, "Valentina Soto", 1, "personal"),
+    (2, -3, 6, "Daniela Vera", 2, "ia"), (2, 6, 3, "Sebastián Núñez", 2, "personal"),
+    (3, 1, 5, "Felipe Araya", 2, "personal"), (4, -1, 3, "Andrea Muñoz", 1, "personal"),
+    (5, 2, 4, "Carolina Silva", 2, "ia"), (6, 0, 2, "Ignacio Bravo", 2, "personal"),
+    (6, 4, 5, "Paula Ortiz", 2, "personal"), (7, -4, 7, "Cristóbal Lagos", 2, "personal"),
+]
+
+
+def seed_demo_bookings(path: str, rooms: list[RoomType], today: date) -> int:
+    """Reservas ficticias para que el plano de la demo local no parta vacío. Solo si `bookings` está vacía."""
+    with closing(connect(path)) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            if connection.execute("SELECT COUNT(*) FROM bookings").fetchone()[0]:
+                connection.rollback()
+                return 0
+            rows = []
+            for index, start, nights, name, adults, source in DEMO_STAYS:
+                room = rooms[index]
+                checkin = today + timedelta(days=start)
+                checkout = checkin + timedelta(days=nights)
+                rows.append((name, checkin.isoformat(), checkout.isoformat(), room.code,
+                             min(adults, room.max_adults), 0, source))
+            connection.executemany(
+                """INSERT INTO bookings(guest_name, checkin, checkout, room_code, adults, children, source)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                rows,
+            )
+            connection.commit()
+            return len(rows)
+        except BaseException:
+            connection.rollback()
+            raise
+
+
 class Stay(BaseModel):
     checkin: date
     checkout: date
@@ -205,6 +279,8 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         initialize(database_path, rooms)
+        if os.getenv("PMS_SEED_DEMO", "").strip().lower() in _TRUTHY:
+            seed_demo_bookings(database_path, rooms, datetime.now(ZoneInfo("America/Santiago")).date())
         yield
 
     application = FastAPI(title="Hotel Boutique Bordeluz PMS mock", lifespan=lifespan)
@@ -248,7 +324,7 @@ def create_app() -> FastAPI:
                 units = available_units(connection, room.code, checkin, checkout)
                 if units:
                     result.append(
-                        {**room.model_dump(), "available_units": units, "nightly_price_clp": 65000 + index * 5000}
+                        {**room.model_dump(), "available_units": units, "nightly_price_clp": nightly_price(index)}
                     )
             connection.rollback()
         return {
@@ -310,6 +386,47 @@ def create_app() -> FastAPI:
         with closing(connect(database_path)) as connection:
             rows = connection.execute("SELECT * FROM bookings ORDER BY booking_id").fetchall()
         return [{**dict(row), "simulated": bool(row["simulated"])} for row in rows]
+
+    @application.get("/api/v1/occupancy", dependencies=[Depends(require_staff)])
+    def occupancy(start: date | None = None, days: Annotated[int, Query(ge=1, le=31)] = 14):
+        """Plano de ocupación: una fila por unidad y las estadías que cruzan [start, start + days)."""
+        if os.getenv("SIMULATE_DOWN") == "1":
+            raise HTTPException(status_code=503, detail="Simulated PMS outage")
+        today = datetime.now(ZoneInfo("America/Santiago")).date()
+        first = start or today
+        end = first + timedelta(days=days)
+        with closing(connect(database_path)) as connection:
+            connection.execute("BEGIN")
+            unit_rows = connection.execute("SELECT room_id, room_code FROM rooms ORDER BY room_id").fetchall()
+            booking_rows = connection.execute("SELECT * FROM bookings ORDER BY booking_id").fetchall()
+            connection.rollback()
+        by_code = {room.code: (index, room) for index, room in enumerate(rooms)}
+        units = [
+            {"room_id": row["room_id"], "number": str(100 + row["room_id"]), "code": row["room_code"],
+             "short": short_code(row["room_code"]), "name": by_code[row["room_code"]][1].name,
+             "nightly_price_clp": nightly_price(by_code[row["room_code"]][0])}
+            for row in unit_rows
+        ]
+        # La asignación mira todas las reservas: una anterior al rango también ocupa su unidad.
+        assigned = assign_units([dict(row) for row in unit_rows], [dict(row) for row in booking_rows])
+        stays = [
+            {"booking_id": row["booking_id"], "room_id": assigned[row["booking_id"]], "guest_name": row["guest_name"],
+             "checkin": row["checkin"], "checkout": row["checkout"], "adults": row["adults"],
+             "children": row["children"], "source": row["source"]}
+            for row in booking_rows
+            if row["booking_id"] in assigned
+            and row["checkin"] < end.isoformat()
+            and row["checkout"] > first.isoformat()
+        ]
+        return {
+            "read_at": datetime.now(ZoneInfo("America/Santiago")).isoformat(),
+            "source": "pms-mock",
+            "simulated": True,
+            "start": first.isoformat(),
+            "days": days,
+            "units": units,
+            "bookings": stays,
+        }
 
     @application.get("/admin", response_class=HTMLResponse)
     def admin(demo: Annotated[str | None, Query()] = None):

@@ -73,6 +73,7 @@
     if (view === 'admin' && !started.admin) {
       started.admin = true;
       window.DemoAdmin.init();
+      window.DemoOccupancy?.initAdmin();
     }
     if ((view === 'ambas' || view === 'huesped') && !started.huesped) {
       started.huesped = true;
@@ -82,6 +83,7 @@
     if ((view === 'ambas' || view === 'recepcion') && !started.recepcion) {
       started.recepcion = true;
       window.DemoInbox.init();
+      window.DemoOccupancy?.initReception();
     }
   }
 

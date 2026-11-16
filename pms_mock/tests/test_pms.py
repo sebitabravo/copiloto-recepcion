@@ -1,7 +1,8 @@
 import logging
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from contextlib import closing
+from datetime import date, datetime
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
@@ -394,3 +395,110 @@ def test_existing_database_without_source_column_is_migrated(tmp_path, monkeypat
     initialize(str(path), load_rooms(DEFAULT_HOTEL_PATH))
     with sqlite3.connect(path) as migrated:
         assert migrated.execute("SELECT source FROM bookings").fetchone() == ("personal",)
+
+
+def occupancy(client, **params):
+    return client.get("/api/v1/occupancy", headers=TOKEN, params=params)
+
+
+def test_occupancy_requires_staff_and_honors_simulated_outage(client, monkeypatch):
+    assert client.get("/api/v1/occupancy").status_code == 401
+    assert client.get("/api/v1/occupancy", headers={"X-Staff-Token": "wrong"}).status_code == 401
+    monkeypatch.setenv("SIMULATE_DOWN", "1")
+    assert occupancy(client).status_code == 503
+
+
+def test_occupancy_lists_units_with_number_short_and_price(client):
+    body = occupancy(client, start="2026-11-01", days=7).json()
+    assert body["simulated"] is True
+    assert (body["start"], body["days"]) == ("2026-11-01", 7)
+    assert len(body["units"]) == 20
+    first = body["units"][0]
+    assert first == {
+        "room_id": 1, "number": "101", "code": "single_doble_vista_jardin", "short": "SDVJ",
+        "name": first["name"], "nightly_price_clp": 65000,
+    }
+    assert body["units"][2]["nightly_price_clp"] == 70000
+    assert body["bookings"] == []
+
+
+def test_occupancy_rejects_out_of_range_days(client):
+    assert occupancy(client, days=0).status_code == 422
+    assert occupancy(client, days=32).status_code == 422
+    assert occupancy(client, days=31).status_code == 200
+
+
+def test_occupancy_includes_stays_that_cross_the_range_and_skips_the_rest(client):
+    book(client, guest_name="Antes", checkin="2026-10-28", checkout="2026-11-02")
+    book(client, guest_name="Despues", checkin="2026-11-08", checkout="2026-11-10")
+    book(client, guest_name="Fuera", checkin="2026-10-20", checkout="2026-11-01")
+    book(client, guest_name="Dentro", checkin="2026-11-03", checkout="2026-11-05", source="ia")
+    bookings = occupancy(client, start="2026-11-01", days=7).json()["bookings"]
+    assert sorted(b["guest_name"] for b in bookings) == ["Antes", "Dentro"]
+    inside = next(b for b in bookings if b["guest_name"] == "Dentro")
+    assert inside["source"] == "ia"
+    assert {"booking_id", "room_id", "checkin", "checkout", "adults", "children"} <= inside.keys()
+
+
+def test_occupancy_never_overlaps_two_stays_in_the_same_unit(client):
+    code = "single_doble_vista_jardin"
+    # Dos unidades: la tercera estadía solo cabe después de que se libere alguna (salida = ingreso).
+    book(client, guest_name="A", checkin="2026-11-01", checkout="2026-11-04")
+    book(client, guest_name="B", checkin="2026-11-02", checkout="2026-11-06")
+    book(client, guest_name="C", checkin="2026-11-04", checkout="2026-11-08")
+    book(client, guest_name="D", checkin="2026-11-06", checkout="2026-11-09")
+    body = occupancy(client, start="2026-10-30", days=14).json()
+    by_unit: dict[int, list] = {}
+    for stay in body["bookings"]:
+        by_unit.setdefault(stay["room_id"], []).append(stay)
+    assert len(body["bookings"]) == 4
+    for unit_id, stays in by_unit.items():
+        assert next(u for u in body["units"] if u["room_id"] == unit_id)["code"] == code
+        stays.sort(key=lambda s: s["checkin"])
+        for earlier, later in zip(stays, stays[1:], strict=False):
+            assert later["checkin"] >= earlier["checkout"]
+
+
+def test_assign_units_is_stable_and_picks_the_first_free_unit():
+    from pms_mock.main import assign_units
+
+    units = [{"room_id": 1, "room_code": "x"}, {"room_id": 2, "room_code": "x"}, {"room_id": 3, "room_code": "y"}]
+    stays = [
+        {"booking_id": 2, "room_code": "x", "checkin": "2026-11-02", "checkout": "2026-11-05"},
+        {"booking_id": 1, "room_code": "x", "checkin": "2026-11-01", "checkout": "2026-11-03"},
+        {"booking_id": 3, "room_code": "x", "checkin": "2026-11-03", "checkout": "2026-11-04"},
+        {"booking_id": 4, "room_code": "y", "checkin": "2026-11-01", "checkout": "2026-11-09"},
+    ]
+    assert assign_units(units, stays) == {1: 1, 2: 2, 3: 1, 4: 3}
+
+
+def test_demo_seed_fills_an_empty_database_without_ever_filling_a_type(tmp_path, monkeypatch):
+    from pms_mock.main import available_units, connect, seed_demo_bookings
+
+    app = make_demo_client(tmp_path, monkeypatch).app
+    path, rooms = app.state.database_path, app.state.room_types
+    today = date(2026, 11, 16)
+    assert seed_demo_bookings(path, rooms, today) > 0
+    assert seed_demo_bookings(path, rooms, today) == 0, "idempotente: no duplica"
+    with closing(connect(path)) as connection:
+        rows = connection.execute("SELECT * FROM bookings").fetchall()
+        assert len(rows) >= 10
+        assert {row["source"] for row in rows} == {"personal", "ia"}
+        by_code = {room.code: room for room in rooms}
+        for row in rows:
+            assert row["adults"] <= by_code[row["room_code"]].max_adults
+            assert row["children"] <= by_code[row["room_code"]].max_children
+        for room in rooms:
+            for offset in range(-10, 40):
+                day = date.fromordinal(today.toordinal() + offset)
+                assert available_units(connection, room.code, day, date.fromordinal(day.toordinal() + 1)) >= 1
+
+
+def test_demo_seed_never_overwrites_existing_bookings(client):
+    from pms_mock.main import seed_demo_bookings
+
+    book(client, guest_name="Real", checkin="2026-11-01", checkout="2026-11-03")
+    app = client.app
+    assert seed_demo_bookings(app.state.database_path, app.state.room_types, date(2026, 11, 16)) == 0
+    assert len(client.get("/api/v1/bookings", headers=TOKEN).json()) == 1
+

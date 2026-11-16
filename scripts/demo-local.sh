@@ -213,6 +213,7 @@ run_pms() {
   PMS_DB_PATH="$PMS_DB" \
   STAFF_TOKEN="$(cat "$STATE/staff-token")" \
   DEMO_MODE=1 \
+  PMS_SEED_DEMO=1 \
   COPILOTO_EVENTS_URL="http://127.0.0.1:$COPILOTO_PORT/webhooks/pms" \
   COPILOTO_EVENTS_TOKEN="$(cat "$STATE/events-token")" \
   exec uv run --quiet uvicorn pms_mock.main:app --host 127.0.0.1 --port "$PMS_PORT" --no-access-log

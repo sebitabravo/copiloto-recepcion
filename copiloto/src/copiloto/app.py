@@ -690,6 +690,17 @@ def create_app(
             return JSONResponse({"detail": str(exc)}, status_code=409)
         return request_detail(closed, me, operator)
 
+    @app.get("/api/panel/occupancy", dependencies=limited)
+    async def panel_occupancy(request: Request, start: date | None = None, days: int = Query(default=14, ge=1, le=31)):
+        """Plano de ocupación de solo lectura. Como el cupo, sale del PMS de PRUEBA de la demo, nunca del operativo."""
+        require_identity(request)
+        require_demo(request)
+        first = start or settings.local(clock()).date()
+        try:
+            return await demo_pms.occupancy(first, days)
+        except PmsUnavailable:
+            raise HTTPException(status_code=503, detail="El PMS no respondió: sin plano de ocupación") from None
+
     @app.post("/api/panel/requests/{request_id}/inventory", dependencies=limited)
     async def panel_inventory(request_id: int, request: Request):
         """Recepción verifica cupos en el PMS simulado. Lectura preliminar, con origen y hora.

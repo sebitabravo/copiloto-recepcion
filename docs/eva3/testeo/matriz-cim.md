@@ -14,13 +14,14 @@ mejoras propone. Alimenta directamente la iteración del criterio 3.1.3.
 
 ## Los tres prototipos iniciales
 
-El producto tiene tres superficies que se prueban por separado:
+El producto tiene cuatro superficies que se prueban por separado:
 
 | Código | Prototipo | Quién lo prueba |
 |---|---|---|
 | P1 | Conversación del huésped (demo web) | Personas en rol de huésped |
 | P2 | Panel de recepción (`/panel`) | Personas en rol de recepción |
 | P3 | Bandeja de Chatwoot con la conversación derivada | Personas en rol de recepción |
+| P4 | Plano de ocupación y dashboard (demo) | Las mismas personas de recepción, en las tareas R5 y A1 |
 
 ## Cómo se llena
 
@@ -60,6 +61,14 @@ contradice, se deja tal cual para que la iteración se vea.
 | P5 | | | | Los labels le orientan |
 | P6 | | | | Puede perderse entre conversaciones |
 
+### P4 · Plano y dashboard
+
+| Participante | Cualidades | Debilidades | Mejoras | Hipótesis previa del equipo |
+|---|---|---|---|---|
+| P4 | | | | Encuentra una habitación libre mirando las barras |
+| P5 | | | | Entiende que la barra termina el día antes de la salida |
+| P6 | | | | Lee la ocupación de hoy sin explicación |
+
 ## Síntesis posterior a la sesión
 
 | Prototipo | Cualidades repetidas (≥ 2 personas) | Debilidades repetidas (≥ 2) | Mejoras repetidas (≥ 2) | Qué se cambia en la iteración |
@@ -67,6 +76,7 @@ contradice, se deja tal cual para que la iteración se vea.
 | P1 | | | | |
 | P2 | | | | |
 | P3 | | | | |
+| P4 | | | | |
 
 Regla de decisión: una debilidad repetida por dos o más personas se trata como defecto y entra a la
 iteración. Una debilidad de una sola persona se registra y se observa en la segunda iteración.

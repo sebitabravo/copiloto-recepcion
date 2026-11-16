@@ -6,12 +6,16 @@ Unidad 3: Prototipado y testeo
 
 ## 1. Qué se prueba
 
-El prototipo funcional del copiloto de recepción, en dos roles:
+El prototipo funcional del copiloto de recepción, en tres roles:
 
 | Rol | Qué usa | Qué se observa |
 |---|---|---|
 | Huésped | Demo pública en `http://localhost:8080` (chat web con interfaz estilo WhatsApp) | Si entiende la respuesta, si confía, si percibe que puede reservar |
-| Recepción | Bandeja de Chatwoot `http://localhost:3000` y panel `http://localhost:8100/panel` | Si entiende qué llegó, qué debe hacer y en cuánto tiempo |
+| Recepción | Bandeja de Chatwoot `http://localhost:3000` y panel `http://localhost:8100/panel`; en la demo, la pestaña «Plano de ocupación» | Si entiende qué llegó, qué debe hacer y en cuánto tiempo, y si encuentra una habitación libre en el plano |
+| Administración | Vista «Administración» de la demo (`/demo?vista=admin`) | Si lee la ocupación de hoy y las llegadas sin ayuda |
+
+La demo publicada (versión estática, datos simulados en el navegador) sirve para el huésped, el plano y el
+dashboard; la bandeja de Chatwoot solo existe en la versión local. Enlace de la demo: `https://copiloto-recepcion.vercel.app/demo`.
 
 Se prueba la **propuesta de valor**, no la interfaz sola: ubicación primero, respuesta rápida, disponibilidad
 con sello de hora y confirmación humana.
@@ -51,7 +55,7 @@ bloquea, registra el bloqueo y deja pasar 60 segundos antes de dar la pista mín
 | # | Tarea | Guion para la persona | Éxito |
 |---|---|---|---|
 | H1 | Entender qué es | «Abre esta página y dime qué crees que hace este servicio. No hagas clic todavía.» | Explica en una frase que es un asistente para consultar y reservar |
-| H2 | Consultar disponibilidad | «Pregunta si hay habitación para dos adultos el 12 de noviembre, por dos noches.» | Recibe fechas, personas y una respuesta con hora de lectura del PMS |
+| H2 | Consultar disponibilidad | «Pregunta si hay habitación para dos adultos desde el viernes de la próxima semana, por dos noches.» El facilitador escribe esa fecha en la hoja antes de empezar: siempre posterior al día de la sesión. | Recibe fechas, personas y una respuesta con hora de lectura del PMS |
 | H3 | Distinguir confirmación de disponibilidad | «¿Ya tienes la reserva? ¿Qué falta?» | Responde que falta la confirmación de recepción |
 | H4 | Pedir una persona | «Ahora pide hablar con alguien.» | El copiloto deriva y avisa que recepción responde |
 
@@ -63,6 +67,13 @@ bloquea, registra el bloqueo y deja pasar 60 segundos antes de dar la pista mín
 | R2 | Priorizar | «Tienes dos conversaciones. ¿Cuál atiendes primero y por qué?» | Usa el cronómetro o la etiqueta, no el azar |
 | R3 | Confirmar | «Confirma la pre-reserva en el PMS.» | La confirma con el token y verifica el estado |
 | R4 | Cerrar el turno | «Deja una nota para el turno siguiente y revisa el resumen del turno.» | Nota con autor y resumen leído en voz alta |
+| R5 | Leer el plano | «Abre el plano de ocupación. ¿Qué habitación queda libre el viernes?» | Nombra una habitación sin barra en esa columna en menos de 45 s |
+
+### Bloque administración (3 minutos por persona)
+
+| # | Tarea | Guion para la persona | Éxito |
+|---|---|---|---|
+| A1 | Leer el dashboard | «Abre Administración. ¿Cuál es la ocupación de hoy y cuántas llegadas hay?» | Dice el porcentaje y el número de llegadas leyendo los indicadores, en menos de 30 s |
 
 ## 5. Registro por tarea
 
