@@ -19,6 +19,9 @@
 
   // `generation` sube con cada cambio de caso: una carga o acción que empezó con otra generación ya no manda
   // en la pantalla. `queued` pide otra lectura cuando la selección cambió con una carga en curso.
+  // Quienes dependen de que haya un operador (plano y dashboard) se enteran cuando entra uno.
+  const onEnter = [];
+  let bound = false;
   const state = {
     me: null, items: [], selected: null, generation: 0, detail: null, fetchedAt: Date.now(),
     detailFetchedAt: Date.now(), amber: 120, target: 180, filter: 'todas', search: '', draft: {}, kind: 'answer',
@@ -40,6 +43,7 @@
     S.store.set('localStorage', NAME_KEY, name);
     state.me = name;
     $('inbox-name').textContent = name;
+    for (const listener of onEnter) listener(name);
   }
 
   function askIdentity() {
@@ -550,7 +554,9 @@
     if (clock && shown) clock.textContent = S.clock(S.liveElapsed(shown.measurement, state.detailFetchedAt));
   }
 
-  async function init() {
+  function bind() {
+    if (bound) return;
+    bound = true;
     $('identity-form').addEventListener('submit', submitIdentity);
     $('inbox-identity').addEventListener('click', askIdentity);
     $('inbox-filter').addEventListener('change', event => { state.filter = event.target.value; renderList(); });
@@ -561,6 +567,10 @@
     });
     $('inbox-error').querySelector('button').addEventListener('click', () => state.retry && state.retry());
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  }
+
+  async function init() {
+    bind();
     state.tickTimer = setInterval(tick, 1000);
     const saved = S.store.get('localStorage', NAME_KEY);
     if (!saved) { askIdentity(); return; }
@@ -572,5 +582,13 @@
     }
   }
 
-  window.DemoInbox = {init, refresh, select};
+  // Administración usa la misma identidad sin arrancar la bandeja: abre el diálogo «¿Quién atiende?».
+  async function identify() {
+    bind();
+    const saved = S.store.get('localStorage', NAME_KEY);
+    if (!saved) { askIdentity(); return; }
+    try { await enter(saved); } catch (_) { askIdentity(); }
+  }
+
+  window.DemoInbox = {init, refresh, select, identify, me: () => state.me, onEnter: listener => onEnter.push(listener)};
 })();

@@ -7,7 +7,8 @@ import vm from 'node:vm';
 const root = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 const read = name => readFileSync(join(root, name), 'utf8');
 const shim = read('landing/static-demo.js');
-const frontend = ['landing/demo-shared.js', 'landing/demo-guest.js', 'landing/demo-inbox.js', 'landing/demo-page.js']
+const frontend = ['landing/demo-shared.js', 'landing/demo-guest.js', 'landing/demo-inbox.js',
+  'landing/demo-occupancy.js', 'landing/demo-page.js']
   .map(read).join('\n');
 
 // Rutas que el frontend pide de verdad: si una no está interceptada, la demo estática llama a la red.
@@ -334,4 +335,34 @@ test('los botones de confirmar siguen ahí después de otra pregunta', async () 
   const segunda = await shim.call('/api/demo/chat', {session_id: 'guest', message: 'y llevo a mi perro', shift: 'open'});
   const opciones = segunda.body.messages.at(-1).options || [];
   assert.ok(opciones.includes('Enviar a recepción'), `opciones: ${opciones}`);
+});
+
+test('the simulated occupancy plan is gated by the session, deterministic and overlap-free', async () => {
+  const {call, calls} = loadShim();
+  assert.equal((await call('/api/panel/occupancy')).status, 401, 'el plano pide sesión de recepción');
+  assert.equal((await call('/api/demo/session')).body.name, null, 'GET de sesión informa sin crearla');
+  await call('/api/demo/session', {name: 'Sofía'});
+  assert.equal((await call('/api/demo/session')).body.name, 'Sofía');
+
+  const first = (await call('/api/panel/occupancy?start=2026-08-01&days=14')).body;
+  const again = (await call('/api/panel/occupancy?start=2026-08-01&days=14')).body;
+  assert.deepEqual(first, again, 'mismo rango, mismo resultado');
+  assert.equal(first.simulated, true);
+  assert.equal(first.start, '2026-08-01');
+  assert.equal(first.days, 14);
+  assert.equal(first.units.length, 10);
+  assert.deepEqual(Object.keys(first.units[0]).sort(), ['code', 'name', 'nightly_price_clp', 'number', 'room_id', 'short']);
+  assert.equal(first.units[0].short, 'SDVJ');
+  assert.ok(first.bookings.length > 0);
+  assert.ok(first.bookings.every(b => b.checkin < '2026-08-15' && b.checkout > '2026-08-01'), 'solo estadías que cruzan el rango');
+
+  const all = (await call('/api/panel/occupancy?start=2026-07-01&days=31')).body.bookings;
+  for (const unit of first.units) {
+    const stays = all.filter(b => b.room_id === unit.room_id).sort((a, b) => a.checkin.localeCompare(b.checkin));
+    stays.slice(1).forEach((stay, index) => assert.ok(stay.checkin >= stays[index].checkout, `solape en la hab. ${unit.number}`));
+  }
+  const clamped = (await call('/api/panel/occupancy?start=basura&days=999')).body;
+  assert.equal(clamped.days, 31);
+  assert.match(clamped.start, /^\d{4}-\d{2}-\d{2}$/);
+  assert.deepEqual(calls, [], 'nada sale a la red');
 });

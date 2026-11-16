@@ -31,7 +31,7 @@
 <link rel="preload" href="fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/inter-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="demo.css?v=20261107a">
-<link rel="stylesheet" href="demo-split.css?v=20261109-admin">
+<link rel="stylesheet" href="demo-split.css?v=20261116-plano">
 </head>
 <body class="demo-page" data-view="ambas">
 <a class="skip" href="#main">Saltar al contenido</a>
@@ -167,13 +167,18 @@
     <section id="inbox-view" class="inbox" aria-labelledby="inbox-title" data-role="recepcion">
       <header class="inbox-bar">
         <h2 id="inbox-title">Bandeja de recepción</h2>
+        <div class="inbox-tabs" role="group" aria-label="Qué mostrar en recepción">
+          <button id="inbox-tab-requests" type="button" aria-pressed="true" aria-controls="inbox-body">Solicitudes</button>
+          <button id="inbox-tab-plan" type="button" aria-pressed="false" aria-controls="occupancy-plan">Plano de ocupación</button>
+        </div>
         <div class="inbox-who">
           <span id="inbox-live" class="live-chip" role="status" aria-live="polite">Conectando…</span>
           <button id="inbox-identity" class="identity" type="button" aria-haspopup="dialog">Atiendes como <b id="inbox-name">—</b></button>
         </div>
       </header>
       <div id="inbox-error" class="inline-error inbox-error" role="alert" hidden><span></span><button type="button">Reintentar</button></div>
-      <div class="inbox-body">
+      <div id="occupancy-plan" class="occ" hidden></div>
+      <div id="inbox-body" class="inbox-body">
         <div class="inbox-list">
           <label class="sr-only" for="inbox-filter">Filtrar solicitudes</label>
           <select id="inbox-filter">
@@ -228,6 +233,7 @@
     <!-- ======================= Administración ======================= -->
     <section id="admin-view" class="admin-pane" aria-labelledby="admin-title" data-role="admin" hidden>
       <header class="inbox-bar"><h2 id="admin-title">Administración · PMS de prueba</h2></header>
+      <div id="admin-dashboard" class="occ occ-dash" aria-live="polite"></div>
       <div class="admin-intro">
         <p>Explora habitaciones y reservas en el PMS simulado, sin salir de esta vista. Usa solo datos ficticios.</p>
         <p>Es un servicio separado: no comparte la corrida ni confirma las solicitudes del chat. Este panel no simula escrituras; cualquier reserva requiere una acción explícita dentro del PMS de prueba.</p>
@@ -278,6 +284,7 @@
 <script src="demo-shared.js?v=20261109-admin" defer></script>
 <script src="demo-guest.js?v=20261108c" defer></script>
 <script src="demo-voice.js?v=20261110-voice" defer></script>
+<script src="demo-occupancy.js?v=20261116-plano" defer></script>
 <script src="demo-inbox.js?v=20261108c" defer></script>
 <script src="demo-admin.js?v=20261109-admin" defer></script>
 <script src="demo-page.js?v=20261109-admin" defer></script>

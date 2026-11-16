@@ -333,6 +333,49 @@
         inventory: open && Boolean(r.checkin)}};
   }
 
+
+  // ---------- plano de ocupación simulado ----------
+  // Mismo contrato que GET /api/panel/occupancy del copiloto. Determinista y relativo a hoy (Chile): una unidad
+  // por cupo del catálogo ROOMS, nombres ficticios. Las reservas del chat guiado no aparecen aquí.
+  const OCC_STAYS = [
+    [0, -2, 4, 'Camila Fuentes', 2, 0, 'personal'], [0, 3, 3, 'Rodrigo Pizarro', 2, 0, 'ia'], [0, 8, 4, 'Lucía Varas', 1, 0, 'personal'],
+    [1, -3, 3, 'Andrea Muñoz', 1, 0, 'personal'], [1, 2, 2, 'Tomás Herrera', 2, 0, 'personal'], [1, 9, 3, 'Valentina Soto', 2, 0, 'ia'],
+    [2, -4, 5, 'Eduardo Salas', 2, 0, 'personal'], [2, 1, 5, 'Felipe Araya', 2, 0, 'personal'],
+    [3, 0, 3, 'Javiera Contreras', 2, 1, 'personal'], [3, 5, 4, 'Matías Rojas', 2, 0, 'personal'],
+    [4, -3, 6, 'Daniela Vera', 2, 1, 'ia'], [4, 6, 3, 'Sebastián Núñez', 2, 0, 'personal'],
+    [5, -5, 7, 'Ignacio Bravo', 2, 0, 'personal'], [5, 2, 4, 'Carolina Silva', 2, 1, 'personal'],
+    [6, -1, 2, 'Paula Ortiz', 2, 0, 'ia'], [6, 7, 5, 'Cristóbal Lagos', 2, 1, 'personal'],
+    [7, 0, 4, 'Marcela González', 3, 2, 'personal'], [7, 10, 3, 'Nicolás Pardo', 3, 0, 'personal'],
+    [8, 3, 3, 'Fernanda Castro', 2, 1, 'ia'],
+    [9, -2, 5, 'Andrés Molina', 4, 2, 'personal'], [9, 5, 6, 'Beatriz Ríos', 4, 1, 'personal']
+  ];
+  const isoDay = (iso, offset) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + offset)).toISOString().slice(0, 10);
+  };
+  function occupancy(query) {
+    const t = localParts(now());
+    const pad = n => String(n).padStart(2, '0');
+    const today = `${t.y}-${pad(t.m)}-${pad(t.d)}`;
+    const asked = query.get('start');
+    const start = /^\d{4}-\d{2}-\d{2}$/.test(asked || '') ? asked : today;
+    const days = Math.min(31, Math.max(1, Number.parseInt(query.get('days'), 10) || 14));
+    const end = isoDay(start, days);
+    const units = [];
+    ROOMS.forEach(room => {
+      for (let n = 0; n < room.units; n += 1) {
+        units.push({room_id: units.length + 1, number: String(101 + units.length), code: room.code,
+          short: room.code.split('_').map(word => word[0]).join('').toUpperCase(), name: room.name,
+          nightly_price_clp: room.price});
+      }
+    });
+    const bookings = OCC_STAYS.map(([unit, from, count, guest, adults, children, source], index) => ({
+      booking_id: index + 1, room_id: unit + 1, guest_name: guest, checkin: isoDay(today, from),
+      checkout: isoDay(today, from + count), adults, children, source
+    })).filter(b => b.checkin < end && b.checkout > start);
+    return {read_at: readAt(), simulated: true, start, days, units, bookings};
+  }
+
   // ---------- rutas ----------
   const json = (body, status = 200) => Promise.resolve(new Response(JSON.stringify(body), {status, headers: {'content-type': 'application/json'}}));
   const staffSession = run => {
@@ -516,7 +559,9 @@
       } catch (_) { /* */ }
       return Promise.resolve(new Response(null, {status: 204}));
     }
+    if (path === '/api/demo/session' && method === 'GET') return json({demo: true, name: me || null, run});
     if (path.startsWith('/api/panel/') && !me) return json({detail: 'Sesión del panel requerida'}, 401);
+    if (path === '/api/panel/occupancy') return json(occupancy(query));
     if (path === '/api/panel/requests') {
       const items = db.requests.map(view)
         // Mismo orden que el servidor: abiertas por espera (empate: la que llegó antes), cerradas al final.
