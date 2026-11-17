@@ -10,7 +10,7 @@ from copiloto.config import Settings
 from copiloto.events import connect, init_db
 from copiloto.flow import Copiloto
 from copiloto.hotel import HotelData
-from copiloto.pms import PmsAdapter, PmsReading, PmsUnavailable, RoomOffer
+from copiloto.pms import PmsAdapter, PmsConflict, PmsReading, PmsUnavailable, RoomOffer
 from fastapi.testclient import TestClient
 
 HOTEL_PATH = Path(__file__).resolve().parents[2] / "data" / "hotel.yaml"
@@ -90,14 +90,23 @@ class FakePms(PmsAdapter):
         return PmsReading("2026-10-28T15:00:00-03:00", "pms-mock", True, list(self.offers))
 
 
-async def _fake_book(self, guest_name, room_code, checkin, checkout, adults, children, conversation_id):
+async def _fake_book(self, guest_name, room_code, checkin, checkout, adults, children, conversation_id,
+                     source="ia"):
     if self.book_error:
         raise self.book_error
+    offer = next((item for item in self.offers if item.code == room_code and item.available_units > 0), None)
+    if offer is None:
+        raise PmsConflict("sin cupo")
+    self.offers = [
+        replace(item, available_units=item.available_units - 1) if item.code == room_code else item
+        for item in self.offers
+    ]
     booking = {"booking_id": 7 + len(self.bookings), "guest_name": guest_name, "room_code": room_code,
                "checkin": checkin.isoformat(), "checkout": checkout.isoformat(), "adults": adults,
-               "children": children, "conversation_id": conversation_id}
+               "children": children, "conversation_id": conversation_id, "source": source}
     self.bookings.append(booking)
-    return booking
+    return {"booking_id": booking["booking_id"], "room_code": room_code,
+            "checkin": booking["checkin"], "checkout": booking["checkout"]}
 
 
 FakePms.book = _fake_book
@@ -261,7 +270,7 @@ def demo(settings, harness):
         pass
 
     d = Demo()
-    d.app, d.clock, d.db, d.chatwoot = app, clock, harness.db, chatwoot
+    d.app, d.clock, d.db, d.chatwoot, d.pms = app, clock, harness.db, chatwoot, harness.pms
     d.guest = TestClient(app)
     d.sofia = TestClient(app)
     d.run = new_run(d.guest)

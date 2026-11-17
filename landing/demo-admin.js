@@ -47,7 +47,7 @@
     if (initialized) return;
     initialized = true;
     if (config.staticDemo) {
-      $('status').textContent = 'Administración/PMS no disponible en esta versión estática. No hay servicio de administración: aquí no se crean ni se guardan reservas.';
+      $('status').textContent = 'El panel del PMS no abre en esta versión. Las reservas que registra recepción sí quedan en el plano de ocupación de esta página.';
       return;
     }
     const base = pmsBase();

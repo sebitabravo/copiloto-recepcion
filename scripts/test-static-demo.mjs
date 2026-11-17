@@ -41,7 +41,7 @@ test('every endpoint the new frontend calls is intercepted by the static shim', 
   assert.ok(requested.length >= 6, `rutas detectadas: ${requested}`);
   const {call, calls} = loadShim();
   for (const path of requested) {
-    const post = /chat|reply|reset|session|take|close|inventory/.test(path);
+    const post = /chat|reply|reset|session|take|close|inventory|book/.test(path);
     const response = await call(path, post ? {session_id: 'x'.repeat(20), message: 'hola', name: 'Sofía'} : undefined);
     assert.ok(response.status < 500, `${path} respondió ${response.status}`);
   }
@@ -83,6 +83,21 @@ test('the static demo runs the canonical case without a backend', async () => {
   const guest = (await call(`/api/demo/conversation?session_id=${session}`)).body;
   assert.equal(guest.messages.at(-1).body, reply);
   assert.ok(guest.messages.every(message => message.role !== 'note'), 'el huésped no lee notas internas');
+  const room = inventory.offers[0];
+  const before = room.available_units;
+  const registered = await call(`/api/panel/requests/${request.id}/book`, {
+    room_code: room.code, guest_name: 'Huésped de prueba'});
+  assert.equal(registered.body.request.reservation_status, 'confirmada');
+  assert.match(registered.body.request.messages.at(-1).body, /La confirmó recepción/);
+  const after = (await call(`/api/panel/requests/${request.id}/inventory`, {})).body;
+  const left = after.offers.find(offer => offer.code === room.code);
+  assert.equal(left ? left.available_units : 0, before - 1);
+  const plan = (await call('/api/panel/occupancy?start=2026-11-01&days=31')).body;
+  assert.ok(plan.bookings.some(stay => stay.guest_name === 'Huésped de prueba' && stay.source === 'personal'));
+  const seen = (await call(`/api/demo/conversation?session_id=${session}`)).body;
+  assert.match(seen.request.label, /^Reserva confirmada por Sofía/);
+  assert.equal((await call(`/api/panel/requests/${request.id}/book`, {
+    room_code: room.code, guest_name: 'Huésped de prueba'})).status, 409);
   assert.deepEqual(calls, []);
 });
 

@@ -135,10 +135,10 @@ class HttpPmsAdapter(PmsAdapter):
             raise PmsUnavailable(str(exc)) from exc
 
     async def book(self, guest_name: str, room_code: str, checkin: date, checkout: date, adults: int,
-                   children: int, conversation_id: int | None) -> dict:
+                   children: int, conversation_id: int | None, source: str = "ia") -> dict:
         body = {"guest_name": guest_name, "room_code": room_code, "checkin": checkin.isoformat(),
                 "checkout": checkout.isoformat(), "adults": adults, "children": children,
-                "conversation_id": conversation_id, "source": "ia"}
+                "conversation_id": conversation_id, "source": source}
         try:
             response = await self._http.post(f"{self._base_url}{self._booking_path}", json=body,
                                              headers={self._auth_header: self._staff_token})

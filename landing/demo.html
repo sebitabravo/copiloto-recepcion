@@ -215,7 +215,7 @@
           <dl id="card-facts" class="facts"></dl>
           <section class="card-block" aria-labelledby="inventory-title">
             <h4 id="inventory-title">Verificar cupo</h4>
-            <p class="hint">PMS simulado: lectura preliminar con hora. No bloquea cupos ni crea la reserva.</p>
+            <p class="hint">La lectura no toma el cupo. Registrar una habitación la ocupa en el PMS de prueba, igual que una reserva hecha por recepción.</p>
             <div class="inventory-controls">
               <button id="inventory-check" class="button-sm" type="button">Consultar el PMS</button>
               <label class="check"><input id="inventory-down" type="checkbox"> Simular caída</label>
@@ -236,7 +236,7 @@
       <div id="admin-dashboard" class="occ occ-dash" aria-live="polite"></div>
       <div class="admin-intro">
         <p>Explora habitaciones y reservas en el PMS simulado, sin salir de esta vista. Usa solo datos ficticios.</p>
-        <p>Es un servicio separado: no comparte la corrida ni confirma las solicitudes del chat. Este panel no simula escrituras; cualquier reserva requiere una acción explícita dentro del PMS de prueba.</p>
+        <p>Las reservas que recepción registra desde una solicitud ocupan una habitación de este mismo PMS de prueba. El alta la hace una persona, nunca el asistente.</p>
         <p id="admin-status" role="status" aria-live="polite">Administración requiere el servicio PMS de prueba. La versión estática no crea ni guarda reservas.</p>
         <div class="admin-actions">
           <button id="admin-open" class="button-sm primary" type="button" aria-controls="admin-frame" hidden>Abrir PMS de prueba</button>
@@ -285,8 +285,8 @@
 <script src="demo-guest.js?v=20261108c" defer></script>
 <script src="demo-voice.js?v=20261110-voice" defer></script>
 <script src="demo-occupancy.js?v=20261116-plano" defer></script>
-<script src="demo-inbox.js?v=20261108c" defer></script>
-<script src="demo-admin.js?v=20261109-admin" defer></script>
+<script src="demo-inbox.js?v=20261116a" defer></script>
+<script src="demo-admin.js?v=20261116b" defer></script>
 <script src="demo-page.js?v=20261109-admin" defer></script>
 </body>
 </html>

@@ -1141,7 +1141,7 @@ class Copiloto:
             return  # la nota de una reserva hecha por la IA la escribe el propio asistente
         try:
             await self.chatwoot.send_message(
-                conversation_id, f"Reserva #{booking_id} cerrada por recepción en el PMS.", private=True
+                conversation_id, f"Reserva #{booking_id} registrada por recepción en el PMS.", private=True
             )
         except Exception:
             logger.exception("No se pudo anotar la reserva en la conversación %s", conversation_id)

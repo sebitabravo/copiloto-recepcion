@@ -37,7 +37,7 @@ from copiloto.events import connect, init_db, record_event
 from copiloto.flow import DEMO_CHANNEL, DEMO_MENU, DEMO_STYLE, Copiloto, long_date
 from copiloto.guided import guided_reply
 from copiloto.hotel import HotelData
-from copiloto.pms import PmsAdapter, PmsUnavailable, build_demo_pms_adapter, build_pms_adapter
+from copiloto.pms import PmsAdapter, PmsConflict, PmsUnavailable, build_demo_pms_adapter, build_pms_adapter
 from copiloto.ratelimit import SlidingWindowLimiter
 from copiloto.sla import SlaWorker
 from copiloto.voice import (
@@ -297,7 +297,11 @@ def create_app(
         except (TypeError, ValueError):
             raise HTTPException(status_code=422, detail="booking_id inválido") from None
         source = body.get("source") if body.get("source") in ("personal", "ia") else "personal"
-        await core.on_booking_confirmed(body.get("conversation_id"), booking_id, source)
+        conversation_id = body.get("conversation_id")
+        engine = core
+        if isinstance(conversation_id, int) and store.conversation_source(db, conversation_id) == store.DEMO_SOURCE:
+            engine = demo_engine(None)
+        await engine.on_booking_confirmed(conversation_id, booking_id, source)
         return {"status": "recorded"}
 
     def panel_session(name: str, expires: int, demo: bool = False, run: str | None = None,
@@ -579,6 +583,7 @@ def create_app(
             "reply": demo and open_ and mine,
             "close": demo and open_ and mine,
             "inventory": demo and open_ and bool(row["checkin"]),
+            "book": demo and open_ and mine and bool(row["checkin"]) and row["reservation_status"] != "confirmada",
         }
         return detail
 
@@ -758,6 +763,66 @@ def create_app(
                 "offers": offers, "more": max(more, 0),
                 "request": request_detail(scoped_request(request_id, request), me, viewer(request)["operator"])}
 
+    @app.post("/api/panel/requests/{request_id}/book", dependencies=limited)
+    async def panel_book(request_id: int, request: Request):
+        """Recepción registra la reserva en el PMS de prueba. El asistente no puede hacer este paso.
+
+        La lectura de cupos sigue siendo preliminar. Esta acción toma una unidad, marca la solicitud
+        como confirmada y avisa al huésped en el mismo hilo.
+        """
+        me = require_identity(request)
+        row = scoped_request(request_id, request)
+        require_demo(request)
+        operator = viewer(request)["operator"]
+        try:
+            body = json.loads(await read_capped(request, 2048) or b"{}")
+        except ValueError:
+            return JSONResponse({"detail": "JSON inválido"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"detail": "JSON inválido"}, status_code=400)
+        if row["status"] == "cerrada":
+            return JSONResponse({"detail": "La solicitud está cerrada"}, status_code=409)
+        if not store.owned_by(row, me, operator):
+            detail = "Toma la solicitud antes de registrar la reserva" if not row["assignee"] else f"La atiende {row['assignee']}"
+            return JSONResponse({"detail": detail}, status_code=409)
+        if row["reservation_status"] == "confirmada":
+            return JSONResponse({"detail": "Esta solicitud ya tiene una reserva en el PMS"}, status_code=409)
+        if not row["checkin"] or not row["checkout"] or not row["adults"] or row["children"] is None:
+            return JSONResponse({"detail": "Faltan fechas o huéspedes para registrar la reserva"}, status_code=409)
+        guest_name = " ".join(str(body.get("guest_name") or "").split())
+        if not guest_name or len(guest_name) > 80:
+            return JSONResponse({"detail": "Escribe un nombre de prueba de 1 a 80 caracteres"}, status_code=400)
+        room_code = str(body.get("room_code") or "")
+        checkin = date.fromisoformat(row["checkin"])
+        checkout = date.fromisoformat(row["checkout"])
+        adults, children = int(row["adults"]), int(row["children"])
+        try:
+            reading = await demo_pms.availability(checkin, checkout, adults, children)
+        except PmsUnavailable:
+            return JSONResponse({"detail": "El PMS no respondió: no registré la reserva"}, status_code=503)
+        offer = next((item for item in reading.offers if item.code == room_code and item.available_units > 0), None)
+        if offer is None:
+            return JSONResponse({"detail": "Esa habitación no tiene cupo. Vuelve a consultar el PMS."}, status_code=409)
+        try:
+            created = await demo_pms.book(
+                guest_name, room_code, checkin, checkout, adults, children, row["conversation_id"], source="personal",
+            )
+        except PmsConflict:
+            return JSONResponse({"detail": "El PMS rechazó la reserva: sin cupo para esas fechas."}, status_code=409)
+        except PmsUnavailable:
+            return JSONResponse({"detail": "El PMS no respondió: no registré la reserva"}, status_code=503)
+        await demo_engine(None).on_booking_confirmed(row["conversation_id"], int(created["booking_id"]), "personal")
+        nights = (checkout - checkin).days
+        text = (
+            f"Reserva #{created['booking_id']} registrada en el PMS: {offer.name}, "
+            f"{row['checkin']} al {row['checkout']} ({nights} {'noche' if nights == 1 else 'noches'}), "
+            f"{adults} adultos y {children} niños, a nombre de {guest_name}. "
+            "El cupo quedó tomado. La confirmó recepción, no el asistente."
+        )
+        updated, _message = store.staff_reply(db, row["id"], me, text, "answer", clock(), author_id=operator)
+        return {"booking_id": int(created["booking_id"]), "room_name": offer.name,
+                "request": request_detail(updated, me, operator)}
+
     @app.get("/api/panel/{conversation_id}", dependencies=limited)
     async def panel_data(conversation_id: int, request: Request):
         if panel_identity(request) is None:
@@ -934,7 +999,9 @@ def create_app(
         if row is None:
             return None
         status = row["status"]
-        if status == "pendiente" and row["in_shift"]:
+        if row["reservation_status"] == "confirmada":
+            label = f"Reserva confirmada por {row['assignee'] or 'recepción'} en el PMS"
+        elif status == "pendiente" and row["in_shift"]:
             label = "Enviada a recepción · te responderán por aquí"
         elif status == "pendiente":
             opening = settings.next_shift_start(row["created_at"])

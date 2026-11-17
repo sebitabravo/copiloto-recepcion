@@ -120,6 +120,35 @@ def test_canonical_case_end_to_end(demo):
     assert demo.chatwoot.messages == [], "la demo nunca escribe a Chatwoot"
 
 
+def test_reception_registers_the_room_and_a_reply_alone_does_not(demo):
+    canonical(demo)
+    item = demo.inbox()["requests"][0]
+    payload = {"room_code": "doble_con_jacuzzi", "guest_name": "Huésped de prueba"}
+    assert demo.sofia.post(f"/api/panel/requests/{item['id']}/book", json=payload).status_code == 409
+    demo.sofia.post(f"/api/panel/requests/{item['id']}/take")
+    answered = demo.sofia.post(f"/api/panel/requests/{item['id']}/reply", json={"body": REPLY}).json()["request"]
+    assert answered["reservation_status"] == "pendiente_confirmacion"
+    booked = demo.sofia.post(f"/api/panel/requests/{item['id']}/book", json=payload)
+    assert booked.status_code == 200, booked.text
+    body = booked.json()
+    assert body["request"]["reservation_status"] == "confirmada"
+    assert body["request"]["reservation_label"] == "Confirmada por recepción en el PMS"
+    assert "La confirmó recepción" in body["request"]["messages"][-1]["body"]
+    assert demo.pms.bookings[-1]["source"] == "personal"
+    assert demo.pms.bookings[-1]["conversation_id"] == item["conversation_id"]
+    guest = demo.guest.get("/api/demo/conversation", params={"session_id": SESSION}).json()
+    assert guest["request"]["label"].startswith("Reserva confirmada por Sofía")
+    assert guest["messages"][-1]["role"] == "staff"
+    assert guest["messages"][-1]["author"] == "Sofía"
+    again = demo.sofia.post(f"/api/panel/requests/{item['id']}/book", json=payload)
+    assert again.status_code == 409
+    assert len(demo.pms.bookings) == 1
+    assert demo.chatwoot.messages == []
+    inventory = demo.sofia.post(f"/api/panel/requests/{item['id']}/inventory", json={}).json()
+    jacuzzi = next(offer for offer in inventory["offers"] if offer["code"] == "doble_con_jacuzzi")
+    assert jacuzzi["available_units"] == 1
+
+
 def test_the_bot_stays_silent_while_reception_owns_the_case(demo):
     canonical(demo)
     request_id = demo.inbox()["requests"][0]["id"]
@@ -219,7 +248,7 @@ def test_the_owner_can_close_once_without_answering_or_confirming_a_reservation(
     assert detail["messages"] == taken["messages"]
     events = [event for event in detail["events"] if event["kind"] == "request_closed"]
     assert events == [{"kind": "request_closed", "ts": demo.clock(), "payload": {"request_id": request_id}}]
-    assert detail["actions"] == {"take": False, "reply": False, "close": False, "inventory": False}
+    assert detail["actions"] == {"take": False, "reply": False, "close": False, "inventory": False, "book": False}
     before_retry = close_snapshot(demo, request_id)
     assert before_retry[-1]["handled_by"] == "asistente"
     assert demo.sofia.post(f"/api/panel/requests/{request_id}/close").json() == detail

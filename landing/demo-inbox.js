@@ -25,7 +25,7 @@
   const state = {
     me: null, items: [], selected: null, generation: 0, detail: null, fetchedAt: Date.now(),
     detailFetchedAt: Date.now(), amber: 120, target: 180, filter: 'todas', search: '', draft: {}, kind: 'answer',
-    sending: false, retry: null, inventory: {}, pollTimer: 0, tickTimer: 0, loading: false, queued: false,
+    sending: false, retry: null, inventory: {}, bookName: 'Huésped de prueba', pollTimer: 0, tickTimer: 0, loading: false, queued: false,
     stickBottom: false
   };
 
@@ -350,7 +350,9 @@
       fact('Motivo', detail.reason_label),
       fact('Primera respuesta', clock, measure.state === 'fuera_de_turno'
         ? measure.label : `${measure.label} · meta ${S.clock(measure.target_s)}`),
-      fact('Reserva', reservation, 'La confirma recepción en su sistema. Responder no reserva.')
+      fact('Reserva', reservation, detail.reservation_status === 'confirmada'
+        ? 'El cupo quedó tomado en el PMS. La estadía aparece en el plano.'
+        : 'Responder no reserva. Registrar una habitación toma el cupo.')
     );
     $('inventory-check').disabled = !detail.actions.inventory;
     $('case-close').hidden = !detail.actions.close;
@@ -374,6 +376,26 @@
       box.append(list);
     } else {
       box.append(S.el('p', 'warn', `Disponibilidad por verificar: ${result.reason}. No informes cupos; responde con un seguimiento honesto.`));
+    }
+    if (detail.reservation_status === 'confirmada') {
+      box.append(S.el('p', '', 'Cupo tomado. Abre el plano de ocupación para ver la estadía en su habitación.'));
+    } else if (detail.actions.book && result.ok) {
+      const name = S.el('input');
+      name.id = 'book-name';
+      name.maxLength = 80;
+      name.autocomplete = 'off';
+      name.placeholder = 'Nombre de prueba';
+      name.value = state.bookName || 'Huésped de prueba';
+      name.addEventListener('input', () => { state.bookName = name.value; });
+      const nameLabel = S.el('label', '', 'Nombre en la reserva');
+      nameLabel.htmlFor = 'book-name';
+      box.append(nameLabel, name);
+      result.offers.filter(offer => offer.available_units > 0).forEach(offer => {
+        const register = S.el('button', 'button-sm', `Registrar ${offer.name.replace(/^Habitación\s+/i, '')}`);
+        register.type = 'button';
+        register.addEventListener('click', () => registerStay(detail, offer.code));
+        box.append(register);
+      });
     }
     if (detail.actions.reply) {
       const text = suggestion(result);
@@ -513,6 +535,25 @@
       state.sending = false;
       if ($('reply-send')) $('reply-send').textContent = 'Enviar respuesta';
       updateSendButton();
+      refresh();
+    }
+  }
+
+  async function registerStay(detail, roomCode) {
+    if (state.booking) return;
+    const name = ($('book-name')?.value || state.bookName || '').trim();
+    const generation = state.generation;
+    state.booking = true;
+    try {
+      const data = await S.api(`/api/panel/requests/${detail.id}/book`, {method: 'POST', staff: true,
+        body: {room_code: roomCode, guest_name: name}});
+      delete state.inventory[detail.id];
+      state.stickBottom = true;
+      applyResult(detail.id, generation, data.request);
+    } catch (error) {
+      showError(`${detail.code}: ${error.message}`, () => registerStay(detail, roomCode));
+    } finally {
+      state.booking = false;
       refresh();
     }
   }

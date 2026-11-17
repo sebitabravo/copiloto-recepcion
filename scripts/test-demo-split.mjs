@@ -241,7 +241,7 @@ test('static Administration is explicitly unavailable and makes no service calls
   const ui = bootAdmin({staticDemo: true, pmsUrl: 'http://localhost:8200'});
   await flush();
   assert.equal(ui.node('status').textContent,
-    'Administración/PMS no disponible en esta versión estática. No hay servicio de administración: aquí no se crean ni se guardan reservas.');
+    'El panel del PMS no abre en esta versión. Las reservas que registra recepción sí quedan en el plano de ocupación de esta página.');
   await ui.node('open').click();
   await ui.node('retry').click();
   assert.equal(ui.calls.length, 0);

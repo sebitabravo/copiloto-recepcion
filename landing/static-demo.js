@@ -74,9 +74,12 @@
   window.__STATIC_DEMO__ = {get key() { return stateKey(currentRun()); }};
 
   // ---------- estado compartido solo entre pestañas de la misma corrida ----------
-  const empty = () => ({conversations: {}, requests: [], events: [], seq: {msg: 0, req: 0}});
+  const empty = () => ({conversations: {}, requests: [], events: [], bookings: [], seq: {msg: 0, req: 0}});
   function load(key) {
-    try { return JSON.parse(window.localStorage.getItem(key)) || empty(); } catch (_) { return empty(); }
+    let db;
+    try { db = JSON.parse(window.localStorage.getItem(key)) || empty(); } catch (_) { db = empty(); }
+    if (!Array.isArray(db.bookings)) db.bookings = [];
+    return db;
   }
   function save(key, db) { try { window.localStorage.setItem(key, JSON.stringify(db)); } catch (_) { /* */ } }
 
@@ -168,10 +171,14 @@
     return `${t.y}-${pad(t.m)}-${pad(t.d)}T${pad(t.h)}:${pad(t.min)}:00`;
   }
   // Lectura simulada del PMS: capacidad del catálogo y un cupo menos en las noches del 20 y 21 de noviembre.
-  function reading(d) {
+  function takenUnits(bookings, code, checkin, checkout) {
+    return (bookings || []).filter(stay => stay.room_code === code && stay.checkin < checkout && stay.checkout > checkin).length;
+  }
+  function reading(d, bookings) {
     const busy = d.checkin <= '2026-11-21' && d.checkout > '2026-11-20';
     const offers = ROOMS.filter(room => room.adults >= d.adults && room.children >= (d.children || 0))
-      .map(room => ({code: room.code, name: room.name, available_units: room.units - (busy ? 1 : 0),
+      .map(room => ({code: room.code, name: room.name,
+        available_units: room.units - (busy ? 1 : 0) - takenUnits(bookings, room.code, d.checkin, d.checkout),
         nightly_price_clp: room.price}))
       .filter(offer => offer.available_units > 0);
     return {read_at: readAt(), offers};
@@ -179,7 +186,7 @@
   function summary(db, conv) {
     const d = conv.data;
     const nights = Math.round((new Date(d.checkout) - new Date(d.checkin)) / 86400000);
-    const pms = reading(d);
+    const pms = reading(d, db.bookings);
     d.read_at = pms.read_at;
     conv.step = 'confirm';
     const r = pms.read_at;
@@ -290,7 +297,9 @@
   function guestRequest(db, conv) {
     const request = db.requests.filter(r => r.conversation_id === conv.id).pop();
     if (!request) return null;
-    const label = request.status === 'pendiente'
+    const label = request.reservation_status === 'confirmada'
+      ? `Reserva confirmada por ${request.assignee || 'recepción'} en el PMS`
+      : request.status === 'pendiente'
       ? (request.in_shift ? 'Enviada a recepción · te responderán por aquí' : `Guardada · recepción responde desde las ${nextOpening()}`)
       : request.status === 'en_atencion' ? `${request.assignee} de recepción está atendiendo tu solicitud`
         : request.status === 'respondida' ? `Respondida por ${request.assignee} · recepción`
@@ -330,7 +339,8 @@
       faq: db.events.filter(e => e.conversation_id === r.conversation_id && e.kind === 'faq_answered')
         .map(e => ({faq_id: e.payload.faq_id, latency_s: 0, met: true})),
       actions: {take: open && !r.assignee, reply: open && owned(r, operator), close: open && owned(r, operator),
-        inventory: open && Boolean(r.checkin)}};
+        inventory: open && Boolean(r.checkin),
+        book: open && owned(r, operator) && Boolean(r.checkin) && r.reservation_status !== 'confirmada'}};
   }
 
 
@@ -353,7 +363,15 @@
     const [y, m, d] = iso.split('-').map(Number);
     return new Date(Date.UTC(y, m - 1, d + offset)).toISOString().slice(0, 10);
   };
-  function occupancy(query) {
+  function placeUnit(units, placed, code, stay) {
+    const candidates = units.filter(unit => unit.code === code);
+    for (const unit of candidates) {
+      const hit = placed.some(item => item.room_id === unit.room_id && item.checkin < stay.checkout && item.checkout > stay.checkin);
+      if (!hit) return unit.room_id;
+    }
+    return null;
+  }
+  function occupancy(query, registered) {
     const t = localParts(now());
     const pad = n => String(n).padStart(2, '0');
     const today = `${t.y}-${pad(t.m)}-${pad(t.d)}`;
@@ -372,8 +390,15 @@
     const bookings = OCC_STAYS.map(([unit, from, count, guest, adults, children, source], index) => ({
       booking_id: index + 1, room_id: unit + 1, guest_name: guest, checkin: isoDay(today, from),
       checkout: isoDay(today, from + count), adults, children, source
-    })).filter(b => b.checkin < end && b.checkout > start);
-    return {read_at: readAt(), simulated: true, start, days, units, bookings};
+    }));
+    (registered || []).forEach(stay => {
+      const roomId = placeUnit(units, bookings, stay.room_code, stay);
+      if (roomId == null) return;
+      bookings.push({booking_id: 1000 + bookings.length, room_id: roomId, guest_name: stay.guest_name,
+        checkin: stay.checkin, checkout: stay.checkout, adults: stay.adults, children: stay.children, source: 'personal'});
+    });
+    const visible = bookings.filter(b => b.checkin < end && b.checkout > start);
+    return {read_at: readAt(), simulated: true, start, days, units, bookings: visible};
   }
 
   // ---------- rutas ----------
@@ -508,6 +533,8 @@
             Object.assign(conv.data, answer.stay);
             if (answer.offers) {
               conv.data.offers = answer.offers;
+              // La lectura ya ocurrió en la función de IA: el traspaso no puede decir que falta el cupo.
+              conv.data.read_at = conv.data.read_at || readAt();
               conv.step = 'confirm';
             } else {
               summary(db, conv);
@@ -561,7 +588,7 @@
     }
     if (path === '/api/demo/session' && method === 'GET') return json({demo: true, name: me || null, run});
     if (path.startsWith('/api/panel/') && !me) return json({detail: 'Sesión del panel requerida'}, 401);
-    if (path === '/api/panel/occupancy') return json(occupancy(query));
+    if (path === '/api/panel/occupancy') return json(occupancy(query, db.bookings));
     if (path === '/api/panel/requests') {
       const items = db.requests.map(view)
         // Mismo orden que el servidor: abiertas por espera (empate: la que llegó antes), cerradas al final.
@@ -571,7 +598,7 @@
       return json({now: now(), me, target_s: 180, amber_s: 120,
         shift: {start: SHIFT.start, end: SHIFT.end, in_shift: inShift(''), next_opening: nextOpening()}, requests: items, selected});
     }
-    const match = path.match(/^\/api\/panel\/requests\/(\d+)(?:\/(take|reply|close|inventory))?$/);
+    const match = path.match(/^\/api\/panel\/requests\/(\d+)(?:\/(take|reply|close|inventory|book))?$/);
     if (match) {
       const r = db.requests.find(item => item.id === +match[1]);
       if (!r) return json({detail: 'Solicitud no encontrada'}, 404);
@@ -610,7 +637,7 @@
         let result;
         if (body && body.simulate_down) result = {ok: false, reason: 'el PMS no respondió (caída simulada)'};
         else {
-          const pms = reading(r);
+          const pms = reading(r, db.bookings);
           result = {ok: true, source: 'PMS simulado', read_at: pms.read_at, simulated: true, offers: pms.offers};
         }
         const offersText = result.ok
@@ -620,6 +647,34 @@
           : `Disponibilidad por verificar: PMS sin lectura (${result.reason}). No informar cupos al huésped.`, {author: me});
         write();
         return json({...result, request: view(r)});
+      } else if (action === 'book') {
+        if (method !== 'POST') return json(view(r));
+        if (r.status === 'cerrada') return conflict('La solicitud está cerrada');
+        if (!owned(r, operator)) return conflict(r.assignee ? `La atiende ${r.assignee}` : 'Toma la solicitud antes de registrar la reserva');
+        if (r.reservation_status === 'confirmada') return conflict('Esta solicitud ya tiene una reserva en el PMS');
+        if (!r.checkin || !r.checkout || !r.adults || r.children == null) return conflict('Faltan fechas o huéspedes para registrar la reserva');
+        const guest = String(body.guest_name || '').trim().replace(/\s+/g, ' ');
+        if (!guest || guest.length > 80) return json({detail: 'Escribe un nombre de prueba de 1 a 80 caracteres'}, 400);
+        const pms = reading(r, db.bookings);
+        const offer = pms.offers.find(item => item.code === body.room_code);
+        if (!offer) return conflict('Esa habitación no tiene cupo. Vuelve a consultar el PMS.');
+        const booking = {booking_id: db.bookings.length + 1, room_code: offer.code, guest_name: guest,
+          checkin: r.checkin, checkout: r.checkout, adults: r.adults, children: r.children, source: 'personal'};
+        db.bookings.push(booking);
+        r.reservation_status = 'confirmada';
+        r.reservation_label = 'Confirmada por recepción en el PMS';
+        const nights = Math.round((new Date(r.checkout) - new Date(r.checkin)) / 86400000);
+        add(db, conv, 'staff',
+          `Reserva #${booking.booking_id} registrada en el PMS: ${offer.name}, ${r.checkin} al ${r.checkout} (${nights} ${nights === 1 ? 'noche' : 'noches'}), ${r.adults} adultos y ${r.children} niños, a nombre de ${guest}. El cupo quedó tomado. La confirmó recepción, no el asistente.`,
+          {author: me, kind: 'answer'});
+        if (!r.first_answer_at) {
+          r.first_answer_at = now();
+          event(db, conv, 'human_first_reply', {author: me});
+        }
+        r.status = 'respondida';
+        event(db, conv, 'booking_confirmed', {booking_id: booking.booking_id, source: 'personal'});
+        write();
+        return json({booking_id: booking.booking_id, room_name: offer.name, request: view(r)});
       }
       write();
       return json(view(r));
